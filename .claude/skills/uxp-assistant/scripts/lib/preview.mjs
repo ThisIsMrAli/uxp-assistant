@@ -20,12 +20,12 @@ export function extractSuppliedUi(text) {
 
 export function previewDocument({ mode, goal, limits, supplied }) {
   const surface = mode === "webview" ? "webview-browser" : "native-simulation";
-  const title = surface === "webview-browser" ? "WebView document preview" : "Native UXP simulation";
+  const title = surface === "webview-browser" ? "WebView source-text preview" : "Source-text preview and mocks";
   const banner = surface === "webview-browser"
-    ? "Browser rendering of a WebView document. The host bridge is unavailable. Adobe host: NOT TESTED."
+    ? "Source-text preview plus mocks. This is not a UXP UI preview and not the generated panel. The host bridge is unavailable. Adobe host: NOT TESTED."
     : mode === "hybrid"
-      ? "Native UXP UI simulation. A native bridge was assessed and is not executed here. Adobe host: NOT TESTED."
-      : "Native UXP UI simulation. APIs are mocked. Unsupported CSS is listed, not applied as a host result. Adobe host: NOT TESTED.";
+      ? "Source-text preview plus mocks. This is not a UXP UI preview and not the generated panel. A native bridge was assessed and is not executed here. Adobe host: NOT TESTED."
+      : "Source-text preview plus mocks. This is not a UXP UI preview and not the generated panel. Adobe host: NOT TESTED.";
   const limitsHtml = (limits || []).map((limit) => `<li>${escapeHtml(limit)}</li>`).join("")
     || "<li>No transition or text-transform sentence was found on the fresh known-issues text. None was invented.</li>";
   const suppliedItems = supplied || [];
@@ -81,7 +81,7 @@ export function previewDocument({ mode, goal, limits, supplied }) {
   <h2>Retrieved limits</h2>
   <ul id="limits">${limitsHtml}</ul>
   <h2>Supplied panel text</h2>
-  <p id="supplied-note">Source text from the supplied or generated UI. This is not a host render.</p>
+  <p id="supplied-note">Copied source text from h1, h2, button, and p. This list is not the generated panel and not a host render.</p>
   <ul id="supplied">${suppliedHtml}</ul>
   <section class="panel">${action}</section>
   <script>${script}</script>

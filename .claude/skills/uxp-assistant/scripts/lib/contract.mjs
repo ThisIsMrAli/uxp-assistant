@@ -46,6 +46,8 @@ export function buildContract({ intake, capability, projectPath, docs, kept, bas
       "Do not apply the selected-layer rename fixture unless fixture is selected-layer-rename and the goal is still that rename.",
       "Do not invent a host API that is absent from the evidence.",
       "Do not treat a WebView shim or a browser preview as the host.",
+      "A page that lists copied headings and buttons is a source-text preview plus mocks. It is not a UXP UI preview.",
+      "Hashed files are the scripts and the local code imports of vite and uxp config. JSON, packages, and node builtins are outside that set. Process and eval in a hashed file are refused. That is not a sandbox.",
       "Do not mark tests, package, or the feature done without a real command result or real files.",
       "Do not claim the Adobe host executed.",
       "Do not write classified origins into requiredPermissions. Recording an origin does not grant network access."

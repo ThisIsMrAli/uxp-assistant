@@ -6,10 +6,10 @@
   "note": "These screenshots are the labelled preview in this environment. They show supplied source text inside the labelled frame. They are not the box browser, not Photoshop, and not Premiere.",
   "native": {
     "surface": "native-simulation",
-    "text": "Native UXP UI simulation. APIs are mocked. Unsupported CSS is listed, not applied as a host result. Adobe host: NOT TESTED.\n\nNative UXP simulation\n\nShow the layer name\n\nRetrieved limits\nCSS transitions and animations are not supported\ntext-transform is not supported\nSupplied panel text\n\nSource text from the supplied or generated UI. This is not a host render.\n\nDocument title\nRead title\nRead document (mock)\n\nMock: the host app is not available. No document was read.\n\nRename layer (blocked)\n\nBlocked: the native mutation was not executed."
+    "text": "Source-text preview plus mocks. This is not a UXP UI preview and not the generated panel. Adobe host: NOT TESTED.\n\nSource-text preview and mocks\n\nShow the layer name\n\nRetrieved limits\nCSS transitions and animations are not supported\ntext-transform is not supported\nSupplied panel text\n\nCopied source text from h1, h2, button, and p. This list is not the generated panel and not a host render.\n\nDocument title\nRead title\nRead document (mock)\n\nMock: the host app is not available. No document was read.\n\nRename layer (blocked)\n\nBlocked: the native mutation was not executed."
   },
   "webview": {
     "surface": "webview-browser",
-    "text": "Browser rendering of a WebView document. The host bridge is unavailable. Adobe host: NOT TESTED.\n\nWebView document preview\n\nShow the layer name\n\nRetrieved limits\nCSS transitions and animations are not supported\ntext-transform is not supported\nSupplied panel text\n\nSource text from the supplied or generated UI. This is not a host render.\n\nDocument title\nRead title\nCall uxpHost.postMessage\n\nBlocked: window.uxpHost is unavailable. No host message was sent."
+    "text": "Source-text preview plus mocks. This is not a UXP UI preview and not the generated panel. The host bridge is unavailable. Adobe host: NOT TESTED.\n\nWebView source-text preview\n\nShow the layer name\n\nRetrieved limits\nCSS transitions and animations are not supported\ntext-transform is not supported\nSupplied panel text\n\nCopied source text from h1, h2, button, and p. This list is not the generated panel and not a host render.\n\nDocument title\nRead title\nCall uxpHost.postMessage\n\nBlocked: window.uxpHost is unavailable. No host message was sent."
   }
 }

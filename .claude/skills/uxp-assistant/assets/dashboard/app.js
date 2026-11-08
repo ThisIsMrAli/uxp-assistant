@@ -411,7 +411,7 @@ function paintHero() {
         h("h2", { id: "hero-title", text: "Commands finished" }),
         h("p", { class: "summary", text: "The Adobe host was NOT TESTED." }),
         s?.contract?.goal ? h("p", { class: "lede", text: `Goal: ${s.contract.goal}` }) : null,
-        h("p", { class: "lede", text: s.summary || "Command results are recorded. A browser preview is not a host pass." }),
+        h("p", { class: "lede", text: s.summary || "Command results are recorded. A source-text preview is not a UXP UI preview and is not a host pass." }),
         d.total || d.bugsFixed.length ? h("p", { class: "lede" }, [d.total ? `${d.fixed.length} of ${d.total} findings fixed` : "", d.total && d.bugsFixed.length ? ", " : "", d.bugsFixed.length ? `${d.bugsFixed.length} panel ${plural(d.bugsFixed.length, "bug")} confirmed fixed` : ""].join("") + ".") : null
       ];
     }

@@ -149,6 +149,14 @@ test("bolt cross-env and node --test stay inside the supported grammar", () => {
   assert.equal(graph.files.size, 0);
   const evalGraph = collectGraph(dir, { ...scripts, build: "node -e \"process.exit(0)\"" });
   assert.equal(evalGraph.ok, true);
+  fs.writeFileSync(path.join(dir, "package.json"), `${JSON.stringify({ name: "bolt", version: "1.0.0", scripts }, null, 2)}\n`);
+  fs.writeFileSync(path.join(dir, "uxp.config.ts"), "import { version } from \"./package.json\";\nexport const config = { version };\n");
+  fs.writeFileSync(path.join(dir, "vite.config.ts"), "import { config } from \"./uxp.config\";\nexport default { config };\n");
+  const configGraph = collectGraph(dir, scripts);
+  assert.equal(configGraph.ok, true, configGraph.reason);
+  assert.ok(configGraph.files.has("vite.config.ts"));
+  assert.ok(configGraph.files.has("uxp.config.ts"));
+  assert.equal(configGraph.files.has("package.json"), false);
 });
 
 test("sh -c is refused and cannot be approved into running pack.mjs", async () => {
@@ -211,6 +219,50 @@ test("npm run zip hashes the inner node script, and a later edit does not run", 
   const stale = recordImplementation(out, { goal: SHOW, files });
   assert.equal(stale.success, false);
   assert.equal(fs.existsSync(path.join(project, "bypass-again.txt")), false);
+});
+
+test("spawnSync of a sibling is refused and the sibling edit cannot run", async () => {
+  const parent = temp();
+  const { out, project, files } = await handed(parent);
+  fs.writeFileSync(path.join(project, "payload.mjs"), "import fs from \"node:fs\";\nfs.writeFileSync(\"ran-again.txt\", \"ran\");\n");
+  const pack = path.join(project, "pack.mjs");
+  const original = fs.readFileSync(pack, "utf8");
+  fs.writeFileSync(pack, `import { spawnSync } from "node:child_process";\nspawnSync(process.execPath, ["payload.mjs"]);\n${original}`);
+  const recorded = recordImplementation(out, { goal: SHOW, files, approveScripts: { reason: "x" } });
+  assert.equal(recorded.success, false);
+  assert.match(recorded.say, /child_process|process, eval|was not run/);
+  assert.equal(recorded.blocked, undefined);
+  assert.equal(fs.existsSync(path.join(project, "ran-again.txt")), false);
+  assert.equal(readSession(out).asks.some((item) => item.id === "script-change"), false);
+  assert.throws(() => answerFromChat(out, "script-change", "approve"), /No question named script-change/);
+  fs.writeFileSync(path.join(project, "payload.mjs"), "import fs from \"node:fs\";\nfs.writeFileSync(\"ran-again.txt\", \"edited\");\n");
+  const edited = recordImplementation(out, { goal: SHOW, files, approveScripts: { reason: "x" } });
+  assert.equal(edited.success, false);
+  assert.equal(fs.existsSync(path.join(project, "ran-again.txt")), false);
+});
+
+test("a third-level vite config import is hashed, and editing it does not run the package", async () => {
+  const parent = temp();
+  const { out, project, files } = await handed(parent);
+  fs.writeFileSync(path.join(project, "c.mjs"), "export const level = 3;\n");
+  fs.writeFileSync(path.join(project, "b.mjs"), "import \"./c.mjs\";\nexport const level = 2;\n");
+  fs.writeFileSync(path.join(project, "a.mjs"), "import \"./b.mjs\";\nexport const level = 1;\n");
+  fs.writeFileSync(path.join(project, "vite.config.ts"), "import \"./a.mjs\";\nexport default {};\n");
+  const blocked = recordImplementation(out, { goal: SHOW, files });
+  assert.equal(blocked.blocked, "script-change");
+  const asked = readSession(out).asks.find((item) => item.id === "script-change");
+  for (const name of ["vite.config.ts", "a.mjs", "b.mjs", "c.mjs"]) {
+    assert.ok(asked.scope.files.some((item) => item.name === name), name);
+  }
+  answerFromChat(out, "script-change", "approve");
+  const ran = recordImplementation(out, { goal: SHOW, files });
+  assert.equal(ran.success, true, ran.say);
+  fs.rmSync(path.join(project, "out.ccx"));
+  fs.writeFileSync(path.join(project, "c.mjs"), "export const level = 4;\n");
+  const stale = recordImplementation(out, { goal: SHOW, files });
+  assert.equal(stale.success, false);
+  assert.equal(stale.blocked, "script-change");
+  assert.equal(fs.existsSync(path.join(project, "out.ccx")), false);
 });
 
 test("a graph past 40 files is refused with no approvable partial hash", async () => {

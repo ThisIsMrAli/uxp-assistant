@@ -35,7 +35,7 @@ node box/run.mjs --dashboard
 node box/run.mjs --preview
 ```
 
-Those use a local Chrome, Edge, or Chromium. They are this machine's render. They are not a host pass.
+Those use a local Chrome, Edge, or Chromium. They are this machine's render. The default session page lists copied source text and mocks. It is not a UXP UI preview. `node .claude/skills/uxp-assistant/scripts/bundle-preview.mjs` serves a built package script behind a labelled shim when a CCX is already in `evidence/artifacts/`. That is this machine only. It is not a host pass.
 
 ## Dashboard
 

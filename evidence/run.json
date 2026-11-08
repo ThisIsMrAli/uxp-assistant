@@ -4,18 +4,18 @@
   "npm": "10.9.9",
   "candidate": "The commit that adds this file. The file cannot contain its own commit SHA.",
   "priorCandidateUnderReview": {
-    "commit": "a01313319106773ef29484ea904c5821fbe17f5b",
-    "tests": "32 pass on this cloud, recorded in evidence/candidates/a01313319106773ef29484ea904c5821fbe17f5b/npm-test.log. The bot computer ran npm ci and node box/run.mjs with 28 pass, 0 fail, 4714ms. That box run did not include browser options.",
-    "independentQa": "FAIL on four command-approval holes: sh -c, node --import, npm run zip, and a 41st local import. Those holes are what this later candidate closes.",
+    "commit": "dc173ce8985d35f0a684f2d684d750c655f0cde0",
+    "tests": "38 pass on this cloud. The bot computer ran the exported artifact with node box/run.mjs --acceptance: 36 pass, 0 fail, about 30.9s. Browser options were not in that run.",
+    "independentQa": "PASS with residuals. The four command holes stayed closed. Residuals were spawnSync of an unhashed sibling and a vite.config.ts import outside the packaging hash. This later candidate closes those two without claiming executable closure.",
     "documentTitle": {
-      "file": "evidence/candidates/a01313319106773ef29484ea904c5821fbe17f5b/document-title.ccx",
+      "file": "evidence/candidates/dc173ce8985d35f0a684f2d684d750c655f0cde0/document-title.ccx",
       "bytes": 126207,
-      "sha256": "4205d2a4ce8becf7f744cb3b256dd10cfae14edb735750d6ea9a34b75d834a7a"
+      "sha256": "f6cb10463be16cd5799a58dd5134a791f097047fccd001f6a91e9125a98b384e"
     },
     "existingDocumentTitle": {
-      "file": "evidence/candidates/a01313319106773ef29484ea904c5821fbe17f5b/existing-document-title.ccx",
+      "file": "evidence/candidates/dc173ce8985d35f0a684f2d684d750c655f0cde0/existing-document-title.ccx",
       "bytes": 126207,
-      "sha256": "fcfabc7fd4201384b5f517074b5081cbf32665961729807a36e395219bba18a6"
+      "sha256": "029dcc86f8f0b4fb98426a2719d085db2b027f5b55c49d3193c46f4eda88d703"
     },
     "earlierPass": {
       "commit": "92dd2bca76dcd82376453d794fd0f19e25f9359a",
@@ -45,8 +45,8 @@
   "tests": {
     "command": "node --test",
     "exit": 0,
-    "tests": 38,
-    "pass": 38,
+    "tests": 40,
+    "pass": 40,
     "fail": 0,
     "log": "evidence/logs/npm-test.log"
   },
@@ -55,7 +55,7 @@
   "emptyFolder": {
     "file": "evidence/artifacts/document-title.ccx",
     "bytes": 126207,
-    "sha256": "f6cb10463be16cd5799a58dd5134a791f097047fccd001f6a91e9125a98b384e",
+    "sha256": "c9c3429c5adeb892068209d5de391fc068d3ae734e1cd0da8b082be40be1d66a",
     "containsDocumentTitle": true,
     "containsActiveDocument": true,
     "containsRenameFixturePhrase": false,
@@ -64,7 +64,7 @@
   "existingProject": {
     "file": "evidence/artifacts/existing-document-title.ccx",
     "bytes": 126207,
-    "sha256": "029dcc86f8f0b4fb98426a2719d085db2b027f5b55c49d3193c46f4eda88d703",
+    "sha256": "e08dca3b05ca28241a804cf6808e732d28645f0c8bdf8078557f86420bd859ac",
     "containsDocumentTitle": true,
     "containsActiveDocument": true,
     "containsRenameFixturePhrase": false,
@@ -77,7 +77,14 @@
     "capturedOn": "this cloud environment",
     "boxBrowser": false,
     "hostExecuted": false,
-    "note": "The native page is a simulation with mocked reads and a blocked rename. Supplied source text is shown inside that labelled frame and is not a host render. The WebView page renders in the browser and reports window.uxpHost unavailable. Neither is Photoshop or Premiere, and neither is the box browser."
+    "note": "The session page is a source-text preview plus mocks. It is not a UXP UI preview. The built-bundle screenshots load the acceptance package script behind a labelled shim. Poster is mock data. Adobe host NOT TESTED.",
+    "bundle": {
+      "idle": "evidence/preview/bundle-idle.png",
+      "afterRead": "evidence/preview/bundle-after-read.png",
+      "log": "evidence/preview/bundle-preview-log.json",
+      "script": "assets/index-Chc7lSNg.js",
+      "scriptSha256": "3116a2d703849c4826cbdfadc42f3d1bd8d00de91e73b8c4833924952b03f9a3"
+    }
   },
   "acceptanceNote": "Zip timestamps can change a later digest. These files are the retained archives from this later run. Photoshop and Premiere were not launched. webview false and hybrid false on the empty-folder installer were the answered native choice.",
   "premiereResolution": {
@@ -96,7 +103,8 @@
     "A later rebuild can produce a different SHA-256 because zip timestamps differ.",
     "importFiles is a handoff from the official Project class page. This run did not package a Premiere plugin.",
     "Passing this suite does not declare the product ready.",
-    "The command checker accepts a restricted grammar and a complete local graph. It does not close arbitrary shell syntax.",
-    "npm audit reports 7 moderate advisories through pinned create-bolt-uxp@1.3.27. The suggested fix is create-bolt-uxp@0.2.5, an older major, and was not applied. See evidence/audit.json."
+    "The command checker hashes static local code imports from the supported scripts and from vite.config.ts and uxp.config.ts. JSON, including package.json, package modules, and node builtins are outside that set. Process and eval in a hashed file are refused. This is not a sandbox and not a complete executable closure.",
+    "npm audit reports 7 moderate advisories through pinned create-bolt-uxp@1.3.27. The suggested fix is create-bolt-uxp@0.2.5, an older major, and was not applied. See evidence/audit.json.",
+    "The built-bundle page is this cloud environment. It is not the box browser and not Photoshop. The generated plugin install reported its own advisories during acceptance and is a separate tree from the skill audit."
   ]
 }

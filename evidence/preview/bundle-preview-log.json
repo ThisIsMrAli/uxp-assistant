@@ -1,0 +1,40 @@
+{
+  "capturedOn": "this cloud environment",
+  "boxBrowser": false,
+  "hostExecuted": false,
+  "ccx": "evidence/artifacts/document-title.ccx",
+  "script": "assets/index-Chc7lSNg.js",
+  "scriptSha256": "3116a2d703849c4826cbdfadc42f3d1bd8d00de91e73b8c4833924952b03f9a3",
+  "scriptBytes": 593201,
+  "loadOrder": "The package index.html puts the script in the head, before #app. This page keeps those script bytes and places the tag after #app so the bundle can mount. The component was not rewritten.",
+  "webview": "The acceptance choice was native. This archive has no WebView document, so none was served.",
+  "css": "Variables are the dark table copied from bolt-uxp src/api/themes.ts. Bolt's polyfill returns early when the host name is Photoshop, and this browser has no host variables. The table is not Spectrum and not the host theme.",
+  "dom": "The built panel uses plain h1, p, and button elements. The bundle contains no Spectrum components.",
+  "api": "require('uxp') and require('photoshop') are shim objects. activeDocument.title is the mock string Poster. executeAsModal and batchPlay record a block and do not mutate a host.",
+  "cepShim": "cep-to-uxp CSS and HTML shims are not in this repository. They were not copied. The color table is the maintained Bolt file.",
+  "layout": "The bundle's own stylesheet places the panel content. The brown banner is this page's label, not part of the component and not a host frame.",
+  "equivalence": "Not claimed. Adobe host NOT TESTED.",
+  "idleText": "Built panel bundle with a labelled UXP and Photoshop shim. Poster is mock host data, not a Photoshop document. CSS variables are Bolt's dark table, not Spectrum and not the host theme. This panel uses plain HTML, not Spectrum components. Adobe host: NOT TESTED. Not a UXP equivalence claim.\n\nDocument title\n\nIdle\n\nRead title\n\nIdle",
+  "shim": {
+    "hostExecuted": false,
+    "mockTitle": "Poster",
+    "blocked": [
+      "photoshop.core.suppressResizeGripper"
+    ],
+    "surface": "built-bundle-shim"
+  },
+  "error": "",
+  "after": {
+    "clicked": true,
+    "text": "Built panel bundle with a labelled UXP and Photoshop shim. Poster is mock host data, not a Photoshop document. CSS variables are Bolt's dark table, not Spectrum and not the host theme. This panel uses plain HTML, not Spectrum components. Adobe host: NOT TESTED. Not a UXP equivalence claim.\n\nDocument title\n\nRead document.title outside executeAsModal.\n\nRead title\n\nPoster",
+    "shim": {
+      "hostExecuted": false,
+      "mockTitle": "Poster",
+      "blocked": [
+        "photoshop.core.suppressResizeGripper"
+      ],
+      "surface": "built-bundle-shim"
+    }
+  },
+  "rendered": true
+}

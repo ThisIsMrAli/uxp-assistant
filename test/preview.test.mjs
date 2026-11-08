@@ -13,6 +13,7 @@ test("the browser preview blocks native mutation and a missing host bridge", asy
   const native = previewDocument({ mode: "native", goal: "Show the layer name", limits, supplied });
   const web = previewDocument({ mode: "webview", goal: "Show the layer name", limits, supplied });
   assert.match(native, /Supplied panel text/);
+  assert.match(native, /not a UXP UI preview/);
   assert.match(native, /not a host render/);
   assert.match(native, /Document title/);
   assert.match(native, /data-surface="native-simulation"/);
