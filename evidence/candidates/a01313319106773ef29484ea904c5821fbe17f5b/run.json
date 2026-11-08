@@ -1,0 +1,93 @@
+{
+  "date": "2026-11-08",
+  "node": "v22.23.4",
+  "npm": "10.9.9",
+  "candidate": "The commit that adds this file. The file cannot contain its own commit SHA.",
+  "priorCandidateUnderReview": {
+    "commit": "92dd2bca76dcd82376453d794fd0f19e25f9359a",
+    "tests": "27 pass, recorded in evidence/candidates/92dd2bca/npm-test.log",
+    "documentTitle": {
+      "file": "evidence/candidates/92dd2bca/document-title.ccx",
+      "bytes": 126207,
+      "sha256": "206d119d191379d62a1d59ebc115bacc6f4068c4fbe3aff1687b6614504468de"
+    },
+    "existingDocumentTitle": {
+      "file": "evidence/candidates/92dd2bca/existing-document-title.ccx",
+      "bytes": 126207,
+      "sha256": "ca0fae5f56785473540ed6947dea737e5772350981dfca3890f386e46df53452"
+    },
+    "note": "Those files are the 92dd2bca archives. They are not the archives from this later run."
+  },
+  "retracted": [
+    {
+      "commit": "be20127969498ffb9f9bb3b811f8dfb327cd775c",
+      "claim": "ccx/com.example.selection_PS.ccx 101835 bytes sha256 134237a0bc5d6cff132ef13d2cb417f380de5375cdce258329f1f018137f97c9",
+      "reason": "That archive was not retained and was not reproduced."
+    },
+    {
+      "commit": "e33db6917519576a57facf70ca3f4759d9b5f61f",
+      "claim": "document-title.ccx 126207 bytes sha256 7deba2d3ad3857877647f3b38912c3b0ccb79297cb13150e4db38dc3aa4379cb and existing-document-title.ccx sha256 f795ea05ab81de859d1786325f76618a0b52d1b56083f17a9b63ddb81d362f68",
+      "reason": "Those digests belonged to an earlier candidate. Zip timestamps can change a later digest."
+    }
+  ],
+  "hostExecuted": false,
+  "photoshop": "NOT TESTED",
+  "premiere": "NOT TESTED",
+  "sourceReview": "pending",
+  "featureCorrectness": "not-decided",
+  "tests": {
+    "command": "node --test",
+    "exit": 0,
+    "tests": 32,
+    "pass": 32,
+    "fail": 0,
+    "log": "evidence/logs/npm-test.log"
+  },
+  "goal": "Show the active document title in the panel.",
+  "fixture": null,
+  "emptyFolder": {
+    "file": "evidence/artifacts/document-title.ccx",
+    "bytes": 126207,
+    "sha256": "4205d2a4ce8becf7f744cb3b256dd10cfae14edb735750d6ea9a34b75d834a7a",
+    "containsDocumentTitle": true,
+    "containsActiveDocument": true,
+    "containsRenameFixturePhrase": false,
+    "iconCount": 9
+  },
+  "existingProject": {
+    "file": "evidence/artifacts/existing-document-title.ccx",
+    "bytes": 126207,
+    "sha256": "fcfabc7fd4201384b5f517074b5081cbf32665961729807a36e395219bba18a6",
+    "containsDocumentTitle": true,
+    "containsActiveDocument": true,
+    "containsRenameFixturePhrase": false,
+    "iconCount": 9
+  },
+  "preview": {
+    "native": "evidence/preview/cloud-native-simulation.png",
+    "webview": "evidence/preview/cloud-webview-browser.png",
+    "log": "evidence/preview/preview-log.json",
+    "capturedOn": "this cloud environment",
+    "boxBrowser": false,
+    "hostExecuted": false,
+    "note": "The native page is a simulation with mocked reads and a blocked rename. The WebView page renders in the browser and reports window.uxpHost unavailable. Neither is Photoshop or Premiere, and neither is the box browser."
+  },
+  "acceptanceNote": "Zip timestamps can change a later digest. These files are the retained archives from this later run. Photoshop and Premiere were not launched. webview false and hybrid false on the empty-folder installer were the answered native choice.",
+  "premiereResolution": {
+    "state": "awaiting-agent-implementation",
+    "fixture": null,
+    "hostExecuted": false,
+    "packaged": false,
+    "evidenceUrl": "https://developer.adobe.com/premiere-pro/uxp/ppro-reference/classes/project/",
+    "token": "importFiles"
+  },
+  "limits": [
+    "Command success is not feature correctness and not a host pass.",
+    "Source and behavior review is still pending.",
+    "Photoshop was not launched. Premiere was not launched.",
+    "A browser preview is not a host pass and is not the box test.",
+    "A later rebuild can produce a different SHA-256 because zip timestamps differ.",
+    "importFiles is a handoff from the official Project class page. This run did not package a Premiere plugin.",
+    "Passing this suite does not declare the product ready."
+  ]
+}

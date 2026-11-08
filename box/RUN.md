@@ -18,7 +18,15 @@ npm ci
 node box/run.mjs
 ```
 
-That runs the fixture checks. It does not call a model, does not checkout git, and does not launch an Adobe app.
+That runs the fixture checks, including the command-approval graph. It does not call a model, does not checkout git, and does not launch an Adobe app.
+
+Real setup, build, and package, still without a browser:
+
+```
+node box/run.mjs --acceptance
+```
+
+That command installs the maintained Bolt starter, fetches the official docs, and builds the package on this machine. It needs network access. It is not a browser render and not a host pass. The byte and revision manifest beside the archive stays the source binding.
 
 On this same machine, optional browser checks:
 

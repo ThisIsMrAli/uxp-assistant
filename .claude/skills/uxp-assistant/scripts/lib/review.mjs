@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { readZip } from "./archive.mjs";
 import { goalWasReplaced } from "./contract.mjs";
 import { readScripts } from "./package-project.mjs";
@@ -53,9 +54,10 @@ export function snapshotProject(project) {
   walk(project);
   const scripts = readScripts(project) || {};
   snap.scripts = { test: scripts.test || "", build: scripts.build || "", ccx: scripts.ccx || "" };
-  for (const rel of commandRefs(`${snap.scripts.build}\n${snap.scripts.ccx}`)) {
-    const full = path.join(project, rel);
-    if (fs.existsSync(full) && fs.statSync(full).isFile()) snap.commandFiles[rel] = sha(fs.readFileSync(full));
+  const graph = collectGraph(project, snap.scripts);
+  snap.commandGraph = graph.ok ? "complete" : graph.reason;
+  if (graph.ok) {
+    for (const [rel, hash] of graph.files) snap.commandFiles[rel] = hash;
   }
   snap.surface = surfaces.join("\n");
   return snap;
@@ -68,13 +70,134 @@ export function isNoopTestScript(script) {
   return /process\.exit\s*\(\s*0\s*\)/.test(text) || text === "true" || text === "exit 0";
 }
 
-function commandRefs(script) {
-  const found = [];
-  for (const match of String(script || "").matchAll(/(?:^|[;&|\n])\s*node(?:\s+--[\w=-]+)*\s+([^\s"'&|;]+)/g)) {
-    const rel = match[1];
-    if (!rel.startsWith("-") && /\.(mjs|cjs|js|ts)$/.test(rel)) found.push(rel);
+/** Local files named by one command. Past this, the graph is refused rather than approved in part. */
+export const GRAPH_LIMIT = 40;
+
+const GRAMMAR = "Supported scripts are: node <local file>, node --import/--require <local file> <local file>, node --test, node -e with no import or require, npm run <name> for one hop into one of those, and cross-env NAME=value vite build. Shell wrappers, extra hops, dynamic imports, and a graph past the file cap are not approved.";
+
+function tokenize(command) {
+  const tokens = [];
+  const source = String(command || "").trim();
+  let index = 0;
+  while (index < source.length) {
+    while (source[index] === " " || source[index] === "\t") index += 1;
+    if (index >= source.length) break;
+    const quote = source[index];
+    if (quote === "'" || quote === "\"") {
+      const end = source.indexOf(quote, index + 1);
+      if (end < 0) return null;
+      tokens.push(source.slice(index + 1, end));
+      index = end + 1;
+      continue;
+    }
+    if ("|&;<>`$()\n".includes(source[index])) return null;
+    let end = index;
+    while (end < source.length && !" \t|&;<>`$()\n".includes(source[end])) end += 1;
+    tokens.push(source.slice(index, end));
+    index = end;
   }
-  return [...new Set(found)];
+  return tokens;
+}
+
+function parseCommand(command, scripts, depth = 0) {
+  if (depth > 1) {
+    return { ok: false, reason: "Only one npm run hop is supported. A longer chain was not run." };
+  }
+  const tokens = tokenize(command);
+  if (!tokens) {
+    return { ok: false, reason: `The command is not in the supported grammar. ${GRAMMAR} The command was not run.` };
+  }
+  if (!tokens.length) return { ok: true, refs: [] };
+  const [bin, ...rest] = tokens;
+  if (bin === "node") return parseNode(rest);
+  if (bin === "npm") return parseNpm(rest, scripts, depth);
+  if (bin === "cross-env") return parseCrossEnv(rest);
+  return { ok: false, reason: `${bin} is outside the supported command grammar. ${GRAMMAR} The command was not run.` };
+}
+
+function parseNode(rest) {
+  const refs = [];
+  const args = [...rest];
+  let evalSource = "";
+  let testMode = false;
+  while (args.length && args[0].startsWith("-")) {
+    const flag = args.shift();
+    if (flag === "--test") {
+      testMode = true;
+      continue;
+    }
+    if (flag === "--import" || flag === "--require" || flag === "-r") {
+      const spec = args.shift();
+      if (!spec || spec.startsWith("-")) return { ok: false, reason: `${flag} needs a local module. The command was not run.` };
+      refs.push(spec);
+      continue;
+    }
+    if (flag === "-e" || flag === "--eval") {
+      evalSource = args.shift() || "";
+      if (!evalSource) return { ok: false, reason: "node -e has no expression. The command was not run." };
+      if (/require\s*\(|import\s*\(|\bimport\s+/.test(evalSource)) {
+        return { ok: false, reason: "node -e that imports or requires other code is not in the supported grammar. The command was not run." };
+      }
+      continue;
+    }
+    return { ok: false, reason: `Node flag ${flag} is outside the supported grammar. ${GRAMMAR} The command was not run.` };
+  }
+  if (evalSource && args.length) return { ok: false, reason: "node -e does not take a script path in this grammar. The command was not run." };
+  if (!args.length) {
+    if (testMode || evalSource) return { ok: true, refs };
+    return { ok: false, reason: "node has no script path. The command was not run." };
+  }
+  refs.push(args.shift());
+  if (args.some((item) => item.startsWith(".") || /\.(mjs|cjs|js|ts)$/.test(item))) {
+    return { ok: false, reason: "Extra node arguments that look like files are outside the supported grammar. The command was not run." };
+  }
+  return { ok: true, refs };
+}
+
+function parseNpm(rest, scripts, depth) {
+  if (rest.length !== 2 || rest[0] !== "run" || !/^[\w:-]+$/.test(rest[1])) {
+    return { ok: false, reason: "npm is supported only as `npm run <name>` with no extra arguments. The command was not run." };
+  }
+  const inner = scripts?.[rest[1]];
+  if (!inner) return { ok: false, reason: `npm run ${rest[1]} does not name a script. The command was not run.` };
+  return parseCommand(inner, scripts, depth + 1);
+}
+
+function parseCrossEnv(rest) {
+  const command = [];
+  let seen = false;
+  for (const token of rest) {
+    if (!seen && /^[A-Za-z_][A-Za-z0-9_]*=[^\s|&;<>`$]*$/.test(token)) continue;
+    seen = true;
+    command.push(token);
+  }
+  if (command.length === 2 && command[0] === "vite" && command[1] === "build") return { ok: true, refs: [] };
+  return { ok: false, reason: "cross-env is supported only as cross-env NAME=value vite build. The command was not run." };
+}
+
+function graphProblem(text, label) {
+  const masked = String(text)
+    .replace(/'(?:\\.|[^'\n])*'/g, "''")
+    .replace(/"(?:\\.|[^"\n])*"/g, '""');
+  const code = commentStripped(masked);
+  if (/import\s*\(\s*`|require\s*\(\s*`/.test(code) || /import\s*\(\s*(?!['"])/.test(code) || /require\s*\(\s*(?!['"])/.test(code)) {
+    return `${label} has a dynamic import or require. The checker cannot hash that graph, so the command was not run.`;
+  }
+  return "";
+}
+
+function literalSpecs(text) {
+  const specs = [];
+  const patterns = [
+    /(?:^|[;\n])\s*import\s+[\s\S]*?\sfrom\s*["']([^"']+)["']/g,
+    /(?:^|[;\n])\s*import\s*["']([^"']+)["']/g,
+    /require\s*\(\s*["']([^"']+)["']\s*\)/g,
+    /import\s*\(\s*["']([^"']+)["']\s*\)/g
+  ];
+  for (const pattern of patterns) {
+    for (const match of String(text).matchAll(pattern)) specs.push(match[1]);
+  }
+  return specs;
 }
 
 function phrases(goal) {
@@ -318,59 +441,104 @@ function describeChange(change) {
   return `${change.name} sha256 ${change.to || "missing"}`;
 }
 
-function localImports(text, fromRel) {
-  const found = [];
-  const dir = path.posix.dirname(String(fromRel).split(path.sep).join("/"));
-  const pattern = /(?:from\s+|import\s*\(\s*|import\s+|require\(\s*)["'](\.[^"']+)["']/g;
-  for (const match of String(text).matchAll(pattern)) {
-    const rel = path.posix.normalize(path.posix.join(dir, match[1]));
-    if (!rel.startsWith("..")) found.push(rel);
+function resolveRef(project, spec, fromFull) {
+  if (spec.startsWith("file:")) {
+    let full;
+    try {
+      full = fileURLToPath(spec);
+    } catch {
+      return { ok: false, reason: `${spec} is not a file URL this checker can hash. The command was not run.` };
+    }
+    if (!fs.existsSync(full) || !fs.statSync(full).isFile()) {
+      return { ok: false, reason: `${spec} is not a readable file. The command was not run.` };
+    }
+    return { ok: true, key: full, full };
   }
-  return found;
+  const root = path.resolve(project);
+  const base = fromFull ? path.dirname(fromFull) : root;
+  const candidates = path.extname(spec) ? [spec] : [spec, `${spec}.mjs`, `${spec}.js`, `${spec}.cjs`];
+  let outside = false;
+  for (const candidate of candidates) {
+    const full = path.resolve(base, candidate);
+    if (full !== root && !full.startsWith(`${root}${path.sep}`)) {
+      outside = true;
+      continue;
+    }
+    if (fs.existsSync(full) && fs.statSync(full).isFile()) {
+      return { ok: true, key: path.relative(root, full).split(path.sep).join("/"), full };
+    }
+  }
+  if (outside) return { ok: false, reason: `${spec} resolves outside the project. The command was not run.` };
+  return { ok: false, reason: `${spec} is not a local file this checker can hash. The command was not run.` };
 }
 
-function resolveLocal(project, rel) {
-  const candidates = path.extname(rel) ? [rel] : [rel, `${rel}.mjs`, `${rel}.js`, `${rel}.cjs`, `${rel}.ts`];
-  const root = path.resolve(project);
-  for (const candidate of candidates) {
-    const full = path.resolve(project, candidate);
-    if (full !== root && !full.startsWith(`${root}${path.sep}`)) continue;
-    if (fs.existsSync(full) && fs.statSync(full).isFile()) return { rel: candidate, full };
+function dependencies(text, key, full) {
+  const problem = graphProblem(text, key);
+  if (problem) return { ok: false, reason: problem };
+  const specs = new Set(literalSpecs(text));
+  const deps = [];
+  for (const spec of specs) {
+    if (spec.startsWith(".")) deps.push({ spec, fromFull: full });
+    else if (spec.startsWith("file:") || spec.startsWith("/")) deps.push({ spec, fromFull: null });
+    else if (/^[\w.-]+\.(mjs|cjs|js|ts)$/.test(spec)) deps.push({ spec, fromFull: full });
   }
-  return null;
+  return { ok: true, deps };
+}
+
+/** Every local file a supported command can execute. An incomplete graph is a refusal. */
+export function collectGraph(project, scripts) {
+  const queue = [];
+  for (const name of ["test", "build", "ccx"]) {
+    const command = scripts?.[name] || "";
+    if (!command) continue;
+    const parsed = parseCommand(command, scripts);
+    if (!parsed.ok) return { ok: false, reason: `${name}: ${parsed.reason}`, files: new Map() };
+    for (const spec of parsed.refs) queue.push({ spec, fromFull: null });
+  }
+  const files = new Map();
+  const seen = new Set();
+  while (queue.length) {
+    const item = queue.shift();
+    const resolved = resolveRef(project, item.spec, item.fromFull);
+    if (!resolved.ok) return { ok: false, reason: resolved.reason, files };
+    if (seen.has(resolved.key)) continue;
+    if (seen.size >= GRAPH_LIMIT) {
+      return {
+        ok: false,
+        reason: `The local import graph reached ${GRAPH_LIMIT} files before ${resolved.key} was hashed. The partial graph was not approved and the command was not run.`,
+        files
+      };
+    }
+    seen.add(resolved.key);
+    let data;
+    try {
+      data = fs.readFileSync(resolved.full);
+    } catch (error) {
+      return { ok: false, reason: `${resolved.key} could not be read (${error.message}). The command was not run.`, files };
+    }
+    files.set(resolved.key, sha(data));
+    const deps = dependencies(data.toString("utf8"), resolved.key, resolved.full);
+    if (!deps.ok) return { ok: false, reason: deps.reason, files };
+    queue.push(...deps.deps);
+  }
+  return { ok: true, files };
 }
 
 /** Commands plus the local scripts and configs they reach. Hashes are the trust boundary. */
 export function commandChangeSet(project, baseline) {
   const scripts = readScripts(project) || {};
   const base = baseline?.scripts || {};
+  const graph = collectGraph(project, scripts);
+  if (!graph.ok) return { scripts, changes: [], scope: null, unresolved: graph.reason };
   const changes = [];
   for (const name of ["build", "ccx"]) {
-    const from = base[name] || "";
-    const to = scripts[name] || "";
-    if (from !== to) changes.push({ kind: "command", name, from, to });
+    if ((base[name] || "") !== (scripts[name] || "")) changes.push({ kind: "command", name, from: base[name] || "", to: scripts[name] || "" });
   }
   if ((base.test || "") !== (scripts.test || "")) {
-    const addingRunner = !base.test && scripts.test && !isNoopTestScript(scripts.test);
-    if (!addingRunner) changes.push({ kind: "command", name: "test", from: base.test || "", to: scripts.test || "" });
+    const added = !base.test && /(?:^|\s)node --test(?:\s|$)/.test(scripts.test || "");
+    if (!added) changes.push({ kind: "command", name: "test", from: base.test || "", to: scripts.test || "" });
   }
-  const seen = new Set();
-  const queue = [...commandRefs(`${scripts.build || ""}\n${scripts.ccx || ""}`)];
-  const hashed = new Map();
-  while (queue.length && seen.size < 40) {
-    const next = queue.shift();
-    if (seen.has(next)) continue;
-    seen.add(next);
-    const resolved = resolveLocal(project, next);
-    if (!resolved) {
-      hashed.set(next, "");
-      continue;
-    }
-    const data = fs.readFileSync(resolved.full);
-    hashed.set(resolved.rel, sha(data));
-    if (seen.size >= 40) break;
-    for (const dep of localImports(data.toString("utf8"), resolved.rel)) queue.push(dep);
-  }
+  const hashed = new Map(graph.files);
   for (const rel of PACKAGING) {
     const full = path.join(project, rel);
     if (!fs.existsSync(full) || !fs.statSync(full).isFile()) continue;
@@ -380,7 +548,7 @@ export function commandChangeSet(project, baseline) {
     const previous = baseline?.commandFiles?.[rel] || baseline?.packaging?.[rel] || baseline?.files?.[rel] || "";
     if (previous !== hash) changes.push({ kind: "file", name: rel, from: previous, to: hash });
   }
-  return { scripts, changes, scope: canonicalScope(changes) };
+  return { scripts, changes, scope: canonicalScope(changes), unresolved: "" };
 }
 
 /**
@@ -393,6 +561,7 @@ export function reviewCommandProvenance(project, baseline, grant, options = {}) 
   if (!scripts.test || isNoopTestScript(scripts.test)) {
     return { ok: false, say: "The test script is missing or only exits 0. A missing Bolt test script may be replaced with a real runner such as node --test. A no-op is not that runner." };
   }
+  if (drift.unresolved) return { ok: false, say: drift.unresolved, unresolved: true };
   if (!drift.changes.length) return { ok: true, provenance: "handoff", scripts };
   const listed = drift.changes.map(describeChange).join("; ");
   const claimNote = options.ignoredClaim
