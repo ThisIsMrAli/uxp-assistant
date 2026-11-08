@@ -1,0 +1,210 @@
+{
+  "auditedAt": "2026-11-08",
+  "tree": "create-bolt-uxp@1.3.27 react Photoshop panel, webview false, hybrid false, sampleCode false, installDeps true",
+  "command": "npm audit --json",
+  "before": {
+    "low": 2,
+    "moderate": 0,
+    "high": 14,
+    "critical": 1,
+    "total": 17,
+    "dependencies": { "prod": 4, "dev": 426, "optional": 48, "total": 429 }
+  },
+  "afterLockfileFix": {
+    "command": "npm audit fix --package-lock-only",
+    "packageJsonRangesChanged": false,
+    "force": false,
+    "ccxBuild": "npm run ccx exited 0 with vite 6.4.5. Archive com.example.title_PS.ccx was 126237 bytes.",
+    "remaining": { "low": 0, "moderate": 7, "high": 0, "critical": 0, "total": 7 },
+    "remainingFixOffered": "npm audit fix --force would install vite-uxp-plugin@0.2.5 and is marked isSemVerMajor. That downgrade was not applied."
+  },
+  "exposure": "Every advisory package in the generated lockfile was a dev dependency. react and react-dom are the production dependencies and were not in the advisory set. The CCX is a static Vite bundle. These packages are not the panel's runtime imports. Dev-server and script-runner advisories still apply when a person runs the generated toolchain. A passing build does not close them.",
+  "advisories": [
+    {
+      "package": "shell-quote",
+      "severity": "critical",
+      "kind": "transitive dev",
+      "chain": "npm-run-all@4.1.5 -> shell-quote@^1.6.1",
+      "installedBefore": "1.8.1",
+      "installedAfter": "1.12.0",
+      "ids": ["GHSA-w7jw-789q-3m8p", "GHSA-395f-4hp3-45gv"],
+      "where": "npm-run-all script runner. Not imported by the panel bundle.",
+      "action": "1.12.0 is inside ^1.6.1 and outside the reported <=1.8.4 range. The lockfile update installs it. quote() itself was not executed in a test."
+    },
+    {
+      "package": "vite",
+      "severity": "high",
+      "kind": "direct dev",
+      "declared": "^6.3.5",
+      "installedBefore": "6.3.5",
+      "installedAfter": "6.4.5",
+      "ids": ["GHSA-g4jq-h2w9-997c", "GHSA-jqfw-vq24-v9c3", "GHSA-93m4-6634-74q7", "GHSA-4w7w-66w2-5vf9", "GHSA-p9ff-h696-f583", "GHSA-v6wh-96g9-6wx3", "GHSA-698v-4r3x-3vcv", "GHSA-r825-w8mm-5pxw", "GHSA-587h-7wmj-h5pm", "GHSA-9jrq-w75r-8gcw", "GHSA-rq7h-c2jc-7f22", "GHSA-fx2h-pf6j-xcff"],
+      "where": "Vite dev server and build tool. The packaged panel does not start that server.",
+      "action": "6.4.5 stays inside ^6.3.5. Vite 8 is outside the range and was not installed. npm run ccx succeeded on 6.4.5."
+    },
+    {
+      "package": "ws",
+      "severity": "high",
+      "kind": "direct dev",
+      "declared": "^8.14.2",
+      "chain": "package.json and vite-uxp-plugin -> ws@^8.14.2",
+      "installedBefore": "8.14.2",
+      "installedAfter": "8.22.2",
+      "ids": ["GHSA-3h5v-q93c-6h6q", "GHSA-58qx-3vcg-4xpx", "GHSA-96hv-2xvq-fx4p"],
+      "where": "Dev websocket helper. Not the packaged panel runtime.",
+      "action": "8.22.2 stays inside ^8.14.2."
+    },
+    {
+      "package": "rollup",
+      "severity": "high",
+      "kind": "transitive dev",
+      "chain": "vite -> rollup@^4.34.9",
+      "installedBefore": "4.41.1",
+      "installedAfter": "4.68.0",
+      "ids": ["GHSA-mw96-cpmx-2vgc"],
+      "where": "Build bundler.",
+      "action": "4.68.0 is inside Vite's rollup range. The reported vulnerable range ended before 4.59.0."
+    },
+    {
+      "package": "postcss",
+      "severity": "high",
+      "kind": "transitive dev",
+      "chain": "vite -> postcss@^8.5.3",
+      "installedBefore": "8.5.4",
+      "installedAfter": "8.5.32",
+      "ids": ["GHSA-qx2v-qp2m-jg93", "GHSA-6g55-p6wh-862q", "GHSA-fxqj-rqcc-2cmp", "GHSA-r28c-9q8g-f849"],
+      "where": "CSS build tool.",
+      "action": "8.5.32 is inside ^8.5.3. The reported range ended at 8.5.22."
+    },
+    {
+      "package": "cross-spawn",
+      "severity": "high",
+      "kind": "transitive dev",
+      "chain": "npm-run-all -> cross-spawn@^6.0.5. A separate 7.0.6 copy comes from cross-env and was already outside <6.0.6.",
+      "installedBefore": "6.0.5 nested",
+      "installedAfter": "6.0.6 nested",
+      "ids": ["GHSA-3xgq-45jj-v275"],
+      "where": "Script spawning during npm-run-all. Not the panel bundle.",
+      "action": "6.0.6 stays inside ^6.0.5. cross-spawn 7 was not forced onto npm-run-all."
+    },
+    {
+      "package": "minimatch",
+      "severity": "high before, moderate residual",
+      "kind": "transitive dev",
+      "chains": ["npm-run-all -> minimatch@^3.0.4", "@ts-morph/common -> minimatch@^5.1.0", "meta-bolt -> glob -> minimatch@^9.0.4"],
+      "installedAfter": ["3.1.5", "5.1.9", "9.0.9"],
+      "ids": ["GHSA-3ppc-4f35-3m26", "GHSA-7r86-cg39-jmmj", "GHSA-23c5-xmqv-rm74", "GHSA-g3hv-75wg-m249"],
+      "where": "Build-time globbing, including meta-bolt's zip helper.",
+      "action": "3.x and 5.x copies moved to versions outside the high ReDoS ranges. minimatch 9.0.9 remains inside GHSA-g3hv-75wg-m249. Clearing it is the breaking vite-uxp-plugin downgrade and was not done."
+    },
+    {
+      "package": "brace-expansion",
+      "severity": "high",
+      "kind": "transitive dev",
+      "chain": "minimatch copies -> brace-expansion",
+      "installedAfter": ["1.1.21", "2.1.7"],
+      "ids": ["GHSA-v6h2-p8h4-qcjw", "GHSA-f886-m6hf-6m8v", "GHSA-3jxr-9vmj-r5cp"],
+      "where": "Build-time matching.",
+      "action": "Updated inside the existing minimatch ranges. Not a shipped panel library."
+    },
+    {
+      "package": "glob",
+      "severity": "high before, moderate residual",
+      "kind": "transitive dev",
+      "chains": ["archiver-utils -> glob@^7.1.4 or ^7.2.3", "meta-bolt -> archiver-utils -> glob@^10.0.0"],
+      "installedAfter": ["7.2.3", "10.5.0"],
+      "ids": ["GHSA-5j98-mcp5-4vw2", "GHSA-3g3m-2fjr-6pw4"],
+      "where": "meta-bolt zip helper used by vite-uxp-plugin. The panel CCX is produced by that build.",
+      "action": "glob 10.5.0 is outside the CLI injection range <10.5.0 and still inside the AbortSignal advisory <=14.0.1. glob 7.2.3 was not in the 9-14 advisory range. No override was added."
+    },
+    {
+      "package": "browserslist",
+      "severity": "high",
+      "kind": "transitive dev",
+      "chain": "@babel/helper-compilation-targets -> browserslist@^4.24.0",
+      "installedBefore": "4.25.0",
+      "installedAfter": "4.29.5",
+      "ids": ["GHSA-c83g-rgw3-j3cx", "GHSA-73wf-gq98-2v4g"],
+      "where": "Babel target selection during the React build.",
+      "action": "4.29.5 is inside ^4.24.0 and outside <=4.28.6."
+    },
+    {
+      "package": "lodash",
+      "severity": "high",
+      "kind": "transitive dev",
+      "chain": "meta-bolt archiver-utils -> lodash@^4.17.15",
+      "installedBefore": "4.17.21",
+      "installedAfter": "4.18.1",
+      "ids": ["GHSA-r5fr-rjxr-66jc", "GHSA-xxjr-mmjv-4gpg"],
+      "where": "Build-time archiver helper.",
+      "action": "4.18.1 is inside ^4.17.15 and outside <=4.17.23."
+    },
+    {
+      "package": "immutable",
+      "severity": "high",
+      "kind": "transitive dev",
+      "chain": "sass -> immutable@^4.0.0",
+      "installedBefore": "4.3.4",
+      "installedAfter": "4.3.9",
+      "ids": ["GHSA-wf6x-7x77-mvgw", "GHSA-xvcm-6775-5m9r", "GHSA-v56q-mh7h-f735"],
+      "where": "Sass build.",
+      "action": "4.3.9 is inside ^4.0.0 and outside <4.3.9."
+    },
+    {
+      "package": "nanoid",
+      "severity": "high",
+      "kind": "transitive dev",
+      "chain": "postcss -> nanoid@^3.3.11",
+      "installedBefore": "3.3.11",
+      "installedAfter": "3.3.20",
+      "ids": ["GHSA-28wg-ghj8-5hjv", "GHSA-2v37-7h3g-55p8", "GHSA-xwg4-73v4-xw9w"],
+      "where": "PostCSS build.",
+      "action": "3.3.20 is inside ^3.3.11 and outside <=3.3.17."
+    },
+    {
+      "package": "picomatch",
+      "severity": "high",
+      "kind": "transitive dev",
+      "chains": ["micromatch/anymatch/readdirp -> picomatch@^2", "vite and tinyglobby -> picomatch@^4.0.2"],
+      "installedAfter": ["2.3.2", "4.0.7"],
+      "ids": ["GHSA-3v7f-55p6-f55p", "GHSA-c2c7-rcm5-vvqj"],
+      "where": "Build file matching.",
+      "action": "Updated inside the 2.x and 4.x ranges."
+    },
+    {
+      "package": "source-map-js",
+      "severity": "high",
+      "kind": "transitive dev",
+      "chain": "postcss -> source-map-js@^1.2.1 and sass",
+      "installedBefore": "1.2.1",
+      "installedAfter": "1.2.2",
+      "ids": ["GHSA-68fv-2mgg-jv7q"],
+      "where": "Build source maps.",
+      "action": "1.2.2 is outside <1.2.2."
+    },
+    {
+      "package": "diff",
+      "severity": "low",
+      "kind": "transitive dev",
+      "chain": "ts-node -> diff@^4.0.1",
+      "installedBefore": "4.0.2",
+      "installedAfter": "4.0.4",
+      "ids": ["GHSA-73rr-hh4g-fpgx"],
+      "where": "TypeScript tooling.",
+      "action": "4.0.4 is inside ^4.0.1 and outside <4.0.4."
+    },
+    {
+      "package": "@babel/core",
+      "severity": "low",
+      "kind": "transitive dev",
+      "chain": "@vitejs/plugin-react -> @babel/core@^7.26.10",
+      "installedBefore": "7.27.4",
+      "installedAfter": "7.29.13",
+      "ids": ["GHSA-4x5r-pxfx-6jf8"],
+      "where": "React refresh transform during build.",
+      "action": "7.29.13 is inside ^7.26.10. The reported range ended at 7.29.0."
+    }
+  ],
+  "releaseHold": "Seven moderate advisories remain through vite-uxp-plugin -> meta-bolt -> archiver, archiver-utils, glob@10.5.0, minimatch@9.0.9, and zip-stream. The only npm-offered fix is vite-uxp-plugin@0.2.5, an older major. It was not applied. This is not a production-ready claim and not a statement that the count means the panel is safe or unsafe.",
+  "skillRootSeparate": "The skill repository's own npm audit is still 7 moderate through create-bolt-uxp@1.3.27. That record is evidence/audit.json and is not this generated-plugin tree."
+}

@@ -11,6 +11,10 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const args = new Set(process.argv.slice(2));
 const files = ["test/guards.test.mjs", "test/authoring.test.mjs", "test/stages.test.mjs", "test/approval-graph.test.mjs"];
 if (args.has("--acceptance")) files.push("test/acceptance.test.mjs");
+if (args.has("--stacks")) {
+  console.log("--stacks installs Vue, Svelte, and the WebView document and runs their package scripts. It is not a browser and not a host pass.");
+  files.push("test/stacks.test.mjs");
+}
 if (args.has("--preview")) files.push("test/preview.test.mjs");
 if (args.has("--dashboard")) files.push("test/dashboard-render.test.mjs");
 

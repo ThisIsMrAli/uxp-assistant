@@ -3,13 +3,15 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 import { launch } from "../.claude/skills/uxp-assistant/scripts/lib/cdp.mjs";
 import { findChrome } from "../.claude/skills/uxp-assistant/scripts/lib/chrome.mjs";
 import { assetsDir } from "../.claude/skills/uxp-assistant/scripts/lib/paths.mjs";
 import { pagesForRequest } from "../.claude/skills/uxp-assistant/scripts/lib/registry.mjs";
 import { createDashboardServer } from "../.claude/skills/uxp-assistant/scripts/lib/server.mjs";
-import { finish } from "../.claude/skills/uxp-assistant/scripts/lib/session.mjs";
+import { answerFromChat, finish } from "../.claude/skills/uxp-assistant/scripts/lib/session.mjs";
 import { recordImplementation, runWorkflow } from "../.claude/skills/uxp-assistant/scripts/lib/workflow.mjs";
 
 const SHOW = "Show each selected layer id and name in the panel.";
@@ -59,10 +61,75 @@ test("the dashboard shows the outcome and does not call a skipped feature finish
     await page.eval("new Promise((resolve) => setTimeout(resolve, 400))");
     const phone = await page.eval("document.body.innerText");
     assert.match(phone, /Manual steps are in host-verification.md/);
+    const dashDir = path.join(repoRoot, "evidence/dashboard");
+    fs.mkdirSync(dashDir, { recursive: true });
+    await page.screenshot(path.join(dashDir, "commands-finished.png"), { x: 0, y: 0, width: 390, height: 844, scale: 1 });
   } finally {
     await page.close();
     await unknownDash.close();
     await doneDash.close();
+  }
+});
+
+test("the dashboard shows each staged choice before the session continues", { timeout: 90_000 }, async (t) => {
+  const chrome = findChrome();
+  if (!chrome) {
+    t.skip("No Chrome, Edge, or Chromium is installed.");
+    return;
+  }
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "uxp-walk-"));
+  const out = path.join(root, "session");
+  const base = {
+    mode: "dashboard",
+    framework: "react",
+    host: "phxs",
+    os: "linux",
+    context: "panel",
+    name: "Selection Panel",
+    id: "com.example.selection",
+    consequential: "proceed",
+    "narrow-permissions": "narrow",
+    goal: SHOW
+  };
+  const steps = [
+    ["feasibility", "continue", /Evidence before edits/],
+    ["context-evidence", "keep-unverified", /Context is not confirmed/],
+    ["runtime", "native", /Native UXP, WebView, or a bridge/],
+    ["design", "uxp-constraints", /Design source/],
+    ["validation", "commands", /What validation can record/]
+  ];
+  const dash = createDashboardServer({ out, assets: assetsDir, token: "token" });
+  const info = await dash.listen(0);
+  const page = await launch({ width: 1100, height: 800, chrome });
+  const dashDir = path.join(repoRoot, "evidence/dashboard");
+  fs.mkdirSync(dashDir, { recursive: true });
+  try {
+    for (const [id, option, title] of steps) {
+      const result = await runWorkflow({ out, kind: "empty", answers: base, fetchImpl, scaffoldImpl });
+      assert.equal(result.blocked, id, result.say);
+      await page.goto(info.url);
+      await page.eval("new Promise((resolve) => setTimeout(resolve, 800))");
+      const text = await page.eval("document.body.innerText");
+      assert.match(text, title);
+      await page.screenshot(path.join(dashDir, `${id}.png`), { x: 0, y: 0, width: 1100, height: 800, scale: 1 });
+      answerFromChat(out, id, option);
+    }
+    const ready = await runWorkflow({
+      out,
+      kind: "empty",
+      answers: base,
+      fetchImpl,
+      scaffoldImpl
+    });
+    assert.equal(ready.state, "awaiting-agent-implementation");
+    await page.goto(info.url);
+    await page.eval("new Promise((resolve) => setTimeout(resolve, 500))");
+    const waiting = await page.eval("document.body.innerText");
+    assert.match(waiting, /awaiting-agent-implementation|Implement|Waiting/);
+    await page.screenshot(path.join(dashDir, "awaiting-implementation.png"), { x: 0, y: 0, width: 1100, height: 800, scale: 1 });
+  } finally {
+    await page.close();
+    await dash.close();
   }
 });
 

@@ -1,0 +1,12 @@
+{
+  "capturedOn": "this cloud environment",
+  "boxBrowser": false,
+  "hostExecuted": false,
+  "surface": "webview-document",
+  "html": "evidence/webview-document.html",
+  "after": {
+    "clicked": true,
+    "text": "This is the packaged WebView document. It is browser content. The native panel bridge was not executed. window.uxpHost is not invented here. Adobe host: NOT TESTED.\n\nWebView document\n\nClicked in the WebView document. No host API was called.\n\nMark read"
+  },
+  "rendered": true
+}

@@ -20,16 +20,39 @@ export function starterIconsDir(root = repoRoot) {
  * Vite does not typecheck that identifier. Import the starter's uxp binding.
  */
 export function repairEntrypoint(project) {
-  const relative = "src/main.tsx";
-  const main = path.join(project, relative);
-  if (!fs.existsSync(main)) return { repaired: false, reason: "no main.tsx" };
-  const text = fs.readFileSync(main, "utf8");
-  const uses = /\buxp\s*\./.test(text);
-  const imported = /import\s*\{[^}]*\buxp\b[^}]*\}\s*from\s*["']\.\/globals["']/.test(text);
-  if (!uses) return { repaired: false, reason: "main.tsx does not reference uxp." };
-  if (imported) return { repaired: false, reason: "uxp is already imported." };
-  fs.writeFileSync(main, `import { uxp } from "./globals";\n${text}`);
-  return { repaired: true, file: relative, reason: "Added the globals import that sampleCode:false removes." };
+  const files = [];
+  const tsx = path.join(project, "src", "main.tsx");
+  if (fs.existsSync(tsx)) {
+    const text = fs.readFileSync(tsx, "utf8");
+    const uses = /\buxp\s*\./.test(text);
+    const imported = /import\s*\{[^}]*\buxp\b[^}]*\}\s*from\s*["']\.\/globals["']/.test(text);
+    if (uses && !imported) {
+      fs.writeFileSync(tsx, `import { uxp } from "./globals";\n${text}`);
+      files.push("src/main.tsx");
+    }
+  }
+  const vue = path.join(project, "src", "main.vue");
+  if (fs.existsSync(vue)) {
+    const text = fs.readFileSync(vue, "utf8");
+    if (/\buxp\s*\./.test(text) && !/import\s*\{[^}]*\buxp\b/.test(text)) {
+      fs.writeFileSync(vue, text.replace("<script setup lang=\"ts\">", "<script setup lang=\"ts\">\nimport { uxp } from \"./globals\";"));
+      files.push("src/main.vue");
+    }
+  }
+  const svelte = path.join(project, "src", "main.svelte");
+  if (fs.existsSync(svelte)) {
+    const text = fs.readFileSync(svelte, "utf8");
+    if (/\bwebviewUI\b/.test(text) && !/const webviewUI\b/.test(text)) {
+      fs.writeFileSync(svelte, text.replace("<script lang=\"ts\">", "<script lang=\"ts\">\n  const webviewUI = import.meta.env.VITE_BOLT_WEBVIEW_UI === \"true\";"));
+      files.push("src/main.svelte");
+    }
+  }
+  return {
+    repaired: files.length > 0,
+    file: files[0] || "",
+    files,
+    reason: files.length ? "Restored identifiers that sampleCode:false removed, without changing the starter stack." : "No stripped entrypoint identifier needed a repair."
+  };
 }
 
 /** The installer globalIncludes list omits public/**. Copy the starter icons the manifest names. */
