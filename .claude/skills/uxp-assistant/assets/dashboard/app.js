@@ -479,7 +479,7 @@ function paintStats() {
   const outcome = s?.outcome || report().state || "none";
   const commandsRecorded = outcome === "commands-finished" && report().success === true && report().hostExecuted !== true && s?.verification?.hostExecuted !== true;
   const tiles = [
-    { tone: commandsRecorded ? "work" : "warn", icon: commandsRecorded ? "info" : "alert", k: "Feature", v: outcome, s: commandsRecorded ? "Commands recorded. Not semantic proof. Host NOT TESTED." : "Not complete. A missing recipe is not success." },
+    { tone: commandsRecorded ? "work" : "warn", icon: commandsRecorded ? "info" : "alert", k: "Feature", v: outcome, s: commandsRecorded ? "Commands recorded. Source review pending. Not feature correctness. Host NOT TESTED." : "Not complete. A missing recipe is not success." },
     { tone: d.errors.length ? "bad" : "work", icon: d.errors.length ? "x" : "info", k: "Code errors", v: d.errors.length, s: d.total ? `${d.fixed.length} of ${d.total} findings fixed` : "An empty scan is not a finished feature." },
     { tone: d.warnings.length || !commandsRecorded ? "warn" : "work", icon: d.warnings.length || !commandsRecorded ? "alert" : "info", k: "Warnings", v: d.warnings.length, s: commandsRecorded ? `${d.patterns.length} review ${plural(d.patterns.length, "pattern")}` : "Not a completed feature." },
     { tone: d.bugsOpen.length ? "bad" : audit ? "ok" : "work", icon: "bug", k: "Panel bugs open", v: audit || d.bugsOpen.length || d.bugsFixed.length ? d.bugsOpen.length : "–", s: audit ? `${d.bugsFixed.length} fixed, ${audit.screens ?? 0} ${plural(audit.screens ?? 0, "screen")} measured` : "Measured at 320px" },
