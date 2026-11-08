@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -83,6 +84,7 @@ export async function scaffoldWithInstaller(parent, options) {
     const folder = path.join(parent, options.folderName);
     const repair = repairEntrypoint(folder);
     const icons = copyStarterIcons(folder, options.repoRoot);
+    const auditFix = options.installDeps ? applyNonBreakingAuditFix(folder) : { applied: false, reason: "Dependencies were not installed." };
     return {
       folder,
       installer: "create-bolt-uxp@1.3.27",
@@ -90,9 +92,49 @@ export async function scaffoldWithInstaller(parent, options) {
       hybrid: options.hybrid,
       repair,
       icons,
+      auditFix,
       result: result ?? null
     };
   } finally {
     process.chdir(previous);
   }
+}
+
+/** Update the generated lockfile inside the ranges Bolt already declared. Never pass --force. */
+function applyNonBreakingAuditFix(folder) {
+  const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+  const pkgPath = path.join(folder, "package.json");
+  const lockPath = path.join(folder, "package-lock.json");
+  const before = fs.existsSync(pkgPath) ? fs.readFileSync(pkgPath, "utf8") : "";
+  const lockBefore = fs.existsSync(lockPath) ? fs.readFileSync(lockPath) : null;
+  const result = spawnSync(npm, ["audit", "fix", "--package-lock-only"], {
+    cwd: folder,
+    encoding: "utf8",
+    timeout: 180000
+  });
+  if (before && fs.existsSync(pkgPath) && fs.readFileSync(pkgPath, "utf8") !== before) {
+    fs.writeFileSync(pkgPath, before);
+    if (lockBefore) fs.writeFileSync(lockPath, lockBefore);
+    return {
+      applied: false,
+      status: result.status,
+      reason: "npm audit fix rewrote package.json. The Bolt dependency declarations were restored and the lockfile update was not installed."
+    };
+  }
+  if (!(result.status === 0 || result.status === 1)) {
+    return {
+      applied: false,
+      status: result.status,
+      reason: `npm audit fix did not finish (${result.error ? result.error.message : result.status}). The installer tree was left as create-bolt-uxp wrote it.`
+    };
+  }
+  const install = spawnSync(npm, ["ci"], { cwd: folder, encoding: "utf8", timeout: 180000 });
+  return {
+    applied: install.status === 0,
+    status: result.status,
+    installStatus: install.status,
+    reason: install.status === 0
+      ? "The lockfile was updated inside the declared ranges and reinstalled. npm audit fix was not passed --force. Remaining advisories were left in place."
+      : "The lockfile update did not reinstall. The generated tree may still be the original install."
+  };
 }

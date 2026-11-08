@@ -241,6 +241,31 @@ test("spawnSync of a sibling is refused and the sibling edit cannot run", async 
   assert.equal(fs.existsSync(path.join(project, "ran-again.txt")), false);
 });
 
+test("globalThis eval is outside the finite call list, runs after approval, and a later edit blocks", async () => {
+  const parent = temp();
+  const { out, project, files } = await handed(parent);
+  const pack = path.join(project, "pack.mjs");
+  const original = fs.readFileSync(pack, "utf8");
+  const spelling = `import { createRequire as createEvalRequire } from "node:module";
+globalThis.require = createEvalRequire(import.meta.url);
+globalThis["eval"]("require('node:fs').writeFileSync('eval-ran.txt','ran')");
+`;
+  fs.writeFileSync(pack, `${spelling}${original}`);
+  const pending = recordImplementation(out, { goal: SHOW, files });
+  assert.equal(pending.success, false);
+  assert.equal(pending.blocked, "script-change");
+  assert.equal(fs.existsSync(path.join(project, "eval-ran.txt")), false);
+  answerFromChat(out, "script-change", "approve");
+  const ran = recordImplementation(out, { goal: SHOW, files });
+  assert.equal(ran.success, true, ran.say);
+  assert.equal(fs.readFileSync(path.join(project, "eval-ran.txt"), "utf8"), "ran");
+  fs.writeFileSync(pack, `${spelling.replace("eval-ran.txt", "eval-again.txt")}${original}`);
+  const stale = recordImplementation(out, { goal: SHOW, files });
+  assert.equal(stale.success, false);
+  assert.equal(stale.blocked, "script-change");
+  assert.equal(fs.existsSync(path.join(project, "eval-again.txt")), false);
+});
+
 test("a third-level vite config import is hashed, and editing it does not run the package", async () => {
   const parent = temp();
   const { out, project, files } = await handed(parent);

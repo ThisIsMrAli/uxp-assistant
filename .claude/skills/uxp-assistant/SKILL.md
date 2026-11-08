@@ -25,3 +25,5 @@ Do not stop after the plan. Continue until the session outcome is commands-finis
 ## Limits
 
 `npm test`, `npm run build`, a CCX file, and the dashboard do not execute Photoshop or Premiere. Host unavailable is NOT TESTED. Follow `host-verification.md` by hand. Do not claim a host pass. Do not claim the implementation is correct because a command exited 0 or a symbol appears in the package. Source and behavior review stays pending.
+
+The command checker refuses a finite set of call shapes in a hashed file: `eval(`, `new Function(`, `vm.run`, and the named `child_process` helpers. `globalThis["eval"]` is not one of those shapes. A file approved with that spelling can run. A later edit of the file still changes the hash, and the command does not run. That list is not being grown into a token blacklist. The checker is not a sandbox.

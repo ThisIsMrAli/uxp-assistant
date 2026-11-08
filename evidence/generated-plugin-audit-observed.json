@@ -1,0 +1,23 @@
+{
+  "project": "acceptance empty-folder tree after npm audit fix --package-lock-only and npm ci",
+  "force": false,
+  "packageJsonRanges": {
+    "vite": "^6.3.5",
+    "ws": "^8.14.2",
+    "vite-uxp-plugin": "^1.3.26"
+  },
+  "installed": {
+    "shell-quote": "1.12.0",
+    "vite": "6.4.5",
+    "ws": "8.22.2"
+  },
+  "vulnerabilities": {
+    "info": 0,
+    "low": 0,
+    "moderate": 7,
+    "high": 0,
+    "critical": 0,
+    "total": 7
+  },
+  "note": "critical and high are zero after the in-range lockfile update. Remaining moderate advisories are not dismissed. vite-uxp-plugin was not downgraded."
+}

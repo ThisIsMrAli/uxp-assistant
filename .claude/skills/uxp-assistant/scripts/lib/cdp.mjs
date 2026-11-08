@@ -213,8 +213,8 @@ async function makePage(socket, size, cleanup) {
       }
     },
 
-    async screenshot(file) {
-      const { data } = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+    async screenshot(file, clip) {
+      const { data } = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false, ...(clip ? { clip } : {}) });
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, Buffer.from(data, "base64"));
       return file;

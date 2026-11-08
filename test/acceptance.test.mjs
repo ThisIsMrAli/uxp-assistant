@@ -19,6 +19,7 @@ test("create-bolt-uxp scaffolds from a cwd that is not the repository, and both 
   process.chdir(os.tmpdir());
   let empty;
   let existing;
+  let observedAudit;
   try {
     empty = await runWorkflow({
       out: path.join(root, "empty-session"),
@@ -58,6 +59,36 @@ test("create-bolt-uxp scaffolds from a cwd that is not the repository, and both 
     assert.ok(members.some((name) => name.endsWith("icons/light.png")));
     const js = readZip(full).filter((member) => member.name.endsWith(".js")).map((member) => member.data.toString("utf8")).join("\n");
     assert.match(js, /Document title/);
+    assert.match(js, /document-title-panel/);
+    assert.match(js, /CSS transitions and animations are not supported/);
+    assert.match(js, /font-size: 14px/);
+    assertNoStarterChrome(js);
+    assertNoStarterChrome(fs.readFileSync(path.join(empty.project, "src", "app.css"), "utf8"));
+    assertNoStarterChrome(fs.readFileSync(path.join(empty.project, "src", "index.scss"), "utf8"));
+    assertNoStarterChrome(fs.readFileSync(path.join(empty.project, "src", "panel-design.css"), "utf8"));
+    const pkg = JSON.parse(fs.readFileSync(path.join(empty.project, "package.json"), "utf8"));
+    const lock = JSON.parse(fs.readFileSync(path.join(empty.project, "package-lock.json"), "utf8"));
+    assert.equal(pkg.devDependencies.vite, "^6.3.5");
+    assert.equal(pkg.devDependencies.ws, "^8.14.2");
+    assert.notEqual(pkg.devDependencies["vite-uxp-plugin"], "0.2.5");
+    const shellQuote = lock.packages["node_modules/shell-quote"].version;
+    const viteVersion = lock.packages["node_modules/vite"].version;
+    const wsVersion = lock.packages["node_modules/ws"].version;
+    assert.notEqual(shellQuote, "1.8.1");
+    assert.notEqual(viteVersion, "6.3.5");
+    assert.notEqual(wsVersion, "8.14.2");
+    const audit = spawnSync("npm", ["audit", "--json"], { cwd: empty.project, encoding: "utf8" });
+    const report = JSON.parse(audit.stdout);
+    assert.equal(report.metadata.vulnerabilities.critical, 0);
+    assert.equal(report.metadata.vulnerabilities.high, 0);
+    observedAudit = {
+      project: "acceptance empty-folder tree after npm audit fix --package-lock-only and npm ci",
+      force: false,
+      packageJsonRanges: { vite: pkg.devDependencies.vite, ws: pkg.devDependencies.ws, "vite-uxp-plugin": pkg.devDependencies["vite-uxp-plugin"] },
+      installed: { "shell-quote": shellQuote, vite: viteVersion, ws: wsVersion },
+      vulnerabilities: report.metadata.vulnerabilities,
+      note: "critical and high are zero after the in-range lockfile update. Remaining moderate advisories are not dismissed. vite-uxp-plugin was not downgraded."
+    };
     fs.mkdirSync(path.join(root, "kept"), { recursive: true });
     fs.copyFileSync(full, path.join(root, "kept", "document-title.ccx"));
     fs.writeFileSync(path.join(root, "kept", "document-title.json"), `${JSON.stringify({
@@ -111,6 +142,7 @@ test("create-bolt-uxp scaffolds from a cwd that is not the repository, and both 
     limits: "Zip timestamps can change a later digest. These files are the retained archives from this run. Photoshop and Premiere were not launched."
   };
   fs.writeFileSync("evidence/artifacts/acceptance.json", `${JSON.stringify(note, null, 2)}\n`);
+  fs.writeFileSync("evidence/generated-plugin-audit-observed.json", `${JSON.stringify(observedAudit, null, 2)}\n`);
   const log = spawnSync(process.execPath, ["-e", "process.stdout.write('acceptance recorded')"], { encoding: "utf8" });
   assert.equal(log.status, 0);
 });
@@ -173,8 +205,141 @@ async function fetchImpl(url) {
   return { ok: true, async text() { return text; } };
 }
 
+function assertNoStarterChrome(source) {
+  assert.doesNotMatch(source, /font-size:\s*3\.2em/);
+  assert.doesNotMatch(source, /100vh/);
+  assert.doesNotMatch(source, /100vw/);
+  assert.doesNotMatch(source, /transition\s*:/);
+  assert.doesNotMatch(source, /place-items\s*:/);
+  assert.doesNotMatch(source, /display\s*:\s*flex/);
+  assert.doesNotMatch(source, /background-color\s*:\s*transparent/);
+  assert.doesNotMatch(source, /border\s*:\s*none/);
+  assert.doesNotMatch(source, /min-width\s*:\s*320px/);
+}
+
+function stripConflictingStarterRules(css) {
+  return css
+    .replace(/(^|[;{\n])[ \t]*transition\s*:[^;]*;/g, "$1")
+    .replace(/(^|[;{\n])[ \t]*min-height\s*:\s*100vh\s*;/g, "$1")
+    .replace(/(^|[;{\n])[ \t]*height\s*:\s*100vh\s*;/g, "$1")
+    .replace(/(^|[;{\n])[ \t]*width\s*:\s*100vw\s*;/g, "$1")
+    .replace(/(^|[;{\n])[ \t]*min-width\s*:\s*320px\s*;/g, "$1")
+    .replace(/(^|[;{\n])[ \t]*font-size\s*:\s*3\.2em\s*;/g, "$1")
+    .replace(/(^|[;{\n])[ \t]*line-height\s*:\s*1\.1\s*;/g, "$1")
+    .replace(/(^|[;{\n])[ \t]*place-items\s*:[^;]*;/g, "$1")
+    .replace(/(^|[;{\n])[ \t]*display\s*:\s*flex\s*;/g, "$1")
+    .replace(/(^|[;{\n])[ \t]*flex-direction\s*:[^;]*;/g, "$1")
+    .replace(/(^|[;{\n])[ \t]*justify-content\s*:[^;]*;/g, "$1")
+    .replace(/(^|[;{\n])[ \t]*align-items\s*:[^;]*;/g, "$1")
+    .replace(/(^|[;{\n])[ \t]*background-color\s*:\s*transparent\s*;/g, "$1")
+    .replace(/(^|[;{\n])[ \t]*background-color\s*:\s*#1a1a1a\s*;/g, "$1")
+    .replace(/(^|[;{\n])[ \t]*border\s*:\s*1px solid transparent\s*;/g, "$1")
+    .replace(/(^|[;{\n])[ \t]*border\s*:\s*none\s*;/g, "$1")
+    .replace(/(^|[;{\n])[ \t]*border-color\s*:[^;]*;/g, "$1")
+    .replace(/(^|[;{\n])[ \t]*outline\s*:\s*none\s*;/g, "$1")
+    .replace(/(^|[;{\n])[ \t]*outline\s*:\s*4px auto -webkit-focus-ring-color\s*;/g, "$1");
+}
+
+function rewriteStarterChrome(project) {
+  for (const name of ["app.css", "index.scss"]) {
+    const file = path.join(project, "src", name);
+    if (!fs.existsSync(file)) continue;
+    fs.writeFileSync(file, stripConflictingStarterRules(fs.readFileSync(file, "utf8")));
+  }
+}
+
+function designQuotes(project) {
+  const file = path.join(project, "design-constraints.md");
+  if (!fs.existsSync(file)) return [];
+  return [...fs.readFileSync(file, "utf8").matchAll(/^-\s+Fresh page text[^:]*:\s*(.+)$/gm)].map((match) => match[1].trim());
+}
+
 function writeTitle(project) {
   fs.mkdirSync(path.join(project, "test"), { recursive: true });
+  const quotes = designQuotes(project);
+  fs.writeFileSync(path.join(project, "src", "panel-design.mjs"), `export const appliedConstraints = ${JSON.stringify(quotes, null, 2)};
+export const surface = "plain-html-host-css";
+export const spectrum = "UXP sp-* widgets are not used. A browser Spectrum library is not loaded and is not a stand-in for native UXP widgets.";
+`);
+  const quoteComment = quotes.length
+    ? quotes.map((quote) => ` * ${quote}`).join("\n")
+    : " * No fresh limit sentence was recorded. Transitions and text-transform are still omitted.";
+  fs.writeFileSync(path.join(project, "src", "panel-design.css"), `/* Applied from design-constraints.md. This panel consumes those sentences.
+${quoteComment}
+ * Plain HTML uses host color variables. The button is a real button, not an sp-button mock.
+ * Conflicting starter rules are deleted from app.css and index.scss before this file is added.
+ */
+html, body {
+  display: block;
+  height: auto;
+  min-height: 0;
+  min-width: 0;
+  margin: 0;
+}
+#app {
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  text-align: start;
+  box-sizing: border-box;
+}
+main {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0;
+  align-items: stretch;
+  justify-content: flex-start;
+}
+.document-title-panel {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  padding: 12px;
+  text-align: start;
+  overflow-wrap: anywhere;
+  background: var(--uxp-host-background-color, transparent);
+  color: var(--uxp-host-text-color, inherit);
+}
+.document-title-panel h1 {
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+.document-title-panel .status,
+.document-title-panel .empty,
+.document-title-panel .error,
+.document-title-panel .title {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 16px;
+}
+.document-title-panel .error {
+  color: #ffb4b4;
+}
+.document-title-panel button {
+  font-size: 12px;
+  line-height: 16px;
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--uxp-host-border-color, currentColor);
+  background: var(--uxp-host-widget-hover-background-color, transparent);
+  color: var(--uxp-host-text-color, inherit);
+  cursor: pointer;
+}
+.document-title-panel button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.document-title-panel button:focus-visible {
+  outline: 2px solid var(--uxp-host-link-text-color, currentColor);
+  outline-offset: 2px;
+}
+`);
+  rewriteStarterChrome(project);
   fs.writeFileSync(path.join(project, "src", "document-title.mjs"), `export async function readDocumentTitle(app) {
   if (!app) return { ok: false, status: "Photoshop is not available." };
   const document = app.activeDocument;
@@ -187,6 +352,8 @@ function writeTitle(project) {
   fs.writeFileSync(path.join(project, "src", "DocumentTitle.tsx"), `import React, { useState } from "react";
 import { photoshop } from "./globals";
 import { readDocumentTitle } from "./document-title.mjs";
+import { appliedConstraints } from "./panel-design.mjs";
+import "./panel-design.css";
 
 export function DocumentTitlePanel() {
   const [status, setStatus] = useState("Idle");
@@ -206,12 +373,13 @@ export function DocumentTitlePanel() {
       setBusy(false);
     }
   }
+  const empty = !title && status === "Idle";
   return (
-    <section>
+    <section className="document-title-panel" aria-busy={busy} data-design={appliedConstraints.join(" | ")}>
       <h1>Document title</h1>
-      <p className="status">{status}</p>
+      <p className="status" role="status">{status}</p>
       <button type="button" disabled={busy} onClick={read}>{busy ? "Loading" : "Read title"}</button>
-      {title ? <p>{title}</p> : <p className="error">{status}</p>}
+      {title ? <p className="title">{title}</p> : <p className={empty ? "empty" : "error"}>{empty ? "No title yet." : status}</p>}
     </section>
   );
 }

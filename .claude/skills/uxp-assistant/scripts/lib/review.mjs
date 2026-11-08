@@ -73,7 +73,7 @@ export function isNoopTestScript(script) {
 /** Local files named by one command. Past this, the graph is refused rather than approved in part. */
 export const GRAPH_LIMIT = 40;
 
-const GRAMMAR = "Supported scripts are: node <local file>, node --import/--require <local file> <local file>, node --test, node -e with no import or require, npm run <name> for one hop into one of those, and cross-env NAME=value vite build. Shell wrappers, extra hops, dynamic imports, process or eval inside a hashed file, and a graph past the file cap are not approved. This is not a sandbox and not a complete executable closure.";
+const GRAMMAR = "Supported scripts are: node <local file>, node --import/--require <local file> <local file>, node --test, node -e with no import or require, npm run <name> for one hop into one of those, and cross-env NAME=value vite build. Shell wrappers, extra hops, dynamic imports, process or eval inside a hashed file, and a graph past the file cap are not approved. The eval refusal is the finite call shapes eval(, new Function(, and vm.run. A computed spelling such as globalThis[\"eval\"] is not on that list, so an approved file that uses it can run. Editing that file afterward still fails the hash and the command does not run. The list is not being extended. This is not a sandbox and not a complete executable closure.";
 
 const CODE_EXT = [".mjs", ".cjs", ".js", ".ts", ".tsx", ".mts", ".cts"];
 
