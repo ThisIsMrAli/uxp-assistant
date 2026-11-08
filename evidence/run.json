@@ -3,96 +3,54 @@
   "node": "v22.23.4",
   "npm": "10.9.9",
   "candidate": "The commit that adds this file. The file cannot contain its own commit SHA.",
-  "retracted": {
-    "commit": "be20127969498ffb9f9bb3b811f8dfb327cd775c",
-    "claim": "ccx/com.example.selection_PS.ccx 101835 bytes sha256 134237a0bc5d6cff132ef13d2cb417f380de5375cdce258329f1f018137f97c9",
-    "reason": "That archive was not retained and was not reproduced. Zip timestamps can change a later digest. This file records the archives retained from the test run that wrote them."
-  },
+  "retracted": [
+    {
+      "commit": "be20127969498ffb9f9bb3b811f8dfb327cd775c",
+      "claim": "ccx/com.example.selection_PS.ccx 101835 bytes sha256 134237a0bc5d6cff132ef13d2cb417f380de5375cdce258329f1f018137f97c9",
+      "reason": "That archive was not retained and was not reproduced."
+    },
+    {
+      "commit": "e33db6917519576a57facf70ca3f4759d9b5f61f",
+      "claim": "document-title.ccx 126207 bytes sha256 7deba2d3ad3857877647f3b38912c3b0ccb79297cb13150e4db38dc3aa4379cb and existing-document-title.ccx sha256 f795ea05ab81de859d1786325f76618a0b52d1b56083f17a9b63ddb81d362f68",
+      "reason": "Those digests belonged to the previous candidate. This run replaced the retained archives. Zip timestamps can change a later digest."
+    }
+  ],
   "hostExecuted": false,
   "photoshop": "NOT TESTED",
   "premiere": "NOT TESTED",
   "tests": {
     "command": "node --test",
     "exit": 0,
-    "tests": 23,
-    "pass": 23,
+    "tests": 27,
+    "pass": 27,
     "fail": 0,
     "log": "evidence/logs/npm-test.log"
   },
   "goal": "Show the active document title in the panel.",
   "fixture": null,
-  "installer": {
-    "package": "create-bolt-uxp",
-    "version": "1.3.27",
-    "resolvedFrom": "repository node_modules, not process.cwd()",
-    "sampleCode": false,
-    "entrypointRepair": "src/main.tsx imports { uxp } from ./globals after sampleCode:false",
-    "permissions": "requiredPermissions replaced by brace depth with requiredPermissions: {}",
-    "starterMinVersion": "24.2.0"
-  },
   "emptyFolder": {
     "file": "evidence/artifacts/document-title.ccx",
     "bytes": 126207,
-    "sha256": "7deba2d3ad3857877647f3b38912c3b0ccb79297cb13150e4db38dc3aa4379cb",
+    "sha256": "206d119d191379d62a1d59ebc115bacc6f4068c4fbe3aff1687b6614504468de",
     "members": [
-      {
-        "name": "assets/",
-        "bytes": 0
-      },
-      {
-        "name": "assets/index-Chc7lSNg.js",
-        "bytes": 593201
-      },
-      {
-        "name": "icons/",
-        "bytes": 0
-      },
-      {
-        "name": "icons/dark.png",
-        "bytes": 4074
-      },
-      {
-        "name": "icons/dark@1x.png",
-        "bytes": 1717
-      },
-      {
-        "name": "icons/dark@2x.png",
-        "bytes": 1988
-      },
-      {
-        "name": "icons/light.png",
-        "bytes": 3251
-      },
-      {
-        "name": "icons/light@1x.png",
-        "bytes": 1678
-      },
-      {
-        "name": "icons/light@2x.png",
-        "bytes": 1976
-      },
-      {
-        "name": "icons/plugin-icon.png",
-        "bytes": 9762
-      },
-      {
-        "name": "icons/plugin-icon@1x.png",
-        "bytes": 2043
-      },
-      {
-        "name": "icons/plugin-icon@2x.png",
-        "bytes": 2411
-      },
-      {
-        "name": "index.html",
-        "bytes": 372
-      },
-      {
-        "name": "manifest.json",
-        "bytes": 1315
-      }
+      "assets/",
+      "assets/index-Chc7lSNg.js",
+      "icons/",
+      "icons/dark.png",
+      "icons/dark@1x.png",
+      "icons/dark@2x.png",
+      "icons/light.png",
+      "icons/light@1x.png",
+      "icons/light@2x.png",
+      "icons/plugin-icon.png",
+      "icons/plugin-icon@1x.png",
+      "icons/plugin-icon@2x.png",
+      "index.html",
+      "manifest.json"
     ],
     "containsDocumentTitle": true,
+    "containsActiveDocument": true,
+    "containsTitleProperty": true,
     "iconMembers": [
       "icons/",
       "icons/dark.png",
@@ -109,66 +67,26 @@
   "existingProject": {
     "file": "evidence/artifacts/existing-document-title.ccx",
     "bytes": 126207,
-    "sha256": "f795ea05ab81de859d1786325f76618a0b52d1b56083f17a9b63ddb81d362f68",
+    "sha256": "ca0fae5f56785473540ed6947dea737e5772350981dfca3890f386e46df53452",
     "members": [
-      {
-        "name": "assets/",
-        "bytes": 0
-      },
-      {
-        "name": "assets/index-Chc7lSNg.js",
-        "bytes": 593201
-      },
-      {
-        "name": "icons/",
-        "bytes": 0
-      },
-      {
-        "name": "icons/dark.png",
-        "bytes": 4074
-      },
-      {
-        "name": "icons/dark@1x.png",
-        "bytes": 1717
-      },
-      {
-        "name": "icons/dark@2x.png",
-        "bytes": 1988
-      },
-      {
-        "name": "icons/light.png",
-        "bytes": 3251
-      },
-      {
-        "name": "icons/light@1x.png",
-        "bytes": 1678
-      },
-      {
-        "name": "icons/light@2x.png",
-        "bytes": 1976
-      },
-      {
-        "name": "icons/plugin-icon.png",
-        "bytes": 9762
-      },
-      {
-        "name": "icons/plugin-icon@1x.png",
-        "bytes": 2043
-      },
-      {
-        "name": "icons/plugin-icon@2x.png",
-        "bytes": 2411
-      },
-      {
-        "name": "index.html",
-        "bytes": 372
-      },
-      {
-        "name": "manifest.json",
-        "bytes": 1315
-      }
+      "assets/",
+      "assets/index-Chc7lSNg.js",
+      "icons/",
+      "icons/dark.png",
+      "icons/dark@1x.png",
+      "icons/dark@2x.png",
+      "icons/light.png",
+      "icons/light@1x.png",
+      "icons/light@2x.png",
+      "icons/plugin-icon.png",
+      "icons/plugin-icon@1x.png",
+      "icons/plugin-icon@2x.png",
+      "index.html",
+      "manifest.json"
     ],
     "containsDocumentTitle": true,
+    "containsActiveDocument": true,
+    "containsTitleProperty": true,
     "iconMembers": [
       "icons/",
       "icons/dark.png",
@@ -189,16 +107,16 @@
     "hostExecuted": false,
     "packaged": false,
     "evidenceUrl": "https://developer.adobe.com/premiere-pro/uxp/ppro-reference/classes/project/",
-    "token": "importFiles",
-    "quote": "| | targetBin | [*ProjectItem*](projectitem.md) | - | <HorizontalLine /> ### importFiles Import files in root/target bin of the project Since: **25.6** Returns: Promise\\<*boolean*\\> #### Parameters | Nam"
+    "token": "importFiles"
   },
   "limits": [
-    "Command exits and a string from the feature inside the archive are not semantic proof and are not a host pass.",
+    "Command success is not feature correctness and not a host pass.",
+    "Source and behavior review is still pending. The automated checks are bounded: a new documented API symbol in changed code, a real import and a non-tautological assertion, and that symbol in every new archive.",
     "Photoshop was not launched. Premiere was not launched.",
     "A later rebuild can produce a different SHA-256 because zip timestamps differ. The digests above are the retained files.",
-    "suspendHistory has no separate numeric floor on the fetched executeAsModal page. None is invented.",
     "importFiles is a handoff from the official Project class page. This run did not package a Premiere plugin.",
-    "Vue, Svelte, InDesign, Media Encoder, Illustrator, and After Effects are inventory. They were not the acceptance run.",
+    "suspendHistory has no separate numeric floor on the fetched executeAsModal page. None is invented.",
+    "Vue, Svelte, InDesign, Media Encoder, Illustrator, and After Effects are inventory. They were not this acceptance run.",
     "Passing this suite does not declare the product ready."
   ]
 }

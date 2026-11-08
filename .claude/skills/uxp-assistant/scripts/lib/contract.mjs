@@ -28,6 +28,8 @@ export function buildContract({ intake, capability, projectPath, docs, kept, bas
     detail: capability.detail,
     unverified: [
       "The Adobe host was not executed.",
+      "Command success is not feature correctness.",
+      "Source and behavior review is still pending.",
       "A documented name in fresh pages is not semantic proof of the implementation."
     ],
     doNot: [

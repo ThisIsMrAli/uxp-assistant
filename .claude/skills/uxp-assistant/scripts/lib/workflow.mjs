@@ -9,7 +9,7 @@ import { effectiveHostFloor, floorsFromText } from "./floors.mjs";
 import { narrowRequiredPermissions } from "./permissions.mjs";
 import { runPackage } from "./package-project.mjs";
 import { rememberOut } from "./paths.mjs";
-import { REVIEW_LIMIT, reviewArchive, reviewClaim, snapshotProject, testsCoverFeature } from "./review.mjs";
+import { REVIEW_LIMIT, reviewArchive, reviewClaim, reviewCommandProvenance, selectArchives, snapshotProject, testsCoverFeature } from "./review.mjs";
 import { refreshPages, readPageText } from "./refresh.mjs";
 import { pagesForRequest } from "./registry.mjs";
 import { publishAsk, readMerged, recordFacts, setMode, setStep, startSession } from "./session.mjs";
@@ -232,7 +232,7 @@ export function recordImplementation(out, claimed, { runner } = {}) {
   }
   const claim = reviewClaim({ contract, files, bodies });
   if (!claim.ok) return incomplete(out, "not-yet-implemented", claim.say);
-  setStep(out, "implementation", "done", `Changed files mention ${claim.hit.join(", ")}. ${REVIEW_LIMIT}`, { verified: true });
+  setStep(out, "implementation", "done", `Changed code uses ${claim.usedSymbols.join(", ")}. ${REVIEW_LIMIT}`, { verified: true });
   setStep(out, "ui", "done", "A changed file shows an error, disabled, or loading state. That marker is not the feature by itself.", { verified: true });
   const docsStep = session.steps.find((step) => step.id === "docs");
   if (docsStep?.status !== "done") {
@@ -240,7 +240,14 @@ export function recordImplementation(out, claimed, { runner } = {}) {
     publishOutcome(out, "failed", false);
     return { ok: false, success: false, state: "failed", hostExecuted: false, say: "Official docs are not all fresh. Tests and package were not run and were not marked done." };
   }
-  const covered = testsCoverFeature(project, claim.changed);
+  const provenance = reviewCommandProvenance(project, contract.baseline, claimed.approveScripts);
+  if (!provenance.ok) {
+    setStep(out, "package", "failed", provenance.say);
+    recordFacts(out, { outcome: "failed", verification: { hostExecuted: false, status: "NOT TESTED" }, commandProvenance: provenance });
+    publishOutcome(out, "failed", false);
+    return { ok: false, success: false, state: "failed", hostExecuted: false, say: provenance.say };
+  }
+  const covered = testsCoverFeature(project, claim.changed, claim.usedSymbols);
   if (!covered.ok) {
     setStep(out, "tests", "failed", covered.say);
     recordFacts(out, { outcome: "failed", verification: { hostExecuted: false, status: "NOT TESTED" } });
@@ -255,7 +262,7 @@ export function recordImplementation(out, claimed, { runner } = {}) {
     publishOutcome(out, "failed", false);
     return { ok: false, success: false, state: "failed", hostExecuted: false, say: tests.reason };
   }
-  setStep(out, "tests", "done", `test exited 0 and a test file references the changed feature. ${tests.note || ""} ${REVIEW_LIMIT}`, { verified: true });
+  setStep(out, "tests", "done", `test exited 0. ${covered.file} imports the module that uses the documented API and has a non-tautological assertion. ${tests.note || ""} ${REVIEW_LIMIT}`, { verified: true });
 
   const packed = runPackage(project, { runner, only: ["build", "ccx"] });
   if (packed.status !== "written") {
@@ -264,30 +271,44 @@ export function recordImplementation(out, claimed, { runner } = {}) {
     publishOutcome(out, "failed", false);
     return { ok: false, success: false, state: "failed", hostExecuted: false, say: packed.reason || packed.status };
   }
-  const archive = reviewArchive({
+  const selected = selectArchives(packed.artifacts, contract.baseline?.archives || [], claimed.outputArchives);
+  if (!selected.ok) {
+    packed.preexisting = selected.preexisting;
+    packed.hostExecuted = false;
+    setStep(out, "package", "failed", selected.say);
+    recordFacts(out, { outcome: "failed", packageResult: packed, verification: { hostExecuted: false, status: "NOT TESTED" } });
+    publishOutcome(out, "failed", false);
+    return { ok: false, success: false, state: "failed", hostExecuted: false, say: selected.say, package: packed };
+  }
+  const reviews = selected.fresh.map((artifact) => reviewArchive({
     project,
-    artifact: packed.artifacts[0],
-    changed: claim.changed,
+    artifact,
+    symbols: claim.usedSymbols,
     baselineArchives: contract.baseline?.archives || []
-  });
-  packed.review = archive;
+  }));
+  packed.reviews = reviews;
+  packed.preexisting = selected.preexisting;
+  packed.provenance = provenance.provenance;
   packed.hostExecuted = false;
-  recordFacts(out, { packageResult: packed, verification: { hostExecuted: false, status: "NOT TESTED" } });
-  if (!archive.ok) {
-    setStep(out, "package", "failed", archive.say);
+  recordFacts(out, { packageResult: packed, verification: { hostExecuted: false, status: "NOT TESTED" }, commandProvenance: provenance });
+  const bad = reviews.filter((item) => !item.ok);
+  if (bad.length) {
+    const say = bad.map((item) => item.say).join(" ");
+    setStep(out, "package", "failed", say);
     recordFacts(out, { outcome: "failed" });
     publishOutcome(out, "failed", false);
-    return { ok: false, success: false, state: "failed", hostExecuted: false, say: archive.say, package: packed };
+    return { ok: false, success: false, state: "failed", hostExecuted: false, say, package: packed };
   }
-  setStep(out, "package", "done", `Archive ${archive.digest} (${archive.bytes} bytes) contains feature text. Digests can change when zip timestamps change. ${REVIEW_LIMIT}`, { verified: true });
+  const listed = reviews.map((item) => `${item.file} ${item.digest} (${item.bytes} bytes, ${item.matched.join(", ")})`).join("; ");
+  setStep(out, "package", "done", `New archives: ${listed}. Pre-existing zips were not treated as this run. Digests can change when zip timestamps change. ${REVIEW_LIMIT}`, { verified: true });
   fs.writeFileSync(path.join(out, "host-verification.md"), hostManual({ goal: contract.goal, host: contract.host }, session.docs?.effective));
-  setStep(out, "host-verification", "done", "NOT TESTED. Manual steps are in host-verification.md.", { verified: true });
+  setStep(out, "host-verification", "done", "NOT TESTED. Manual steps are in host-verification.md. Source and behavior review is still pending.", { verified: true });
   recordFacts(out, { outcome: "commands-finished" });
-  publishOutcome(out, "commands-finished", true);
-  return { ok: true, success: true, state: "commands-finished", hostExecuted: false, limits: REVIEW_LIMIT, package: packed };
+  publishOutcome(out, "commands-finished", true, listed);
+  return { ok: true, success: true, state: "commands-finished", hostExecuted: false, limits: REVIEW_LIMIT, sourceReview: "pending", featureCorrectness: "not-decided", package: packed };
 }
 
-function publishOutcome(out, state, success) {
+function publishOutcome(out, state, success, archives = "") {
   const file = path.join(out, "report.json");
   let report = {};
   try {
@@ -298,8 +319,12 @@ function publishOutcome(out, state, success) {
   report.state = state;
   report.success = Boolean(success);
   report.hostExecuted = false;
+  report.commandSuccess = success ? "recorded" : "not-recorded";
+  report.featureCorrectness = "not-decided";
+  report.sourceReview = "pending";
+  if (archives) report.archives = archives;
   fs.writeFileSync(file, `${JSON.stringify(report, null, 2)}\n`);
-  fs.writeFileSync(path.join(out, "report.md"), `# Status\n\nSuccess: ${success ? "command results recorded" : "no"}\n\nState: ${state}\n\nGoal: ${report.goal || ""}\n\nHost executed: no\n\n${success ? REVIEW_LIMIT : "A failed or paused state is not a finished feature."}\n`);
+  fs.writeFileSync(path.join(out, "report.md"), `# Status\n\nCommand success: ${success ? "recorded" : "not recorded"}\n\nFeature correctness: not decided\n\nSource and behavior review: pending\n\nState: ${state}\n\nGoal: ${report.goal || ""}\n\nHost executed: no\n\n${archives ? `New archives: ${archives}\n\n` : ""}${success ? REVIEW_LIMIT : "A failed or paused state is not a finished feature."}\n`);
 }
 
 function hold(out, intake, capability, projectPath, summary, plan, behaviors, kept, extras = {}) {

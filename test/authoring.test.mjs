@@ -22,7 +22,7 @@ const catalog = [
 ];
 const byUrl = new Map(catalog.map((page) => [page.url, page.id]));
 const TEXT = {
-  "photoshop.layer": "name string R W 22.5 Name of the layer.\nid number R 22.5 The identifier of the layer.\n",
+  "photoshop.layer": "name string R W 22.5 Name of the layer.\nid number R 22.5 The identifier of the layer.\nopacity number R W 23.0 The layer opacity.\n",
   "photoshop.document": "activeLayers\n\nLayers\n\nR W\n\n22.5\n\nThe selected layers in the document. (26.9)\n\ntitle\n\nstring\n\nR\n\n22.5\n\nDocument title\n",
   "photoshop.executeAsModal": "commandName string required 23.0 This description is shown above the progress bar.\nsuspendHistory 23.0\n",
   "photoshop.changelog": "set Document activeLayers by providing an array of Layer objects.\n",
@@ -66,7 +66,7 @@ async function scaffold(parent, intake) {
   fs.writeFileSync(path.join(folder, "src", "api", "errors.ts"), "export const errors = { error: \"starter\" };\n");
   writePackage(folder);
   fs.writeFileSync(path.join(folder, "uxp.config.ts"), "export const manifest = {\n  host: [{ app: \"PS\", minVersion: \"24.2.0\" }],\n  requiredPermissions: {\n    localFileSystem: \"fullAccess\",\n  },\n};\n");
-  fs.writeFileSync(path.join(folder, "src", "main.tsx"), "export const App = () => null;\n");
+  fs.writeFileSync(path.join(folder, "src", "main.tsx"), "import React, { useState } from \"react\";\nconst id = uxp.entrypoints._pluginInfo.id;\nexport function App(){ const [count, setCount] = useState(0); return <main className=\"status\">{id}{count}{setCount}</main>; }\n");
   fs.writeFileSync(path.join(folder, "implementation-note.txt"), intake.goal);
   return { folder, installer: "test-double" };
 }
@@ -75,8 +75,15 @@ function writePackage(folder) {
   const mod = pathToFileURL(path.resolve(".claude/skills/uxp-assistant/scripts/lib/archive.mjs")).href;
   fs.writeFileSync(path.join(folder, "pack.mjs"), `import fs from "node:fs";
 import { writeStoredZip } from ${JSON.stringify(mod)};
-const names = ["src/Selection.tsx", "src/selection-read.mjs", "src/DocumentTitle.tsx", "src/document-title.mjs", "src/layer-rename/Panel.tsx", "src/layer-rename/host.ts"];
-const entries = names.filter((name) => fs.existsSync(name)).map((name) => ({ name, data: fs.readFileSync(name) }));
+function walk(dir, acc = []) {
+  for (const name of fs.readdirSync(dir)) {
+    const full = dir + "/" + name;
+    if (fs.statSync(full).isDirectory()) walk(full, acc);
+    else acc.push(full);
+  }
+  return acc;
+}
+const entries = walk("src").map((name) => ({ name, data: fs.readFileSync(name) }));
 entries.push({ name: "manifest.json", data: Buffer.from('{"name":"unit"}') });
 writeStoredZip("out.ccx", entries);
 `);
@@ -172,7 +179,7 @@ test("recording the show-selection files runs the real scripts and still says th
   const result = await runWorkflow({ out, kind: "empty", answers: answers(SHOW), fetchImpl: fetchImpl(), scaffoldImpl: scaffold });
   const files = writeShow(result.project);
   const recorded = recordImplementation(out, { goal: SHOW, files });
-  assert.equal(recorded.success, true);
+  assert.equal(recorded.success, true, recorded.say);
   assert.equal(recorded.state, "commands-finished");
   assert.equal(recorded.hostExecuted, false);
   assert.equal(step(out, "tests").status, "done");
@@ -292,7 +299,7 @@ test("unknown, unsupported, incomplete output, and a failed package cannot repor
   assert.notEqual(step(missingOut, "tests").status, "done");
   const swapped = recordImplementation(missingOut, { goal: "A different goal", files: ["src/main.tsx"] });
   assert.equal(swapped.state, "not-yet-implemented");
-  fs.writeFileSync(path.join(ready.project, "src", "Wrong.tsx"), "export const title = \"Rename selected layers\";\n<button disabled>Apply</button>\n");
+  fs.writeFileSync(path.join(ready.project, "src", "Wrong.tsx"), "export function Wrong(){ const layers = { activeLayers: [] }; return <p className=\"status\">{layers.activeLayers} Rename selected layers</p>; }\n");
   const replaced = recordImplementation(missingOut, { goal: SHOW, files: ["src/Wrong.tsx"] });
   assert.equal(replaced.success, false);
   assert.equal(replaced.state, "not-yet-implemented");
@@ -544,6 +551,180 @@ test("importFiles missing from the Premiere index is resolved from the official 
   assert.match(JSON.stringify(result.contract.evidence), /importFiles/);
   assert.match(JSON.stringify(result.contract.evidence), /ppro-reference\/classes\/project/);
   assert.doesNotMatch(result.contract.handoff, /Do not write feature code/);
+});
+
+test("static text, comment-only API, a noop assertion, and starter tokens do not finish", async () => {
+  const phrase = "Show the active document title in the panel.";
+  const out = temp();
+  const ready = await runWorkflow({ out, kind: "empty", answers: answers(phrase), fetchImpl: fetchImpl(), scaffoldImpl: scaffold });
+  fs.writeFileSync(path.join(ready.project, "src", "TitleStub.tsx"), "export function TitleStub(){ return <p className=\"status\">document title stays on this static panel</p>; }\n");
+  fs.mkdirSync(path.join(ready.project, "test"), { recursive: true });
+  fs.writeFileSync(path.join(ready.project, "test", "title-stub.test.mjs"), "import { test } from \"node:test\"; import assert from \"node:assert/strict\"; test(\"mentions TitleStub\", () => { assert.equal(1, 1); });\n");
+  const stub = recordImplementation(out, { goal: phrase, files: ["src/TitleStub.tsx"] });
+  assert.equal(stub.success, false);
+  assert.notEqual(stub.state, "commands-finished");
+  assert.match(stub.say, /documented API|static panel|not commands-finished/);
+  const shown = spawnSync(process.execPath, [".claude/skills/uxp-assistant/scripts/session.mjs", "show", "--out", out], { encoding: "utf8" });
+  assert.notEqual(shown.status, 0);
+  const done = spawnSync(process.execPath, [".claude/skills/uxp-assistant/scripts/session.mjs", "done", "--out", out], { encoding: "utf8" });
+  assert.notEqual(done.status, 0);
+
+  const commented = temp();
+  const commentReady = await runWorkflow({ out: commented, kind: "empty", answers: answers(phrase), fetchImpl: fetchImpl(), scaffoldImpl: scaffold });
+  fs.mkdirSync(path.join(commentReady.project, "test"), { recursive: true });
+  fs.writeFileSync(path.join(commentReady.project, "src", "TitleStub.tsx"), "/* import { read } from \"./title-read.mjs\"; app.activeDocument.title */\nexport function TitleStub(){ return <p className=\"status\">document title stays on this static panel</p>; }\n");
+  fs.writeFileSync(path.join(commentReady.project, "src", "title-read.mjs"), "/* document.title */\nexport function readTitle(){ return { status: \"static\" }; }\n");
+  fs.writeFileSync(path.join(commentReady.project, "test", "title-stub.test.mjs"), "/* import { readTitle } from \"../src/title-read.mjs\"; */\nimport { test } from \"node:test\"; import assert from \"node:assert/strict\"; test(\"noop\", () => { assert.equal(1, 1); });\n");
+  const comments = recordImplementation(commented, { goal: phrase, files: ["src/TitleStub.tsx", "src/title-read.mjs"] });
+  assert.equal(comments.success, false);
+  assert.match(comments.say, /comment|static panel|documented API|import/);
+
+  const named = temp();
+  const namedReady = await runWorkflow({ out: named, kind: "empty", answers: answers(phrase), fetchImpl: fetchImpl(), scaffoldImpl: scaffold });
+  fs.mkdirSync(path.join(namedReady.project, "src"), { recursive: true });
+  fs.mkdirSync(path.join(namedReady.project, "test"), { recursive: true });
+  fs.writeFileSync(path.join(namedReady.project, "src", "title-read.mjs"), "export function readTitle(app){ if (!app || !app.activeDocument) return { ok: false, status: \"No document.\" }; return { ok: true, status: \"Read\", title: app.activeDocument.title }; }\n");
+  fs.writeFileSync(path.join(namedReady.project, "src", "TitleStub.tsx"), "export function TitleStub(){ return <p className=\"status\">Idle</p>; }\n");
+  fs.writeFileSync(path.join(namedReady.project, "test", "title-stub.test.mjs"), "import { test } from \"node:test\"; import assert from \"node:assert/strict\"; test(\"mentions TitleStub and skips the call\", () => { assert.equal(1, 1); });\n");
+  const mention = recordImplementation(named, { goal: phrase, files: ["src/title-read.mjs", "src/TitleStub.tsx"] });
+  assert.equal(mention.success, false);
+  assert.match(mention.say, /import|assert\.equal\(1, 1\)|tautolog/);
+});
+
+test("a documented layer opacity feature finishes without being the document-title fixture", async () => {
+  const goal = "Read each layer opacity in the panel.";
+  const out = temp();
+  const ready = await runWorkflow({ out, kind: "empty", answers: answers(goal), fetchImpl: fetchImpl(), scaffoldImpl: scaffold });
+  assert.equal(ready.state, "awaiting-agent-implementation");
+  assert.equal(ready.fixture, null);
+  assert.doesNotMatch(ready.contract.goal, /document title/i);
+  fs.mkdirSync(path.join(ready.project, "test"), { recursive: true });
+  fs.writeFileSync(path.join(ready.project, "src", "opacity.mjs"), "export function readOpacity(layer){ if (!layer) return { ok: false, status: \"No layer.\" }; return { ok: true, status: \"Read\", opacity: layer.opacity }; }\n");
+  fs.writeFileSync(path.join(ready.project, "src", "Opacity.tsx"), "export function OpacityPanel(){ return <section><h1>Layer opacity</h1><p className=\"status\">Idle</p><button type=\"button\" disabled={false}>Read opacity</button></section>; }\n");
+  fs.writeFileSync(path.join(ready.project, "test", "opacity.test.mjs"), "import assert from \"node:assert/strict\"; import { test } from \"node:test\"; import { readOpacity } from \"../src/opacity.mjs\"; test(\"readOpacity returns the documented property\", () => { assert.equal(readOpacity({ opacity: 40 }).opacity, 40); assert.equal(readOpacity(null).ok, false); });\n");
+  const recorded = recordImplementation(out, { goal, files: ["src/opacity.mjs", "src/Opacity.tsx"] });
+  assert.equal(recorded.success, true, recorded.say);
+  assert.equal(recorded.hostExecuted, false);
+  assert.equal(recorded.featureCorrectness, "not-decided");
+  assert.equal(recorded.sourceReview, "pending");
+  assert.match(recorded.limits, /not feature correctness/);
+  assert.match(recorded.package.reviews.map((item) => item.matched.join(" ")).join(" "), /opacity/);
+});
+
+test("a swapped ccx command is not run, and every new archive is reviewed", async () => {
+  const out = temp();
+  const ready = await runWorkflow({ out, kind: "empty", answers: answers(SHOW), fetchImpl: fetchImpl(), scaffoldImpl: scaffold });
+  writeShow(ready.project);
+  const pkgPath = path.join(ready.project, "package.json");
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+  pkg.scripts.ccx = "node -e \"require('fs').writeFileSync('decoy.ccx','not a package')\"";
+  fs.writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
+  const swapped = recordImplementation(out, { goal: SHOW, files: ["src/Selection.tsx", "src/selection-read.mjs"] });
+  assert.equal(swapped.success, false);
+  assert.match(swapped.say, /ccx/);
+  assert.equal(fs.existsSync(path.join(ready.project, "decoy.ccx")), false);
+
+  const two = temp();
+  const twoReady = await runWorkflow({
+    out: two,
+    kind: "empty",
+    answers: answers(SHOW),
+    fetchImpl: fetchImpl(),
+    scaffoldImpl: async (parent, intake) => {
+      const created = await scaffold(parent, intake);
+      const mod = pathToFileURL(path.resolve(".claude/skills/uxp-assistant/scripts/lib/archive.mjs")).href;
+      fs.writeFileSync(path.join(created.folder, "pack.mjs"), `import fs from "node:fs";
+import { writeStoredZip } from ${JSON.stringify(mod)};
+function walk(dir, acc = []) {
+  for (const name of fs.readdirSync(dir)) {
+    const full = dir + "/" + name;
+    if (fs.statSync(full).isDirectory()) walk(full, acc);
+    else acc.push(full);
+  }
+  return acc;
+}
+const entries = walk("src").map((name) => ({ name, data: fs.readFileSync(name) }));
+writeStoredZip("aaa-decoy.ccx", entries);
+writeStoredZip("zzz-empty.ccx", [{ name: "note.txt", data: Buffer.from("no feature") }]);
+`);
+      return created;
+    }
+  });
+  writeShow(twoReady.project);
+  const both = recordImplementation(two, { goal: SHOW, files: ["src/Selection.tsx", "src/selection-read.mjs"] });
+  assert.equal(both.success, false);
+  assert.match(both.say, /zzz-empty\.ccx/);
+  assert.ok((both.package?.reviews || []).length >= 2);
+
+  const declared = temp();
+  const declaredReady = await runWorkflow({ out: declared, kind: "empty", answers: answers(SHOW), fetchImpl: fetchImpl(), scaffoldImpl: scaffold });
+  writeShow(declaredReady.project);
+  const subset = recordImplementation(declared, { goal: SHOW, files: ["src/Selection.tsx", "src/selection-read.mjs"], outputArchives: ["aaa-decoy.ccx"] });
+  assert.equal(subset.success, false);
+  assert.match(subset.say, /declared archive set/);
+
+  const prior = temp();
+  const priorReady = await runWorkflow({
+    out: prior,
+    kind: "empty",
+    answers: answers(SHOW),
+    fetchImpl: fetchImpl(),
+    scaffoldImpl: async (parent, intake) => {
+      const created = await scaffold(parent, intake);
+      fs.writeFileSync(path.join(created.folder, "aaa-decoy.ccx"), "not-a-zip-but-present");
+      return created;
+    }
+  });
+  writeShow(priorReady.project);
+  const kept = recordImplementation(prior, { goal: SHOW, files: ["src/Selection.tsx", "src/selection-read.mjs"] });
+  assert.equal(kept.success, true);
+  assert.equal(kept.hostExecuted, false);
+  assert.ok((kept.package.preexisting || []).some((item) => item.file === "aaa-decoy.ccx"));
+  assert.ok((kept.package.reviews || []).every((item) => item.file !== "aaa-decoy.ccx"));
+  assert.ok((kept.package.reviews || []).some((item) => item.file === "out.ccx"));
+});
+
+test("an approved build command is recorded as a change, and a starter-only zip is not the feature", async () => {
+  const out = temp();
+  const ready = await runWorkflow({ out, kind: "empty", answers: answers(SHOW), fetchImpl: fetchImpl(), scaffoldImpl: scaffold });
+  writeShow(ready.project);
+  const mod = pathToFileURL(path.resolve(".claude/skills/uxp-assistant/scripts/lib/archive.mjs")).href;
+  fs.copyFileSync(path.join(ready.project, "pack.mjs"), path.join(ready.project, "pack-approved.mjs"));
+  const pkgPath = path.join(ready.project, "package.json");
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+  pkg.scripts.ccx = "node pack-approved.mjs";
+  fs.writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
+  const silent = recordImplementation(out, { goal: SHOW, files: ["src/Selection.tsx", "src/selection-read.mjs"] });
+  assert.equal(silent.success, false);
+  assert.match(silent.say, /approveScripts|ccx/);
+  const approved = recordImplementation(out, {
+    goal: SHOW,
+    files: ["src/Selection.tsx", "src/selection-read.mjs"],
+    approveScripts: { build: pkg.scripts.build, ccx: pkg.scripts.ccx, reason: "Use the reviewed packer." }
+  });
+  assert.equal(approved.success, true);
+  assert.equal(approved.package.provenance, "explicit-approval");
+  assert.equal(approved.featureCorrectness, "not-decided");
+
+  const starter = temp();
+  const starterReady = await runWorkflow({
+    out: starter,
+    kind: "empty",
+    answers: answers(SHOW),
+    fetchImpl: fetchImpl(),
+    scaffoldImpl: async (parent, intake) => {
+      const created = await scaffold(parent, intake);
+      fs.writeFileSync(path.join(created.folder, "pack.mjs"), `import fs from "node:fs";
+import { writeStoredZip } from ${JSON.stringify(mod)};
+writeStoredZip("out.ccx", [{ name: "src/main.tsx", data: fs.readFileSync("src/main.tsx") }]);
+`);
+      return created;
+    }
+  });
+  writeShow(starterReady.project);
+  const tokens = recordImplementation(starter, { goal: SHOW, files: ["src/Selection.tsx", "src/selection-read.mjs"] });
+  assert.equal(tokens.success, false);
+  assert.match(tokens.say, /useState|uxp\.entrypoints|documented API symbol/);
 });
 
 function request({ port, path: pathname, host, origin, token, method = "GET", body }) {
