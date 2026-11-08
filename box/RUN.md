@@ -28,6 +28,14 @@ node box/run.mjs --acceptance
 
 That command installs the maintained Bolt starter, fetches the official docs, and builds the package on this machine. It needs network access. It is not a browser render and not a host pass. The byte and revision manifest beside the archive stays the source binding.
 
+Vue, Svelte, and the WebView document package, still without a browser:
+
+```
+node box/run.mjs --stacks
+```
+
+That command installs those Bolt stacks and runs their package scripts. It records the exit it gets. A successful CCX is not the React acceptance feature and not a host pass.
+
 On this same machine, optional browser checks:
 
 ```

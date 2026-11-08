@@ -31,7 +31,7 @@ const log = {
   themes: ["dark", "light"],
   webview: "The acceptance choice was native. This archive has no WebView document, so none was served.",
   css: "Variables are the dark and light tables copied from bolt-uxp src/api/themes.ts. Bolt's polyfill returns early when the host name is Photoshop, and this browser has no host variables. The tables are not Spectrum and not the host theme. The page switches them with data-theme.",
-  dom: "The built panel uses plain h1, p, and button elements. The bundle contains no Spectrum components.",
+  dom: "The built panel uses sp-heading, sp-body, and sp-button. Those tags stay in the package. This page adds handcrafted CSS for them. Spectrum Web Components are not loaded. The approximation is not the host widget.",
   api: "require('uxp') and require('photoshop') are shim objects. activeDocument.title is the mock string Poster. executeAsModal and batchPlay record a block and do not mutate a host.",
   cepShim: "cep-to-uxp CSS and HTML shims are not in this repository. They were not copied. The color table is the maintained Bolt file.",
   layout: "The bundle's own stylesheet places the panel content. The brown banner is this page's label, not part of the component and not a host frame.",
@@ -54,8 +54,8 @@ try {
       await page.eval("new Promise((resolve) => setTimeout(resolve, 150))");
       const view = await page.eval(`(() => {
         const panel = document.querySelector(".document-title-panel");
-        const heading = panel && panel.querySelector("h1");
-        const button = panel && panel.querySelector("button");
+        const heading = panel && panel.querySelector("sp-heading");
+        const button = panel && panel.querySelector("sp-button");
         const headingBox = heading ? heading.getBoundingClientRect() : null;
         const buttonBox = button ? button.getBoundingClientRect() : null;
         return {
@@ -76,17 +76,21 @@ try {
   await page.eval("document.documentElement.dataset.theme = 'dark'");
   await page.send("Emulation.setDefaultBackgroundColorOverride", { color: { r: 83, g: 83, b: 83, a: 1 } });
   const after = await page.eval(`(async () => {
-    const button = document.querySelector(".document-title-panel button");
-    if (!button) return { clicked: false, text: "" };
-    button.click();
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    const buttons = [...document.querySelectorAll(".document-title-panel sp-button")];
+    const readDocument = buttons.find((item) => /Read document/.test(item.textContent || ""));
+    const readSelection = buttons.find((item) => /Read selection/.test(item.textContent || ""));
+    if (!readDocument || !readSelection) return { clicked: false, text: "" };
+    readDocument.click();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    readSelection.click();
+    await new Promise((resolve) => setTimeout(resolve, 200));
     const panel = document.querySelector(".document-title-panel");
     return { clicked: true, text: panel ? panel.innerText : "", shim: window.__shim };
   })()`);
   log.after = after;
   await page.screenshot(path.join(evidence, "bundle-320-dark-after-read.png"), { x: 0, y: 0, width: 320, height: 520, scale: 2 });
   const compact = log.views.every((view) => view.headingHeight > 0 && view.headingHeight <= 36 && view.buttonWidth > 40 && view.overflow <= 1 && view.appOverflow <= 1);
-  log.rendered = Boolean(after.clicked) && /Poster/.test(after.text || "") && /Read title/.test(after.text || "") && compact;
+  log.rendered = Boolean(after.clicked) && /Poster/.test(after.text || "") && /Mock layer/.test(after.text || "") && /Read document/.test(after.text || "") && compact;
 } finally {
   await page.close();
   await served.close();

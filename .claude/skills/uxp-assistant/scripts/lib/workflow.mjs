@@ -11,6 +11,7 @@ import { skillRoot } from "./paths.mjs";
 import { extractSuppliedUi, previewDocument } from "./preview.mjs";
 import { stageDecision } from "./stages.mjs";
 import { effectiveHostFloor, floorsFromText } from "./floors.mjs";
+import { spectrumGuidance } from "./runtime.mjs";
 import { narrowRequiredPermissions } from "./permissions.mjs";
 import { runPackage } from "./package-project.mjs";
 import { rememberOut } from "./paths.mjs";
@@ -240,7 +241,8 @@ export async function runWorkflow(options) {
     runtime: runtimeChoice,
     discovery: staged.discovery,
     limits: staged.offer.limits,
-    contextNote: staged.contextCheck?.reason
+    contextNote: staged.contextCheck?.reason,
+    spectrum: spectrumGuidance(pageText)
   });
   fs.writeFileSync(path.join(project, "design-constraints.md"), constraints);
   const preview = {

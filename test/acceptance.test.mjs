@@ -61,7 +61,12 @@ test("create-bolt-uxp scaffolds from a cwd that is not the repository, and both 
     assert.match(js, /Document title/);
     assert.match(js, /document-title-panel/);
     assert.match(js, /CSS transitions and animations are not supported/);
-    assert.match(js, /font-size: 14px/);
+    assert.match(js, /they are not built atop Web Components/);
+    assert.match(js, /sp-heading/);
+    assert.match(js, /sp-body/);
+    assert.match(js, /sp-button/);
+    assert.match(js, /activeLayers/);
+    assert.doesNotMatch(js, /@spectrum-web-components/);
     assertNoStarterChrome(js);
     assertNoStarterChrome(fs.readFileSync(path.join(empty.project, "src", "app.css"), "utf8"));
     assertNoStarterChrome(fs.readFileSync(path.join(empty.project, "src", "index.scss"), "utf8"));
@@ -302,44 +307,21 @@ main {
   background: var(--uxp-host-background-color, transparent);
   color: var(--uxp-host-text-color, inherit);
 }
-.document-title-panel h1 {
-  font-size: 14px;
-  line-height: 18px;
-  font-weight: 600;
+.document-title-panel sp-heading,
+.document-title-panel sp-body,
+.document-title-panel sp-button {
+  display: block;
+  max-width: 100%;
   margin: 0 0 8px;
-}
-.document-title-panel .status,
-.document-title-panel .empty,
-.document-title-panel .error,
-.document-title-panel .title {
-  margin: 8px 0 0;
-  font-size: 12px;
-  line-height: 16px;
-}
-.document-title-panel .error {
-  color: #ffb4b4;
-}
-.document-title-panel button {
-  font-size: 12px;
-  line-height: 16px;
-  margin-top: 8px;
-  padding: 6px 10px;
-  border-radius: 4px;
-  border: 1px solid var(--uxp-host-border-color, currentColor);
-  background: var(--uxp-host-widget-hover-background-color, transparent);
-  color: var(--uxp-host-text-color, inherit);
-  cursor: pointer;
-}
-.document-title-panel button:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-.document-title-panel button:focus-visible {
-  outline: 2px solid var(--uxp-host-link-text-color, currentColor);
-  outline-offset: 2px;
 }
 `);
   rewriteStarterChrome(project);
+  const constraints = fs.readFileSync(path.join(project, "design-constraints.md"), "utf8");
+  const tagLine = constraints.match(/Widget pages named these tags: ([^.]+)\./);
+  const tags = tagLine ? tagLine[1].split(",").map((item) => item.trim()) : [];
+  if (!tags.includes("sp-heading") || !tags.includes("sp-body") || !tags.includes("sp-button")) {
+    throw new Error("The fresh Spectrum pages did not name sp-heading, sp-body, and sp-button. The panel will not invent those tags.");
+  }
   fs.writeFileSync(path.join(project, "src", "document-title.mjs"), `export async function readDocumentTitle(app) {
   if (!app) return { ok: false, status: "Photoshop is not available." };
   const document = app.activeDocument;
@@ -348,45 +330,83 @@ main {
   if (!title) return { ok: false, status: "The document has no title." };
   return { ok: true, status: "Read document.title outside executeAsModal.", title };
 }
+
+export async function readSelectedLayer(app) {
+  if (!app) return { ok: false, status: "Photoshop is not available." };
+  const document = app.activeDocument;
+  if (!document) return { ok: false, status: "No document is open." };
+  const layer = document.activeLayers && document.activeLayers[0];
+  if (!layer) return { ok: false, status: "No layer is selected." };
+  return { ok: true, status: "Read activeLayers outside executeAsModal.", name: layer.name, id: layer.id };
+}
 `);
   fs.writeFileSync(path.join(project, "src", "DocumentTitle.tsx"), `import React, { useState } from "react";
 import { photoshop } from "./globals";
-import { readDocumentTitle } from "./document-title.mjs";
+import { readDocumentTitle, readSelectedLayer } from "./document-title.mjs";
 import { appliedConstraints } from "./panel-design.mjs";
 import "./panel-design.css";
 
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      "sp-heading": React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement> & { size?: string }, HTMLElement>;
+      "sp-body": React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement> & { size?: string }, HTMLElement>;
+      "sp-button": React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement> & { variant?: string; disabled?: boolean }, HTMLElement>;
+    }
+  }
+}
+
 export function DocumentTitlePanel() {
-  const [status, setStatus] = useState("Idle");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState("");
+  const [documentStatus, setDocumentStatus] = useState("Idle");
+  const [layerStatus, setLayerStatus] = useState("Idle");
   const [title, setTitle] = useState("");
-  async function read() {
-    setBusy(true);
-    setStatus("Loading");
+  const [layer, setLayer] = useState("");
+  async function readDocument() {
+    setBusy("document");
+    setDocumentStatus("Loading");
     try {
       const result = await readDocumentTitle(photoshop?.app);
       setTitle(result.title || "");
-      setStatus(result.status);
+      setDocumentStatus(result.status);
     } catch (error) {
       setTitle("");
-      setStatus(error instanceof Error ? error.message : "The read failed.");
+      setDocumentStatus(error instanceof Error ? error.message : "The read failed.");
     } finally {
-      setBusy(false);
+      setBusy("");
     }
   }
-  const empty = !title && status === "Idle";
+  async function readLayer() {
+    setBusy("layer");
+    setLayerStatus("Loading");
+    try {
+      const result = await readSelectedLayer(photoshop?.app);
+      setLayer(result.ok ? result.name + " " + result.id : "");
+      setLayerStatus(result.status);
+    } catch (error) {
+      setLayer("");
+      setLayerStatus(error instanceof Error ? error.message : "The read failed.");
+    } finally {
+      setBusy("");
+    }
+  }
   return (
-    <section className="document-title-panel" aria-busy={busy} data-design={appliedConstraints.join(" | ")}>
-      <h1>Document title</h1>
-      <p className="status" role="status">{status}</p>
-      <button type="button" disabled={busy} onClick={read}>{busy ? "Loading" : "Read title"}</button>
-      {title ? <p className="title">{title}</p> : <p className={empty ? "empty" : "error"}>{empty ? "No title yet." : status}</p>}
+    <section className="document-title-panel" aria-busy={Boolean(busy)} data-design={appliedConstraints.join(" | ")}>
+      <sp-heading size="S">Document title</sp-heading>
+      <sp-body size="S" role="status">{documentStatus}</sp-body>
+      <sp-button variant="primary" disabled={Boolean(busy)} onClick={readDocument}>{busy === "document" ? "Loading" : "Read document"}</sp-button>
+      <sp-body size="S">{title || (documentStatus === "Idle" ? "No title yet." : documentStatus)}</sp-body>
+      <sp-heading size="S">Selected layer</sp-heading>
+      <sp-body size="S" role="status">{layerStatus}</sp-body>
+      <sp-button variant="secondary" disabled={Boolean(busy)} onClick={readLayer}>{busy === "layer" ? "Loading" : "Read selection"}</sp-button>
+      <sp-body size="S">{layer || (layerStatus === "Idle" ? "No selection read yet." : layerStatus)}</sp-body>
     </section>
   );
 }
 `);
   fs.writeFileSync(path.join(project, "test", "document-title.test.mjs"), `import assert from "node:assert/strict";
 import { test } from "node:test";
-import { readDocumentTitle } from "../src/document-title.mjs";
+import { readDocumentTitle, readSelectedLayer } from "../src/document-title.mjs";
 
 test("readDocumentTitle does not invent a title when Photoshop is absent", async () => {
   const missing = await readDocumentTitle(null);
@@ -398,6 +418,15 @@ test("readDocumentTitle reads document.title and does not rename", async () => {
   const result = await readDocumentTitle({ activeDocument: { title: "Poster" } });
   assert.equal(result.ok, true);
   assert.equal(result.title, "Poster");
+});
+
+test("readSelectedLayer reads the first active layer and does not change it", async () => {
+  const missing = await readSelectedLayer({ activeDocument: { activeLayers: [] } });
+  assert.equal(missing.ok, false);
+  const result = await readSelectedLayer({ activeDocument: { activeLayers: [{ name: "Mock layer", id: 7 }] } });
+  assert.equal(result.ok, true);
+  assert.equal(result.name, "Mock layer");
+  assert.equal(result.id, 7);
 });
 `);
   const pkgPath = path.join(project, "package.json");

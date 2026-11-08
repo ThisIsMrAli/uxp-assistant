@@ -2,7 +2,7 @@ import { extractDocFacts, mergeDocFacts as mergeCepFacts } from "./cep/docs-fact
 
 /**
  * Shared UXP pages. The ids and URLs match cep-to-uxp scripts/lib/docs.mjs
- * DOC_PAGES at b2fa98eb28e935dcdfc08cb30d7f66e7bd86f40a (ten pages).
+ * DOC_PAGES at b2fa98eb28e935dcdfc08cb30d7f66e7bd86f40a (ten pages), plus five Spectrum UXP pages.
  * A host class page is not on this list. Its absence is not a support verdict.
  */
 export const SHARED_PAGES = [
@@ -15,7 +15,12 @@ export const SHARED_PAGES = [
   { id: "unsupported-elements", url: "https://developer.adobe.com/uxp/uxp-api/reference-html/general/unsupported-elements" },
   { id: "unsupported-attributes", url: "https://developer.adobe.com/uxp/uxp-api/reference-html/general/unsupported-attributes" },
   { id: "css-styles", url: "https://developer.adobe.com/uxp/uxp-api/reference-css/styles/" },
-  { id: "css-styling", url: "https://developer.adobe.com/uxp/guides/how-to/recipes/css-styling/" }
+  { id: "css-styling", url: "https://developer.adobe.com/uxp/guides/how-to/recipes/css-styling/" },
+  { id: "spectrum-widgets", url: "https://developer.adobe.com/uxp/uxp-api/reference-spectrum/spectrum-uxp-widgets/" },
+  { id: "spectrum-faq", url: "https://developer.adobe.com/uxp/uxp-api/reference-spectrum/faqs/" },
+  { id: "spectrum-sp-heading", url: "https://developer.adobe.com/uxp/uxp-api/reference-spectrum/spectrum-uxp-widgets/typography/sp-heading" },
+  { id: "spectrum-sp-body", url: "https://developer.adobe.com/uxp/uxp-api/reference-spectrum/spectrum-uxp-widgets/typography/sp-body" },
+  { id: "spectrum-sp-button", url: "https://developer.adobe.com/uxp/uxp-api/reference-spectrum/spectrum-uxp-widgets/user-interface/sp-button" }
 ];
 
 /**

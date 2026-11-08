@@ -43,6 +43,33 @@ export function contextEvidence(pages, context) {
   };
 }
 
+const SPECTRUM_SENTENCES = [
+  /You don't need to include any special libraries[^.]*\./,
+  /they are immediately available in the global context\.?/,
+  /they are not built atop Web Components\.?/,
+  /Once imported, UXP will assume you intend to use the SWC variation\.?/,
+  /Since: UXP v4\.1/
+];
+
+/** Quotes only sentences present on fresh Spectrum pages. A missing sentence is not invented. */
+export function spectrumGuidance(pages = []) {
+  const quotes = [];
+  const tags = [];
+  for (const page of pages) {
+    if (page.freshness !== "fresh" || !page.text) continue;
+    const text = String(page.text).replace(/\s+/g, " ");
+    for (const pattern of SPECTRUM_SENTENCES) {
+      const match = text.match(pattern);
+      if (!match) continue;
+      const quote = match[0].trim();
+      if (!quotes.some((item) => item.quote === quote)) quotes.push({ quote, page: page.id });
+    }
+    const tag = String(page.id).match(/^spectrum-(sp-[a-z]+)$/)?.[1];
+    if (tag && /Since: UXP v4\.1/.test(text) && !tags.includes(tag)) tags.push(tag);
+  }
+  return { quotes, tags };
+}
+
 export function runtimeOffer({ pages = [], behaviors = [], goal = "", cepHybrid = false } = {}) {
   const fresh = (id) => pages.find((page) => page.id === id && page.freshness === "fresh" && page.text);
   const entry = fresh("entrypoints");

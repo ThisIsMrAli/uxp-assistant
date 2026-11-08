@@ -59,16 +59,20 @@ export function bundlePreviewHtml(scriptName) {
     html, body { margin: 0; background: var(--uxp-host-background-color); color: var(--uxp-host-text-color); font-family: sans-serif; }
     #shim-fill { position: fixed; inset: 0; z-index: -1; background: var(--uxp-host-background-color); }
     .shim-banner { background: #3a2a12; color: #ffd59a; padding: 8px 12px; font-size: 12px; line-height: 16px; }
+    sp-heading, sp-body, sp-button { display: block; max-width: 100%; margin: 0 0 8px; font-size: 12px; line-height: 16px; }
+    sp-heading { font-size: 14px; line-height: 18px; font-weight: 600; }
+    sp-button { width: fit-content; padding: 6px 10px; border: 1px solid var(--uxp-host-border-color); border-radius: 4px; background: var(--uxp-host-widget-hover-background-color); color: var(--uxp-host-text-color); }
+    sp-button[disabled] { opacity: 0.55; }
     #app { padding: 0; }
   </style>
 </head>
 <body data-surface="built-bundle-shim" data-host-executed="false">
   <div id="shim-fill"></div>
-  <p class="shim-banner" id="shim-banner">Shim label, separate from the generated component. Poster is mock host data, not a Photoshop document. Colors are Bolt host-variable tables, not Spectrum and not the host theme. The panel is plain HTML. sp-* is not mocked. Adobe host: NOT TESTED.</p>
+  <p class="shim-banner" id="shim-banner">Shim label, separate from the generated component. Poster and Mock layer are mock host data, not a Photoshop document. The package uses native Spectrum UXP sp-* tags and does not import Spectrum Web Components. The styles on sp-* here are a handcrafted approximation for this browser. They are not the host widgets and are not shipped as the native runtime. Adobe host: NOT TESTED.</p>
   <p id="shim-error"></p>
   <div id="app"></div>
   <script>
-    window.__shim = { hostExecuted: false, mockTitle: "Poster", blocked: [], surface: "built-bundle-shim" };
+    window.__shim = { hostExecuted: false, mockTitle: "Poster", mockLayer: "Mock layer", blocked: [], surface: "built-bundle-shim", spectrum: "handcrafted-approximation" };
     window.addEventListener("error", (event) => {
       document.getElementById("shim-error").textContent = "Bundle error: " + (event.message || "unknown");
     });
@@ -84,7 +88,7 @@ export function bundlePreviewHtml(scriptName) {
       }
       if (name === "photoshop") {
         return {
-          app: { activeDocument: { title: "Poster" } },
+          app: { activeDocument: { title: "Poster", activeLayers: [{ name: "Mock layer", id: 7 }] } },
           core: {
             suppressResizeGripper() { window.__shim.blocked.push("photoshop.core.suppressResizeGripper"); },
             executeAsModal() {

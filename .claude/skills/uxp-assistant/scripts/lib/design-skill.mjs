@@ -52,7 +52,7 @@ export function discoverDesignSkills(roots = [], { skip = [] } = {}) {
   };
 }
 
-export function writeDesignConstraints({ runtime, discovery, limits, contextNote }) {
+export function writeDesignConstraints({ runtime, discovery, limits, contextNote, spectrum }) {
   const lines = [
     "# Design constraints",
     "",
@@ -81,6 +81,14 @@ export function writeDesignConstraints({ runtime, discovery, limits, contextNote
     lines.push("A native bridge was assessed. The limits above still apply to the UXP panel. The bridge was not executed, and choosing hybrid does not add an API the pages did not document.");
   } else {
     lines.push("Native UXP panel DOM and CSS are the surface. Use the retrieved limits above in that panel. Do not treat a browser simulation as the host.");
+  }
+  lines.push("", "## Native Spectrum UXP widgets", "");
+  if (spectrum?.quotes?.length) {
+    for (const item of spectrum.quotes) lines.push(`- Fresh page text (${item.page}): ${item.quote}`);
+    if (spectrum.tags?.length) lines.push(`- Widget pages named these tags: ${spectrum.tags.join(", ")}.`);
+    lines.push("", "Use the named tags in the native panel. Do not import a Spectrum Web Components package. The fresh FAQ says an import makes UXP use the SWC variation, and that these widgets are not built atop Web Components. A browser page may draw a labelled approximation of the same tags. That drawing is not shipped in the package and is not the host.");
+  } else {
+    lines.push("- The fresh pages did not contain the Spectrum UXP widget sentences this checker looks for. Those sentences were not invented, and sp-* tags were not required.");
   }
   lines.push("", "## Design skill discovery", "", discovery?.example?.note || "No design-skill search was recorded.");
   if (discovery?.skills?.length) {

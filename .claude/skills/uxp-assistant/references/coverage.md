@@ -1,6 +1,6 @@
 # Coverage
 
-Shared pages are the ten cep-to-uxp URLs. Photoshop document, layer, executeAsModal, and changelog pages are fetched when the host is Photoshop or the goal names those APIs.
+Shared pages are the ten cep-to-uxp URLs plus the Spectrum UXP widget overview, the FAQ, and the sp-heading, sp-body, and sp-button pages. On 8 Nov 2026 the overview said those controls need no special library. The FAQ said they are not built atop Web Components and that an import makes UXP use the SWC variation. The three widget pages say Since: UXP v4.1. That line is not a Photoshop host floor. Photoshop document, layer, executeAsModal, and changelog pages are fetched when the host is Photoshop or the goal names those APIs.
 
 A page is fresh only when that fetch succeeds. A failure leaves the previous file and is stale, or failed when there was no file.
 

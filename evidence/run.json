@@ -31,6 +31,15 @@
     },
     "note": "Those files are the earlier candidates. They are not the archives from this later run."
   },
+  "checkpoint3c86": {
+    "commit": "3c86c4c37de3b17069f5ece5de504059ff99b4b2",
+    "independentQa": "Scoped PASS. That pass is not closure of the whole tool.",
+    "parentAcceptance": "The parent computer ran that exact export with node box/run.mjs --acceptance: 39 pass, 0 fail. No browser flags.",
+    "cloudTests": "41 pass, 0 fail",
+    "documentTitleSha256": "411c2cc91b21cdb98ab4ee5e20975f33ed36b478adf534e2c53e945b588edcd5",
+    "existingDocumentTitleSha256": "6fe8b7d7142feaadb43f311d562c4f38d4caec586ba912445d6343efb9d20ad3",
+    "preserved": "evidence/candidates/3c86c4c37de3b17069f5ece5de504059ff99b4b2/"
+  },
   "retracted": [
     {
       "commit": "be20127969498ffb9f9bb3b811f8dfb327cd775c",
@@ -51,8 +60,8 @@
     "tests": {
     "command": "node --test",
     "exit": 0,
-    "tests": 41,
-    "pass": 41,
+    "tests": 43,
+    "pass": 43,
     "fail": 0,
     "log": "evidence/logs/npm-test.log"
   },
@@ -60,8 +69,8 @@
   "fixture": null,
   "emptyFolder": {
     "file": "evidence/artifacts/document-title.ccx",
-    "bytes": 126797,
-    "sha256": "411c2cc91b21cdb98ab4ee5e20975f33ed36b478adf534e2c53e945b588edcd5",
+    "bytes": 127122,
+    "sha256": "4ee560ba63668857f18fa770332a23e2bcb5439b8d8216f07b4dc6561c2e1e72",
     "containsDocumentTitle": true,
     "containsActiveDocument": true,
     "containsRenameFixturePhrase": false,
@@ -69,8 +78,8 @@
   },
   "existingProject": {
     "file": "evidence/artifacts/existing-document-title.ccx",
-    "bytes": 126797,
-    "sha256": "6fe8b7d7142feaadb43f311d562c4f38d4caec586ba912445d6343efb9d20ad3",
+    "bytes": 127122,
+    "sha256": "46ad2c045464b375ffd4e3ea0a611b905538314459c57e11dd042d9aa7a2da83",
     "containsDocumentTitle": true,
     "containsActiveDocument": true,
     "containsRenameFixturePhrase": false,
@@ -93,10 +102,39 @@
         "evidence/preview/bundle-320-dark-after-read.png"
       ],
       "log": "evidence/preview/bundle-preview-log.json",
-      "script": "assets/index-sOgqP8N4.js",
-      "scriptSha256": "aea224c88588a6916d7b17f9613bca920cf432f4958c0f5eea3e75749011497a",
-      "starterRules": "The generated app.css and index.scss no longer contain font-size 3.2em, 100vh, place-items, display flex, a transparent button, border none, or a transition declaration. The panel button is a real button with host color variables. The brown banner is the preview page, not the component."
+      "script": "assets/index-Dy6HoCW8.js",
+      "scriptSha256": "0e82b70edd857801659b4ef68b6634c030ed9fa67f9a34105f2819495103224d",
+      "starterRules": "The generated app.css and index.scss no longer contain font-size 3.2em, 100vh, place-items, display flex, a transparent button, border none, or a transition declaration. The panel uses sp-heading, sp-body, and sp-button. The package does not import Spectrum Web Components. The brown banner and the sp-* borders on this page are a handcrafted browser approximation. They are not in the CCX and they are not host widgets."
     }
+  },
+  "stacks": {
+    "file": "evidence/stacks.json",
+    "vue": { "ccxStatus": 0, "bytes": 75222, "sha256": "025f114f56468c506499eb2ecedf6d27d83edd762d32d4aa7dbdc902ee53b697", "acceptanceTested": false },
+    "svelte": { "ccxStatus": 0, "bytes": 53796, "sha256": "88c93db31080b60b314bf7d3b2abcab891bc56d952e14e7ef3ff4d98d7a4d9ec", "acceptanceTested": false },
+    "note": "Both empty-folder package scripts exited 0 after the sampleCode:false identifier repair. Vue and Svelte stay acceptanceTested false. These archives are not the React inspector and not a host pass."
+  },
+  "webview": {
+    "offeredFromLivePage": true,
+    "installer": { "webview": true, "hybrid": false },
+    "document": "evidence/webview-document.html",
+    "panelHtmlHasWebviewTag": false,
+    "scriptCreatesWebview": true,
+    "bridgeExecuted": false,
+    "screenshots": ["evidence/webview/document-idle.png", "evidence/webview/document-after-click.png"],
+    "log": "evidence/webview/webview-preview-log.json",
+    "note": "The live HTMLWebViewElement page offered WebView. The installer booleans were webview true and hybrid false. The document is a separate Vite build. Its button sets local React state and does not call initWebview or api.notify. The host bundle contains document.createElement(\"webview\") with a plugin:/webview-ui/ src. That function was not run in this browser. Static HTML members do not contain a webview tag. This is not a universal shim. Host NOT TESTED."
+  },
+  "dashboard": {
+    "screenshots": [
+      "evidence/dashboard/feasibility.png",
+      "evidence/dashboard/context-evidence.png",
+      "evidence/dashboard/runtime.png",
+      "evidence/dashboard/design.png",
+      "evidence/dashboard/validation.png",
+      "evidence/dashboard/awaiting-implementation.png",
+      "evidence/dashboard/commands-finished.png"
+    ],
+    "note": "These shots are the dashboard process with the test catalog, not a live Adobe fetch. In that session the runtime card says WebView was not offered, because the fixture text does not contain HTMLWebViewElement, allowLocalRendering, or plugin:/. The live offer is recorded under webview."
   },
   "acceptanceNote": "Zip timestamps can change a later digest. These files are the retained archives from this later run. Photoshop and Premiere were not launched. webview false and hybrid false on the empty-folder installer were the answered native choice.",
   "premiereResolution": {
@@ -118,6 +156,10 @@
     "The command checker hashes static local code imports from the supported scripts and from vite.config.ts and uxp.config.ts. JSON, including package.json, package modules, and node builtins are outside that set. Direct eval(, new Function(, and vm.run in a hashed file are refused. globalThis[\"eval\"] is not on that finite list, so an approved file that uses it can run. A later edit of that file still blocks. The list is not being extended. This is not a sandbox and not a complete executable closure.",
     "npm audit on the skill tree still reports 7 moderate advisories through pinned create-bolt-uxp@1.3.27. The suggested fix is create-bolt-uxp@0.2.5, an older major, and was not applied. See evidence/audit.json.",
     "The generated plugin tree started at shell-quote 1.8.1 through dev npm-run-all 4.1.5, vite 6.3.5, and ws 8.14.2, with 1 critical, 14 high, and 2 low. Those packages are dev toolchain, not the panel runtime. npm audit fix --package-lock-only then npm ci, without --force, installed shell-quote 1.12.0, vite 6.4.5, and ws 8.22.2. The acceptance audit then reported 0 critical and 0 high. Seven moderate advisories remain through vite-uxp-plugin and meta-bolt. The offered fix is vite-uxp-plugin 0.2.5, a breaking downgrade, and was not applied. See evidence/generated-plugin-audit.json and evidence/generated-plugin-audit-observed.json. A passing test does not close the remaining advisories.",
-    "The built-bundle page is this cloud environment. It is not the box browser and not Photoshop. Poster is mock data. Spectrum web components were not loaded."
+    "The built-bundle page is this cloud environment. It is not the box browser and not Photoshop. Poster and Mock layer are mock data. The page's sp-* CSS is a handcrafted approximation. Spectrum Web Components were not loaded and that CSS is not in the package.",
+    "Spectrum UXP widget pages fetched on 8 Nov 2026 say the controls need no library and are not built atop Web Components. An import makes UXP use the SWC variation. sp-heading, sp-body, and sp-button say Since: UXP v4.1. That line is not a Photoshop host floor. The starter minVersion stays 24.2.0.",
+    "Vue and Svelte empty-folder package exits are in evidence/stacks.json. acceptanceTested stays false for both. A successful CCX is not the React acceptance slice and not a host pass.",
+    "The WebView cloud render is the packaged document only. The host script that creates a webview element was not executed. There is no universal cloud shim.",
+    "Dashboard screenshots use the test catalog. They are not a live Adobe fetch. The live WebView offer is the stacks record."
   ]
 }
