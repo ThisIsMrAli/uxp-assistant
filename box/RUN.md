@@ -34,7 +34,7 @@ Vue, Svelte, and the WebView document package, still without a browser:
 node box/run.mjs --stacks
 ```
 
-That command installs those Bolt stacks and runs their package scripts. It records the exit it gets. A successful CCX is not the React acceptance feature and not a host pass.
+That command installs those Bolt stacks, narrows each generated manifest to the least requiredPermissions for that runtime, and runs their package scripts. It records the exit and the packaged manifest. A successful CCX is not the React acceptance feature and not a host pass. The starter's broad permissions are not kept.
 
 On this same machine, optional browser checks:
 

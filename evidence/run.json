@@ -40,6 +40,15 @@
     "existingDocumentTitleSha256": "6fe8b7d7142feaadb43f311d562c4f38d4caec586ba912445d6343efb9d20ad3",
     "preserved": "evidence/candidates/3c86c4c37de3b17069f5ece5de504059ff99b4b2/"
   },
+  "checkpoint072513": {
+    "commit": "072513d87c35fe58b29e2ab5658aa6d532fc986e",
+    "independentQa": "Scoped PASS. That pass is not closure of the whole tool.",
+    "parentCommand": "node box/run.mjs --acceptance --stacks: 40 pass, 0 fail, 53.4s.",
+    "documentTitleSha256": "4ee560ba63668857f18fa770332a23e2bcb5439b8d8216f07b4dc6561c2e1e72",
+    "existingDocumentTitleSha256": "46ad2c045464b375ffd4e3ea0a611b905538314459c57e11dd042d9aa7a2da83",
+    "preserved": "evidence/candidates/072513d87c35fe58b29e2ab5658aa6d532fc986e/",
+    "permissionDefect": "The WebView archive from that commit kept the Bolt starter grants: localFileSystem fullAccess, launchProcess, clipboard readAndWrite, webview.domains all, and enableMessageBridge localAndRemote. The React archive was already requiredPermissions {}."
+  },
   "retracted": [
     {
       "commit": "be20127969498ffb9f9bb3b811f8dfb327cd775c",
@@ -60,8 +69,8 @@
     "tests": {
     "command": "node --test",
     "exit": 0,
-    "tests": 43,
-    "pass": 43,
+    "tests": 44,
+    "pass": 44,
     "fail": 0,
     "log": "evidence/logs/npm-test.log"
   },
@@ -70,7 +79,8 @@
   "emptyFolder": {
     "file": "evidence/artifacts/document-title.ccx",
     "bytes": 127122,
-    "sha256": "4ee560ba63668857f18fa770332a23e2bcb5439b8d8216f07b4dc6561c2e1e72",
+    "sha256": "55aeed773cabced1bd74be2174f77613e187088e7b56fc3af175c034f851ecea",
+    "requiredPermissions": {},
     "containsDocumentTitle": true,
     "containsActiveDocument": true,
     "containsRenameFixturePhrase": false,
@@ -79,7 +89,7 @@
   "existingProject": {
     "file": "evidence/artifacts/existing-document-title.ccx",
     "bytes": 127122,
-    "sha256": "46ad2c045464b375ffd4e3ea0a611b905538314459c57e11dd042d9aa7a2da83",
+    "sha256": "3d6f8a87a23105fd7221638bcbc158cdd4311953f77a1024cbfc358d0c6e61d7",
     "containsDocumentTitle": true,
     "containsActiveDocument": true,
     "containsRenameFixturePhrase": false,
@@ -109,9 +119,26 @@
   },
   "stacks": {
     "file": "evidence/stacks.json",
-    "vue": { "ccxStatus": 0, "bytes": 75222, "sha256": "025f114f56468c506499eb2ecedf6d27d83edd762d32d4aa7dbdc902ee53b697", "acceptanceTested": false },
-    "svelte": { "ccxStatus": 0, "bytes": 53796, "sha256": "88c93db31080b60b314bf7d3b2abcab891bc56d952e14e7ef3ff4d98d7a4d9ec", "acceptanceTested": false },
-    "note": "Both empty-folder package scripts exited 0 after the sampleCode:false identifier repair. Vue and Svelte stay acceptanceTested false. These archives are not the React inspector and not a host pass."
+    "vue": { "ccxStatus": 0, "bytes": 74752, "sha256": "54bfe612e7a3d5d9285ea265ea8ce05ebed8631d40821e45e828b345b47a12b7", "acceptanceTested": false, "requiredPermissions": {} },
+    "svelte": { "ccxStatus": 0, "bytes": 53284, "sha256": "d4e263e5beb067aef3234315f5726744eda59151be1266631d7d8d7a50600e8a", "acceptanceTested": false, "requiredPermissions": {} },
+    "note": "Both empty-folder package scripts exited 0 after the sampleCode:false identifier repair. Their packaged manifests are requiredPermissions {}. Vue and Svelte stay acceptanceTested false. These archives are not the React inspector and not a host pass."
+  },
+  "permissions": {
+    "choice": "The generated packages use the narrow answer. keep is the only staged choice that leaves the Bolt block. An existing project is not rewritten until that answer.",
+    "reactPackaged": {},
+    "vuePackaged": {},
+    "sveltePackaged": {},
+    "webviewPackaged": {
+      "webview": {
+        "allow": "yes",
+        "domains": [],
+        "allowLocalRendering": "yes",
+        "enableMessageBridge": "no"
+      }
+    },
+    "unavoidable": "webview.allow yes is mandatory on the manifest and HTMLWebViewElement pages. domains is a required key; the local example uses an empty list, and domains all is not recommended. allowLocalRendering yes is required to load plugin:/ content. enableMessageBridge no is the manifest default because this document does not postMessage.",
+    "dropped": ["localFileSystem fullAccess", "launchProcess", "clipboard readAndWrite", "network", "ipc", "allowCodeGenerationFromStrings", "webview.domains all", "enableMessageBridge localAndRemote"],
+    "hostExecuted": false
   },
   "webview": {
     "offeredFromLivePage": true,
@@ -122,7 +149,15 @@
     "bridgeExecuted": false,
     "screenshots": ["evidence/webview/document-idle.png", "evidence/webview/document-after-click.png"],
     "log": "evidence/webview/webview-preview-log.json",
-    "note": "The live HTMLWebViewElement page offered WebView. The installer booleans were webview true and hybrid false. The document is a separate Vite build. Its button sets local React state and does not call initWebview or api.notify. The host bundle contains document.createElement(\"webview\") with a plugin:/webview-ui/ src. That function was not run in this browser. Static HTML members do not contain a webview tag. This is not a universal shim. Host NOT TESTED."
+    "packagedPermissions": {
+      "webview": {
+        "allow": "yes",
+        "domains": [],
+        "allowLocalRendering": "yes",
+        "enableMessageBridge": "no"
+      }
+    },
+    "note": "The live HTMLWebViewElement page offered WebView. The installer booleans were webview true and hybrid false. The document is a separate Vite build. Its button sets local React state and does not call initWebview or api.notify. The host bundle contains document.createElement(\"webview\") with a plugin:/webview-ui/ src. That function was not run in this browser. Static HTML members do not contain a webview tag. The packaged manifest no longer has the Bolt filesystem, process, clipboard, domains all, or localAndRemote grants. Message-bridge communication is not enabled. This is not a universal shim. Host NOT TESTED."
   },
   "dashboard": {
     "screenshots": [
@@ -160,6 +195,8 @@
     "Spectrum UXP widget pages fetched on 8 Nov 2026 say the controls need no library and are not built atop Web Components. An import makes UXP use the SWC variation. sp-heading, sp-body, and sp-button say Since: UXP v4.1. That line is not a Photoshop host floor. The starter minVersion stays 24.2.0.",
     "Vue and Svelte empty-folder package exits are in evidence/stacks.json. acceptanceTested stays false for both. A successful CCX is not the React acceptance slice and not a host pass.",
     "The WebView cloud render is the packaged document only. The host script that creates a webview element was not executed. There is no universal cloud shim.",
-    "Dashboard screenshots use the test catalog. They are not a live Adobe fetch. The live WebView offer is the stacks record."
+    "Dashboard screenshots use the test catalog. They are not a live Adobe fetch. The live WebView offer is the stacks record.",
+    "The Bolt starter requiredPermissions block is not user approval. Generated native packages are requiredPermissions {}. The local WebView package keeps allow yes, domains [], allowLocalRendering yes, and enableMessageBridge no. An existing project is unchanged until the staged answer is narrow or keep.",
+    "enableMessageBridge no means the packaged host shell's postMessage setup is not granted. The document does not call it. Whether the host still displays the webview element was not executed."
   ]
 }

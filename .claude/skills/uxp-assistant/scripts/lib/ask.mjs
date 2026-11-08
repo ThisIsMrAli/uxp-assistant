@@ -56,10 +56,10 @@ export function narrowAsk() {
   return {
     id: "narrow-permissions",
     title: "Starter permissions",
-    prompt: "The Bolt starter declares broad permissions. Narrow them to an empty requiredPermissions object?",
+    prompt: "The Bolt starter declares broad permissions. That block is not approval to keep it. Narrow to the least requiredPermissions for the chosen runtime?",
     options: [
-      { id: "narrow", label: "Narrow to none (Recommended)", detail: "Use this only when the requested feature does not need those permissions. Undeclared permissions stay denied." },
-      { id: "keep", label: "Keep the starter permissions", detail: "Leaves the installer's requiredPermissions block unchanged." }
+      { id: "narrow", label: "Narrow to the least required set (Recommended)", detail: "A native panel that requested no permission becomes requiredPermissions: {}. A local WebView keeps the documented webview keys and drops filesystem, process, clipboard, and domains all. A key stays only when this request named it and the starter already had it." },
+      { id: "keep", label: "Keep the starter permissions", detail: "Leaves the installer's requiredPermissions block unchanged. This is an explicit choice, not the installer's default." }
     ]
   };
 }

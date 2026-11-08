@@ -7,6 +7,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { readZip } from "../.claude/skills/uxp-assistant/scripts/lib/archive.mjs";
+import { LEAST_LOCAL_WEBVIEW, narrowRequiredPermissions, starterPermissionsAreBroad } from "../.claude/skills/uxp-assistant/scripts/lib/permissions.mjs";
 import { runtimeOffer } from "../.claude/skills/uxp-assistant/scripts/lib/runtime.mjs";
 import { scaffoldWithInstaller } from "../.claude/skills/uxp-assistant/scripts/lib/scaffold.mjs";
 
@@ -24,6 +25,7 @@ test("vue and svelte empty folders package, and the webview document is a separa
     report.stacks[framework] = built;
     assert.equal(built.ccxStatus, 0, `${framework} ccx failed: ${built.ccxTail}`);
     assert.ok(built.ccxBytes > 0, framework);
+    assert.deepEqual(built.packagedPermissions, {}, `${framework} packaged manifest`);
   }
   const web = await packageWebview(parent);
   const { documentHtml, ...webviewReport } = web;
@@ -33,6 +35,13 @@ test("vue and svelte empty folders package, and the webview document is a separa
   assert.match(web.documentHtml, /WebView document/);
   assert.match(web.documentHtml, /Mark read/);
   assert.doesNotMatch(web.documentHtml, /api\.notify/);
+  assert.deepEqual(web.packagedPermissions, { webview: LEAST_LOCAL_WEBVIEW });
+  report.unavoidable = {
+    native: {},
+    localWebview: { webview: LEAST_LOCAL_WEBVIEW },
+    dropped: ["localFileSystem", "launchProcess", "clipboard", "network", "ipc", "allowCodeGenerationFromStrings", "webview.domains all", "enableMessageBridge localAndRemote"],
+    note: "allow yes, domains [], and allowLocalRendering yes are the documented local plugin:/ enablement. enableMessageBridge no is the manifest default because this document does not postMessage. Host execution was not run."
+  };
   const evidence = path.join(root, "evidence");
   fs.mkdirSync(evidence, { recursive: true });
   fs.writeFileSync(path.join(evidence, "stacks.json"), `${JSON.stringify(report, null, 2)}\n`);
@@ -50,6 +59,7 @@ async function packageFramework(parent, framework) {
     webview: false,
     hybrid: false
   });
+  const least = applyLeast(result.folder, "native");
   const ccx = spawnSync("npm", ["run", "ccx"], { cwd: result.folder, encoding: "utf8", timeout: 180000 });
   const ccxFile = newestCcx(result.folder);
   return {
@@ -59,7 +69,9 @@ async function packageFramework(parent, framework) {
     ccxTail: `${ccx.stdout || ""}\n${ccx.stderr || ""}`.slice(-800),
     ccxFile: ccxFile ? path.basename(ccxFile) : "",
     ccxBytes: ccxFile ? fs.statSync(ccxFile).size : 0,
-    ccxSha256: ccxFile ? sha(fs.readFileSync(ccxFile)) : ""
+    ccxSha256: ccxFile ? sha(fs.readFileSync(ccxFile)) : "",
+    configHasBroadGrant: least.broad,
+    packagedPermissions: ccxFile ? packagedPermissions(ccxFile) : null
   };
 }
 
@@ -131,6 +143,7 @@ export const App = () => {
   }
   const install = spawnSync("npm", ["install"], { cwd: ui, encoding: "utf8", timeout: 180000 });
   const documentBuild = spawnSync("npm", ["run", "build"], { cwd: ui, encoding: "utf8", timeout: 180000 });
+  const least = applyLeast(result.folder, "webview");
   const panel = spawnSync("npm", ["run", "ccx"], { cwd: result.folder, encoding: "utf8", timeout: 180000 });
   const documentFile = [
     path.join(result.folder, "public/webview-ui/index.html"),
@@ -154,8 +167,24 @@ export const App = () => {
     panelTail: `${panel.stdout || ""}\n${panel.stderr || ""}`.slice(-800),
     panelHtmlHasWebviewTag: readZip(panelFile).some((member) => member.name.endsWith(".html") && /<webview\b/i.test(member.data.toString("utf8"))),
     scriptCreatesWebview: readZip(panelFile).some((member) => member.name.endsWith(".js") && /document\.createElement\("webview"\)/.test(member.data.toString("utf8")) && /plugin:\/webview-ui\//.test(member.data.toString("utf8"))),
+    configHasBroadGrant: least.broad,
+    packagedPermissions: panelFile ? packagedPermissions(panelFile) : null,
     panelMembers: panelMembers.filter((name) => /html|webview|index/.test(name)).slice(0, 30)
   };
+}
+
+function applyLeast(folder, runtime) {
+  const config = path.join(folder, "uxp.config.ts");
+  const narrowed = narrowRequiredPermissions(fs.readFileSync(config, "utf8"), { runtime });
+  assert.equal(narrowed.ok, true, narrowed.reason);
+  fs.writeFileSync(config, narrowed.source);
+  return { broad: starterPermissionsAreBroad(narrowed.source) };
+}
+
+function packagedPermissions(ccxFile) {
+  const member = readZip(ccxFile).find((item) => item.name === "manifest.json");
+  assert.ok(member, ccxFile);
+  return JSON.parse(member.data.toString("utf8")).requiredPermissions;
 }
 
 function newestCcx(folder) {

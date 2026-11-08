@@ -12,7 +12,7 @@ import { extractSuppliedUi, previewDocument } from "./preview.mjs";
 import { stageDecision } from "./stages.mjs";
 import { effectiveHostFloor, floorsFromText } from "./floors.mjs";
 import { spectrumGuidance } from "./runtime.mjs";
-import { narrowRequiredPermissions } from "./permissions.mjs";
+import { narrowRequiredPermissions, starterPermissionsAreBroad } from "./permissions.mjs";
 import { runPackage } from "./package-project.mjs";
 import { rememberOut } from "./paths.mjs";
 import { REVIEW_LIMIT, reviewArchive, reviewClaim, reviewCommandProvenance, selectArchives, snapshotProject, testsCoverFeature } from "./review.mjs";
@@ -221,18 +221,24 @@ export async function runWorkflow(options) {
     setStep(out, "scaffold", "skipped", "Existing project. The installer did not replace it.");
   }
 
-  const broad = project && fs.existsSync(path.join(project, "uxp.config.ts")) && /localFileSystem/.test(fs.readFileSync(path.join(project, "uxp.config.ts"), "utf8"));
+  const configPath = project && path.join(project, "uxp.config.ts");
+  const configSource = configPath && fs.existsSync(configPath) ? fs.readFileSync(configPath, "utf8") : "";
+  const broad = Boolean(configSource) && starterPermissionsAreBroad(configSource);
   const permissions = choice("narrow-permissions");
   if (broad && !permissions) return block(out, narrowAsk());
   if (broad && permissions === "narrow") {
-    const config = path.join(project, "uxp.config.ts");
-    const source = fs.readFileSync(config, "utf8");
-    const narrowed = narrowRequiredPermissions(source);
+    const narrowed = narrowRequiredPermissions(configSource, {
+      runtime: intake.webview ? "webview" : "native",
+      requested: intake.permissions
+    });
     if (!narrowed.ok) {
       setStep(out, "scaffold", "failed", narrowed.reason);
       return { ok: false, success: false, state: "failed", out, hostExecuted: false, say: narrowed.reason };
     }
-    fs.writeFileSync(config, narrowed.source);
+    fs.writeFileSync(configPath, narrowed.source);
+    recordFacts(out, { permissions: { choice: "narrow", runtime: narrowed.runtime, kept: narrowed.kept } });
+  } else if (broad && permissions === "keep") {
+    recordFacts(out, { permissions: { choice: "keep", runtime: intake.webview ? "webview" : "native" } });
   }
 
   const removed = applyDrops(project, drops);

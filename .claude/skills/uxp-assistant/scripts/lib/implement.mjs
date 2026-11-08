@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { narrowRequiredPermissions } from "./permissions.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const previewSource = fs.readFileSync(path.join(here, "rename-preview.mjs"), "utf8");
@@ -265,11 +266,10 @@ export function implementLayerRename(projectDir, { narrowPermissions = false } =
   let permissions = "unchanged";
   const config = path.join(root, "uxp.config.ts");
   if (narrowPermissions && fs.existsSync(config)) {
-    const source = fs.readFileSync(config, "utf8");
-    const next = source.replace(/requiredPermissions:\s*\{[\s\S]*?\n\s*\},/m, "requiredPermissions: {},");
-    if (next === source) permissions = "pattern-not-found";
+    const narrowed = narrowRequiredPermissions(fs.readFileSync(config, "utf8"), { runtime: "native" });
+    if (!narrowed.ok) permissions = "pattern-not-found";
     else {
-      fs.writeFileSync(config, next);
+      fs.writeFileSync(config, narrowed.source);
       permissions = "narrowed-empty";
     }
   }
