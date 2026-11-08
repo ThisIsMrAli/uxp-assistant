@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-export function buildContract({ intake, capability, projectPath, docs, kept, baseline, notes, runtime, design, preview }) {
+export function buildContract({ intake, capability, projectPath, docs, kept, baseline, notes, runtime, design, preview, network }) {
   return {
     goal: intake.goal,
     state: capability.state,
@@ -28,6 +28,12 @@ export function buildContract({ intake, capability, projectPath, docs, kept, bas
     runtime: runtime || null,
     design: design || null,
     preview: preview || null,
+    network: network || {
+      origins: [],
+      rejected: [],
+      elevated: false,
+      note: "No origins were classified. Network access was not elevated."
+    },
     detail: capability.detail,
     unverified: [
       "The Adobe host was not executed.",
@@ -41,7 +47,8 @@ export function buildContract({ intake, capability, projectPath, docs, kept, bas
       "Do not invent a host API that is absent from the evidence.",
       "Do not treat a WebView shim or a browser preview as the host.",
       "Do not mark tests, package, or the feature done without a real command result or real files.",
-      "Do not claim the Adobe host executed."
+      "Do not claim the Adobe host executed.",
+      "Do not write classified origins into requiredPermissions. Recording an origin does not grant network access."
     ],
     handoff: capability.state === "awaiting-agent-implementation"
       ? "The invoking assistant writes this goal in the project using design-constraints.md and the chosen runtime, then records agent-result.json with the files that changed. A stock file or a no-op test is not the feature. A browser preview is not the host. The skill keeps the real command exits and does not treat them as semantic proof."

@@ -2,13 +2,14 @@
   "capturedOn": "this cloud environment",
   "boxBrowser": false,
   "hostExecuted": false,
-  "note": "These screenshots are the labelled preview in this environment. They are not the box browser, not Photoshop, and not Premiere.",
+  "supplied": "source text from the supplied UI, not a host render",
+  "note": "These screenshots are the labelled preview in this environment. They show supplied source text inside the labelled frame. They are not the box browser, not Photoshop, and not Premiere.",
   "native": {
     "surface": "native-simulation",
-    "text": "Native UXP UI simulation. APIs are mocked. Unsupported CSS is listed, not applied as a host result. Adobe host: NOT TESTED.\n\nNative UXP simulation\n\nShow the layer name\n\nRetrieved limits\nCSS transitions and animations are not supported\ntext-transform is not supported\nRead document (mock)\n\nMock: the host app is not available. No document was read.\n\nRename layer (blocked)\n\nBlocked: the native mutation was not executed."
+    "text": "Native UXP UI simulation. APIs are mocked. Unsupported CSS is listed, not applied as a host result. Adobe host: NOT TESTED.\n\nNative UXP simulation\n\nShow the layer name\n\nRetrieved limits\nCSS transitions and animations are not supported\ntext-transform is not supported\nSupplied panel text\n\nSource text from the supplied or generated UI. This is not a host render.\n\nDocument title\nRead title\nRead document (mock)\n\nMock: the host app is not available. No document was read.\n\nRename layer (blocked)\n\nBlocked: the native mutation was not executed."
   },
   "webview": {
     "surface": "webview-browser",
-    "text": "Browser rendering of a WebView document. The host bridge is unavailable. Adobe host: NOT TESTED.\n\nWebView document preview\n\nShow the layer name\n\nRetrieved limits\nCSS transitions and animations are not supported\ntext-transform is not supported\nCall uxpHost.postMessage\n\nBlocked: window.uxpHost is unavailable. No host message was sent."
+    "text": "Browser rendering of a WebView document. The host bridge is unavailable. Adobe host: NOT TESTED.\n\nWebView document preview\n\nShow the layer name\n\nRetrieved limits\nCSS transitions and animations are not supported\ntext-transform is not supported\nSupplied panel text\n\nSource text from the supplied or generated UI. This is not a host render.\n\nDocument title\nRead title\nCall uxpHost.postMessage\n\nBlocked: window.uxpHost is unavailable. No host message was sent."
   }
 }

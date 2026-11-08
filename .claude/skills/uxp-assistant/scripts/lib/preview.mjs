@@ -8,7 +8,17 @@ import http from "node:http";
  * which this skill already classifies as a shim. Neither is used as a host pass.
  */
 
-export function previewDocument({ mode, goal, limits }) {
+export function extractSuppliedUi(text) {
+  const found = [];
+  for (const match of String(text || "").matchAll(/<(h1|h2|button|p)\b[^>]*>([^<]{1,160})<\//gi)) {
+    const value = match[2].replace(/\s+/g, " ").trim();
+    if (value && !found.includes(value)) found.push(value);
+    if (found.length >= 8) break;
+  }
+  return found;
+}
+
+export function previewDocument({ mode, goal, limits, supplied }) {
   const surface = mode === "webview" ? "webview-browser" : "native-simulation";
   const title = surface === "webview-browser" ? "WebView document preview" : "Native UXP simulation";
   const banner = surface === "webview-browser"
@@ -18,6 +28,10 @@ export function previewDocument({ mode, goal, limits }) {
       : "Native UXP UI simulation. APIs are mocked. Unsupported CSS is listed, not applied as a host result. Adobe host: NOT TESTED.";
   const limitsHtml = (limits || []).map((limit) => `<li>${escapeHtml(limit)}</li>`).join("")
     || "<li>No transition or text-transform sentence was found on the fresh known-issues text. None was invented.</li>";
+  const suppliedItems = supplied || [];
+  const suppliedHtml = suppliedItems.length
+    ? suppliedItems.map((item) => `<li>${escapeHtml(item)}</li>`).join("")
+    : "<li>No supplied panel text was recorded.</li>";
   const action = surface === "webview-browser"
     ? `<button id="bridge" type="button">Call uxpHost.postMessage</button>
        <p id="bridge-result" class="error"></p>`
@@ -38,14 +52,14 @@ export function previewDocument({ mode, goal, limits }) {
           result.textContent = "Blocked: " + (error && error.message ? error.message : "the bridge call failed") + " No host message was sent.";
         }
       });
-      window.__preview = { surface: "webview-browser", hostExecuted: false };`
+      window.__preview = { surface: "webview-browser", hostExecuted: false, suppliedSourceText: true };`
     : `document.getElementById("read").addEventListener("click", () => {
         document.getElementById("read-result").textContent = "Mock: the host app is not available. No document was read.";
       });
       document.getElementById("mutate").addEventListener("click", () => {
         document.getElementById("mutate-result").textContent = "Blocked: the native mutation was not executed.";
       });
-      window.__preview = { surface: "native-simulation", hostExecuted: false };`;
+      window.__preview = { surface: "native-simulation", hostExecuted: false, suppliedSourceText: true };`;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -66,6 +80,9 @@ export function previewDocument({ mode, goal, limits }) {
   <p id="goal">${escapeHtml(goal || "")}</p>
   <h2>Retrieved limits</h2>
   <ul id="limits">${limitsHtml}</ul>
+  <h2>Supplied panel text</h2>
+  <p id="supplied-note">Source text from the supplied or generated UI. This is not a host render.</p>
+  <ul id="supplied">${suppliedHtml}</ul>
   <section class="panel">${action}</section>
   <script>${script}</script>
 </body>

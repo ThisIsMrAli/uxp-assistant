@@ -9,8 +9,12 @@ import { previewDocument, servePreview } from "../.claude/skills/uxp-assistant/s
 const limits = ["CSS transitions and animations are not supported", "text-transform is not supported"];
 
 test("the browser preview blocks native mutation and a missing host bridge", async (t) => {
-  const native = previewDocument({ mode: "native", goal: "Show the layer name", limits });
-  const web = previewDocument({ mode: "webview", goal: "Show the layer name", limits });
+  const supplied = ["Document title", "Read title"];
+  const native = previewDocument({ mode: "native", goal: "Show the layer name", limits, supplied });
+  const web = previewDocument({ mode: "webview", goal: "Show the layer name", limits, supplied });
+  assert.match(native, /Supplied panel text/);
+  assert.match(native, /not a host render/);
+  assert.match(native, /Document title/);
   assert.match(native, /data-surface="native-simulation"/);
   assert.match(native, /disabled/);
   assert.doesNotMatch(native, /require\(["']photoshop["']\)|executeAsModal\s*\(/);
@@ -32,7 +36,8 @@ test("the browser preview blocks native mutation and a missing host bridge", asy
     capturedOn: "this cloud environment",
     boxBrowser: false,
     hostExecuted: false,
-    note: "These screenshots are the labelled preview in this environment. They are not the box browser, not Photoshop, and not Premiere."
+    supplied: "source text from the supplied UI, not a host render",
+    note: "These screenshots are the labelled preview in this environment. They show supplied source text inside the labelled frame. They are not the box browser, not Photoshop, and not Premiere."
   };
   try {
     await page.goto(nativePage.url);
@@ -42,6 +47,8 @@ test("the browser preview blocks native mutation and a missing host bridge", asy
     assert.match(nativeText, /Mock: the host app is not available/);
     assert.match(nativeText, /Blocked: the native mutation was not executed/);
     assert.match(nativeText, /CSS transitions and animations are not supported/);
+    assert.match(nativeText, /Document title/);
+    assert.match(nativeText, /not a host render/);
     assert.equal(await page.eval("window.__preview.hostExecuted"), false);
     await page.screenshot(path.join(evidence, "cloud-native-simulation.png"));
     log.native = { surface: "native-simulation", text: nativeText };

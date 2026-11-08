@@ -14,7 +14,8 @@ TAP version 13
 # [999D[J◓  Installing dependencies
 # [999D[J◑  Installing dependencies
 # [999D[J◒  Installing dependencies
-# [999D[J◐  Installing dependencies
+# [999D
+# [J◐  Installing dependencies
 # [999D[J◓  Installing dependencies
 # [999D[J◑  Installing dependencies
 # [999D[J◒  Installing dependencies.
@@ -28,12 +29,57 @@ TAP version 13
 # [999D[J◒  Installing dependencies..
 # [999D[J◐  Installing dependencies..
 # [999D[J◓  Installing dependencies..
+# [999D
+# [J
+# ◑  Installing dependencies..
+# [999D
+# [J◒  Installing dependencies..
+# [999D
+# [J◐  Installing dependencies..
+# [999D[J◓  Installing dependencies..
+# [999D[J◑  Installing dependencies..
+# [999D[J◒  Installing dependencies...
+# [999D[J◐  Installing dependencies...
+# [999D
+# [J
+# ◓  Installing dependencies...
+# [999D
+# [J◑  Installing dependencies...
+# [999D[J◒  Installing dependencies...
+# [999D[J◐  Installing dependencies...
+# [999D[J◓  Installing dependencies...
+# [999D[J◑  Installing dependencies...
+# [999D[J◒  Installing dependencies...
+# [999D[J◐  Installing dependencies
+# [999D[J◓  Installing dependencies
+# [999D
+# [J◑  Installing dependencies
+# [999D[J◒  Installing dependencies
+# [999D[J◐  Installing dependencies
+# [999D[J◓  Installing dependencies
+# [999D[J◑  Installing dependencies
+# [999D[J◒  Installing dependencies
+# [999D[J◐  Installing dependencies.
+# [999D[J◓  Installing dependencies.
+# [999D[J◑  Installing dependencies.
+# [999D[J◒  Installing dependencies.
+# [999D[J◐  Installing dependencies.
+# [999D[J◓  Installing dependencies.
+# [999D
+# [J
+# ◑  Installing dependencies.
+# [999D
+# [J
+# ◒  Installing dependencies.
+# [999D
+# [J◐  Installing dependencies..
+# [999D[J◓  Installing dependencies..
 # [999D[J◑  Installing dependencies..
 # [999D[J◒  Installing dependencies..
 # [999D[J◐  Installing dependencies..
 # [999D[J◓  Installing dependencies..
 # [999D[J◑  Installing dependencies..
-# [999D[J◒  Installing dependencies...
+# [999D[J◒  Installing dependencies..
 # [999D[J◐  Installing dependencies...
 # [999D[J◓  Installing dependencies...
 # [999D[J◑  Installing dependencies...
@@ -42,19 +88,16 @@ TAP version 13
 # [999D[J◓  Installing dependencies...
 # [999D[J◑  Installing dependencies...
 # [999D[J◒  Installing dependencies...
-# [999D
-# [J◐  Installing dependencies
-# [999D
-# [J◓  Installing dependencies
-# [999D
-# [J
+# [999D[J◐  Installing dependencies...
+# [999D[J◓  Installing dependencies
+# [999D[J
 # ◑  Installing dependencies
 # [999D[J◒  Installing dependencies
 # [999D[J◐  Installing dependencies
 # [999D[J◓  Installing dependencies
 # [999D[J◑  Installing dependencies
 # [999D[J◒  Installing dependencies
-# [999D[J◐  Installing dependencies.
+# [999D[J◐  Installing dependencies
 # [999D[J◓  Installing dependencies.
 # [999D[J◑  Installing dependencies.
 # [999D[J◒  Installing dependencies.
@@ -62,24 +105,15 @@ TAP version 13
 # [999D[J◓  Installing dependencies.
 # [999D[J◑  Installing dependencies.
 # [999D[J◒  Installing dependencies.
+# [999D[J◐  Installing dependencies.
+# [999D[J◓  Installing dependencies..
+# [999D[J◑  Installing dependencies..
+# [999D[J◒  Installing dependencies..
 # [999D[J◐  Installing dependencies..
 # [999D[J◓  Installing dependencies..
-# [999D
-# [J
-# ◑  Installing dependencies..
-# [999D
-# [J
-# ◒  Installing dependencies..
-# [999D
-# [J◐  Installing dependencies..
-# [999D[J◓  Installing dependencies..
-# [999D
-# [J
-# ◑  Installing dependencies..
+# [999D[J◑  Installing dependencies..
 # [999D[J◒  Installing dependencies..
-# [999D
-# [J
-# ◐  Installing dependencies...
+# [999D[J◐  Installing dependencies..
 # [999D[J◓  Installing dependencies...
 # [999D[J◑  Installing dependencies...
 # [999D[J◒  Installing dependencies...
@@ -88,10 +122,34 @@ TAP version 13
 # [999D[J◑  Installing dependencies...
 # [999D[J◒  Installing dependencies...
 # [999D[J◐  Installing dependencies...
+# [999D[J◓  Installing dependencies...
+# [999D[J◑  Installing dependencies
+# [999D[J◒  Installing dependencies
+# [999D[J◐  Installing dependencies
 # [999D[J◓  Installing dependencies
 # [999D[J◑  Installing dependencies
 # [999D[J◒  Installing dependencies
-# added 384 packages, and audited 386 packages in 6s
+# [999D[J◐  Installing dependencies
+# [999D[J◓  Installing dependencies
+# [999D[J◑  Installing dependencies.
+# [999D[J◒  Installing dependencies.
+# [999D[J◐  Installing dependencies.
+# [999D[J◓  Installing dependencies.
+# [999D[J◑  Installing dependencies.
+# [999D[J◒  Installing dependencies.
+# [999D[J◐  Installing dependencies.
+# [999D[J◓  Installing dependencies.
+# [999D[J◑  Installing dependencies..
+# [999D[J◒  Installing dependencies..
+# [999D[J◐  Installing dependencies..
+# [999D[J◓  Installing dependencies..
+# [999D[J◑  Installing dependencies..
+# [999D[J◒  Installing dependencies..
+# [999D[J◐  Installing dependencies..
+# [999D[J◓  Installing dependencies..
+# [999D[J◑  Installing dependencies...
+# [999D[J◒  Installing dependencies...
+# added 384 packages, and audited 386 packages in 10s
 # 96 packages are looking for funding
 #   run `npm fund` for details
 # 17 vulnerabilities (2 low, 14 high, 1 critical)
@@ -124,202 +182,239 @@ TAP version 13
 # Subtest: create-bolt-uxp scaffolds from a cwd that is not the repository, and both entry paths package the document title
 ok 1 - create-bolt-uxp scaffolds from a cwd that is not the repository, and both entry paths package the document title
   ---
-  duration_ms: 12896.391092
+  duration_ms: 17804.800872
   type: 'test'
   ...
 # Subtest: the live Premiere class pages resolve importFiles when the index does not list it
 ok 2 - the live Premiere class pages resolve importFiles when the index does not list it
   ---
-  duration_ms: 346.549947
+  duration_ms: 781.174511
+  type: 'test'
+  ...
+# Subtest: bolt cross-env and node --test stay inside the supported grammar
+ok 3 - bolt cross-env and node --test stay inside the supported grammar
+  ---
+  duration_ms: 1.366122
+  type: 'test'
+  ...
+# Subtest: sh -c is refused and cannot be approved into running pack.mjs
+ok 4 - sh -c is refused and cannot be approved into running pack.mjs
+  ---
+  duration_ms: 36.839857
+  type: 'test'
+  ...
+# Subtest: node --import hashes the loader and the script, and a later script edit does not run
+ok 5 - node --import hashes the loader and the script, and a later script edit does not run
+  ---
+  duration_ms: 463.916732
+  type: 'test'
+  ...
+# Subtest: npm run zip hashes the inner node script, and a later edit does not run
+ok 6 - npm run zip hashes the inner node script, and a later edit does not run
+  ---
+  duration_ms: 515.369931
+  type: 'test'
+  ...
+# Subtest: a graph past 40 files is refused with no approvable partial hash
+ok 7 - a graph past 40 files is refused with no approvable partial hash
+  ---
+  duration_ms: 13.888797
   type: 'test'
   ...
 # Subtest: a non-rename goal stays on the agent path and is not marked done
-ok 3 - a non-rename goal stays on the agent path and is not marked done
+ok 8 - a non-rename goal stays on the agent path and is not marked done
   ---
-  duration_ms: 80.947193
+  duration_ms: 95.826101
   type: 'test'
   ...
 # Subtest: recording the show-selection files runs the real scripts and still says the host was not tested
-ok 4 - recording the show-selection files runs the real scripts and still says the host was not tested
+ok 9 - recording the show-selection files runs the real scripts and still says the host was not tested
   ---
-  duration_ms: 369.334215
+  duration_ms: 412.404572
   type: 'test'
   ...
 # Subtest: an existing project keeps its behaviors and the requested goal
-ok 5 - an existing project keeps its behaviors and the requested goal
+ok 10 - an existing project keeps its behaviors and the requested goal
   ---
-  duration_ms: 545.825085
+  duration_ms: 408.775484
   type: 'test'
   ...
 # Subtest: the rename fixture is applied only for the rename goal and still needs a real package
-ok 6 - the rename fixture is applied only for the rename goal and still needs a real package
+ok 11 - the rename fixture is applied only for the rename goal and still needs a real package
   ---
-  duration_ms: 433.824988
+  duration_ms: 416.896603
   type: 'test'
   ...
 # Subtest: unknown, unsupported, incomplete output, and a failed package cannot report success
-ok 7 - unknown, unsupported, incomplete output, and a failed package cannot report success
+ok 12 - unknown, unsupported, incomplete output, and a failed package cannot report success
   ---
-  duration_ms: 431.470946
+  duration_ms: 484.839046
   type: 'test'
   ...
 # Subtest: a failed docs fetch is not fresh and does not let package be marked done
-ok 8 - a failed docs fetch is not fresh and does not let package be marked done
+ok 13 - a failed docs fetch is not fresh and does not let package be marked done
   ---
-  duration_ms: 10.046933
+  duration_ms: 14.10089
   type: 'test'
   ...
 # Subtest: the dashboard snapshot and CLI refuse a false success
-ok 9 - the dashboard snapshot and CLI refuse a false success
+ok 14 - the dashboard snapshot and CLI refuse a false success
   ---
-  duration_ms: 138.033138
+  duration_ms: 160.204112
   type: 'test'
   ...
 # Subtest: a documented document title and Premiere importFiles are handoffs, not a dead end
-ok 10 - a documented document title and Premiere importFiles are handoffs, not a dead end
+ok 15 - a documented document title and Premiere importFiles are handoffs, not a dead end
   ---
-  duration_ms: 414.766513
+  duration_ms: 476.592802
   type: 'test'
   ...
 # Subtest: a stock error module and a no-op test cannot finish the feature
-ok 11 - a stock error module and a no-op test cannot finish the feature
+ok 16 - a stock error module and a no-op test cannot finish the feature
   ---
-  duration_ms: 12.452095
+  duration_ms: 9.798991
   type: 'test'
   ...
 # Subtest: drop removes only the assessed listener files
-ok 12 - drop removes only the assessed listener files
+ok 17 - drop removes only the assessed listener files
   ---
-  duration_ms: 5.83635
+  duration_ms: 6.775587
   type: 'test'
   ...
 # Subtest: an existing project without a host does not skip host pages
-ok 13 - an existing project without a host does not skip host pages
+ok 18 - an existing project without a host does not skip host pages
   ---
-  duration_ms: 1.144551
+  duration_ms: 1.924551
   type: 'test'
   ...
 # Subtest: importFiles missing from the Premiere index is resolved from the official class page
-ok 14 - importFiles missing from the Premiere index is resolved from the official class page
+ok 19 - importFiles missing from the Premiere index is resolved from the official class page
   ---
-  duration_ms: 11.436929
+  duration_ms: 5.80739
   type: 'test'
   ...
 # Subtest: static text, comment-only API, a noop assertion, and starter tokens do not finish
-ok 15 - static text, comment-only API, a noop assertion, and starter tokens do not finish
+ok 20 - static text, comment-only API, a noop assertion, and starter tokens do not finish
   ---
-  duration_ms: 82.233559
+  duration_ms: 98.267766
   type: 'test'
   ...
 # Subtest: a documented layer opacity feature finishes without being the document-title fixture
-ok 16 - a documented layer opacity feature finishes without being the document-title fixture
+ok 21 - a documented layer opacity feature finishes without being the document-title fixture
   ---
-  duration_ms: 454.338445
+  duration_ms: 442.819518
   type: 'test'
   ...
 # Subtest: a swapped ccx command is not run, and every new archive is reviewed
-ok 17 - a swapped ccx command is not run, and every new archive is reviewed
+ok 22 - a swapped ccx command is not run, and every new archive is reviewed
   ---
-  duration_ms: 1137.637988
+  duration_ms: 1301.411881
   type: 'test'
   ...
 # Subtest: an approved build command is recorded as a change, and a starter-only zip is not the feature
-ok 18 - an approved build command is recorded as a change, and a starter-only zip is not the feature
+ok 23 - an approved build command is recorded as a change, and a starter-only zip is not the feature
   ---
-  duration_ms: 1125.970049
+  duration_ms: 1129.002577
   type: 'test'
   ...
 # Subtest: the dashboard shows the outcome and does not call a skipped feature finished
-ok 19 - the dashboard shows the outcome and does not call a skipped feature finished
+ok 24 - the dashboard shows the outcome and does not call a skipped feature finished
   ---
-  duration_ms: 2469.133076
+  duration_ms: 2279.821247
   type: 'test'
   ...
 # Subtest: floors do not invent the WebView floor or apiVersion
-ok 20 - floors do not invent the WebView floor or apiVersion
+ok 25 - floors do not invent the WebView floor or apiVersion
   ---
-  duration_ms: 2.224378
+  duration_ms: 2.604793
   type: 'test'
   ...
 # Subtest: commandName 23.0 is read across lines and a nested permission object stays valid
-ok 21 - commandName 23.0 is read across lines and a nested permission object stays valid
+ok 26 - commandName 23.0 is read across lines and a nested permission object stays valid
   ---
-  duration_ms: 0.70708
+  duration_ms: 0.782702
   type: 'test'
   ...
 # Subtest: a failed refresh keeps old text and is not fresh
-ok 22 - a failed refresh keeps old text and is not fresh
+ok 27 - a failed refresh keeps old text and is not fresh
   ---
-  duration_ms: 3.527213
+  duration_ms: 2.341335
   type: 'test'
   ...
 # Subtest: stale check lists every newer file and ignores an equal mtime
-ok 23 - stale check lists every newer file and ignores an equal mtime
+ok 28 - stale check lists every newer file and ignores an equal mtime
   ---
-  duration_ms: 0.679737
+  duration_ms: 0.674948
   type: 'test'
   ...
 # Subtest: chrome cleanup reports a profile that is still there
-ok 24 - chrome cleanup reports a profile that is still there
+ok 29 - chrome cleanup reports a profile that is still there
   ---
-  duration_ms: 0.452799
+  duration_ms: 0.542938
   type: 'test'
   ...
 # Subtest: the loopback socket rejects a public host
-ok 25 - the loopback socket rejects a public host
+ok 30 - the loopback socket rejects a public host
   ---
-  duration_ms: 0.383373
+  duration_ms: 0.406676
   type: 'test'
   ...
 # Subtest: a split known-issues quote is unsupported only when that page is fresh
-ok 26 - a split known-issues quote is unsupported only when that page is fresh
+ok 31 - a split known-issues quote is unsupported only when that page is fresh
   ---
-  duration_ms: 0.333289
+  duration_ms: 0.360686
   type: 'test'
   ...
 # Subtest: rename preview warns on a duplicate and does not invent a host ban
-ok 27 - rename preview warns on a duplicate and does not invent a host ban
+ok 32 - rename preview warns on a duplicate and does not invent a host ban
   ---
-  duration_ms: 0.232534
+  duration_ms: 0.243871
   type: 'test'
   ...
 # Subtest: the browser preview blocks native mutation and a missing host bridge
-ok 28 - the browser preview blocks native mutation and a missing host bridge
+ok 33 - the browser preview blocks native mutation and a missing host bridge
   ---
-  duration_ms: 972.575454
+  duration_ms: 1050.433156
   type: 'test'
   ...
 # BOLT_MODULEONLY true
 # Subtest: cep facts classify a webview page, a domain, and a non-opener process
-ok 29 - cep facts classify a webview page, a domain, and a non-opener process
+ok 34 - cep facts classify a webview page, a domain, and a non-opener process
   ---
-  duration_ms: 2.048658
+  duration_ms: 1.433523
   type: 'test'
   ...
 # Subtest: staged choices block before edits, and native is not a hidden webview default
-ok 30 - staged choices block before edits, and native is not a hidden webview default
+ok 35 - staged choices block before edits, and native is not a hidden webview default
   ---
-  duration_ms: 46.456564
+  duration_ms: 54.795308
   type: 'test'
   ...
 # Subtest: design discovery reports a missing example and records a skill that is on disk
-ok 31 - design discovery reports a missing example and records a skill that is on disk
+ok 36 - design discovery reports a missing example and records a skill that is on disk
   ---
-  duration_ms: 9.763856
+  duration_ms: 13.913944
+  type: 'test'
+  ...
+# Subtest: classified origins stay on the contract and are not written into permissions
+ok 37 - classified origins stay on the contract and are not written into permissions
+  ---
+  duration_ms: 9.948931
   type: 'test'
   ...
 # Subtest: the installer refuses to invent webview or hybrid when the booleans are omitted
-ok 32 - the installer refuses to invent webview or hybrid when the booleans are omitted
+ok 38 - the installer refuses to invent webview or hybrid when the booleans are omitted
   ---
-  duration_ms: 28.152173
+  duration_ms: 32.579572
   type: 'test'
   ...
-1..32
-# tests 32
+1..38
+# tests 38
 # suites 0
-# pass 32
+# pass 38
 # fail 0
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 13323.179408
+# duration_ms 18671.611211
+EXIT:0

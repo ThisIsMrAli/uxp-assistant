@@ -9,13 +9,17 @@ import { fileURLToPath } from "node:url";
  */
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const args = new Set(process.argv.slice(2));
-const files = ["test/guards.test.mjs", "test/authoring.test.mjs", "test/stages.test.mjs"];
+const files = ["test/guards.test.mjs", "test/authoring.test.mjs", "test/stages.test.mjs", "test/approval-graph.test.mjs"];
+if (args.has("--acceptance")) files.push("test/acceptance.test.mjs");
 if (args.has("--preview")) files.push("test/preview.test.mjs");
 if (args.has("--dashboard")) files.push("test/dashboard-render.test.mjs");
 
 console.log("UXP Assistant box runner");
 console.log("No model call. No git checkout. Photoshop and Premiere are not launched.");
 console.log("A browser result from --preview or --dashboard is this machine only. It is not another machine's result and not a host pass.");
+if (args.has("--acceptance")) {
+  console.log("--acceptance runs setup, build, and package on this machine. It needs network for docs and npm install. It is not a browser and not a host pass.");
+}
 if (!args.has("--preview") && !args.has("--dashboard")) {
   console.log("Browser checks are not in the default set. Pass --preview or --dashboard on this machine to run them here.");
 }

@@ -195,6 +195,26 @@ test("design discovery reports a missing example and records a skill that is on 
   assert.match(fs.readFileSync(path.join(found.project, "design-constraints.md"), "utf8"), /Panel Layout/);
 });
 
+test("classified origins stay on the contract and are not written into permissions", async () => {
+  const project = path.join(temp(), "plugin");
+  fs.mkdirSync(project, { recursive: true });
+  fs.writeFileSync(path.join(project, "net.js"), "fetch(\"https://example.com/api/items\");\n");
+  fs.writeFileSync(path.join(project, "uxp.config.ts"), "export const manifest = { requiredPermissions: { localFileSystem: \"fullAccess\" } };\n");
+  const result = await runWorkflow({
+    out: temp(),
+    kind: "existing",
+    projectPath: project,
+    answers: answers(),
+    fetchImpl: fetchImpl()
+  });
+  assert.equal(result.state, "awaiting-agent-implementation");
+  assert.ok(result.contract.network.origins.includes("https://example.com"));
+  assert.equal(result.contract.network.elevated, false);
+  const config = fs.readFileSync(path.join(project, "uxp.config.ts"), "utf8");
+  assert.doesNotMatch(config, /example\.com/);
+  assert.doesNotMatch(config, /network/);
+});
+
 test("the installer refuses to invent webview or hybrid when the booleans are omitted", async () => {
   await assert.rejects(
     () => scaffoldWithInstaller(temp(), {

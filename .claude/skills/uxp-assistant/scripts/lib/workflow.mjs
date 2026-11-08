@@ -8,7 +8,7 @@ import { consequentialAsk, frameworkAsk, hostAsk, keepAsk, modeAsk, narrowAsk, s
 import { assessCepSources } from "./cep/signals.mjs";
 import { writeDesignConstraints } from "./design-skill.mjs";
 import { skillRoot } from "./paths.mjs";
-import { previewDocument } from "./preview.mjs";
+import { extractSuppliedUi, previewDocument } from "./preview.mjs";
 import { stageDecision } from "./stages.mjs";
 import { effectiveHostFloor, floorsFromText } from "./floors.mjs";
 import { narrowRequiredPermissions } from "./permissions.mjs";
@@ -119,7 +119,15 @@ export async function runWorkflow(options) {
   plan.capability = capability;
   plan.fixture = capability.fixture;
   plan.recipe = capability.fixture;
+  const cep = assessCepSources(files);
+  plan.cep = { hybrid: cep.hybrid, origins: cep.origins, rejected: cep.rejected, notes: cep.notes };
   recordFacts(out, { plan });
+  const network = {
+    origins: cep.origins,
+    rejected: cep.rejected,
+    elevated: false,
+    note: "Classified origins are recorded for the handoff. They are not written into requiredPermissions and they do not grant network access."
+  };
   setStep(out, "plan", "done", `${capability.state}. ${capability.detail}`);
 
   if (!summary.ok) {
@@ -128,12 +136,10 @@ export async function runWorkflow(options) {
       state: "docs-incomplete",
       detail: `Docs are not fresh. Failed: ${summary.failed.join(", ") || "none"}. Stale: ${summary.stale.join(", ") || "none"}. Failed or stale pages are not evidence.`
     };
-    const held = hold(out, intake, paused, options.projectPath || "", summary, plan, behaviors, []);
+    const held = hold(out, intake, paused, options.projectPath || "", summary, plan, behaviors, [], { network });
     return { ok: false, success: false, state: "docs-incomplete", out, hostExecuted: false, contract: held, say: paused.detail };
   }
 
-  const cep = assessCepSources(files);
-  plan.cep = { hybrid: cep.hybrid, origins: cep.origins, rejected: cep.rejected, notes: cep.notes };
   const staged = stageDecision({
     choice,
     capability,
@@ -147,7 +153,7 @@ export async function runWorkflow(options) {
   });
   if (staged.action === "ask") return block(out, staged.ask);
   if (staged.action === "reject-continue" || staged.action === "hold-state") {
-    const held = hold(out, intake, capability, options.projectPath || "", summary, plan, behaviors, [], { notes: cep.notes });
+    const held = hold(out, intake, capability, options.projectPath || "", summary, plan, behaviors, [], { notes: cep.notes, network });
     return {
       ok: false,
       success: false,
@@ -261,7 +267,8 @@ export async function runWorkflow(options) {
     notes,
     runtime: { id: runtimeChoice, webview: intake.webview, hybrid: intake.hybrid },
     design: staged.design,
-    preview
+    preview: { ...preview, limits: staged.offer.limits.map((item) => item.quote) },
+    network
   });
   setStep(out, "implementation", "waiting", "awaiting-agent-implementation");
   return {
@@ -296,6 +303,16 @@ export function recordImplementation(out, claimed, { runner } = {}) {
     if (!full.startsWith(path.resolve(project) + path.sep)) return incomplete(out, "not-yet-implemented", "A recorded path escapes the project.");
     if (!fs.existsSync(full) || !fs.statSync(full).size) return incomplete(out, "not-yet-implemented", `${relative} is missing or empty.`);
     bodies.push(fs.readFileSync(full, "utf8"));
+  }
+  const supplied = bodies.flatMap((body) => extractSuppliedUi(body));
+  if (supplied.length && contract.preview?.file) {
+    fs.mkdirSync(path.dirname(path.join(out, contract.preview.file)), { recursive: true });
+    fs.writeFileSync(path.join(out, contract.preview.file), previewDocument({
+      mode: contract.runtime?.id || "native",
+      goal: contract.goal,
+      limits: contract.preview.limits || [],
+      supplied
+    }));
   }
   const claim = reviewClaim({ contract, files, bodies });
   if (!claim.ok) return incomplete(out, "not-yet-implemented", claim.say);
@@ -425,7 +442,8 @@ function hold(out, intake, capability, projectPath, summary, plan, behaviors, ke
     notes: extras.notes,
     runtime: extras.runtime,
     design: extras.design,
-    preview: extras.preview
+    preview: extras.preview,
+    network: extras.network
   });
   if (projectPath) writeContractFiles(projectPath, contract);
   fs.writeFileSync(path.join(out, "implementation-contract.json"), `${JSON.stringify(contract, null, 2)}\n`);
