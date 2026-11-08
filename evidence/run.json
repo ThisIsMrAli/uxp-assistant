@@ -1,0 +1,101 @@
+{
+  "date": "2026-11-08",
+  "node": "v22.23.4",
+  "npm": "10.9.9",
+  "hostExecuted": false,
+  "host": "NOT TESTED. Photoshop and Premiere were not launched. npm test, vite build, the CCX file, and the Chrome dashboard are not a host pass.",
+  "skillTests": {
+    "command": "npm test",
+    "exit": 0,
+    "tests": 15
+  },
+  "liveDocs": {
+    "command": "node .claude/skills/uxp-assistant/scripts/refresh-docs.mjs --host phxs --goal \"Show each selected layer id and name\" --out /tmp/uxp-live-docs",
+    "exit": 0,
+    "fresh": 14,
+    "stale": [],
+    "failed": [],
+    "pages": {
+      "manifest": {
+        "bytes": 21412,
+        "sha256": "fb6ba35e917df81140c0693a9299aab4cd3edd64a31e17b35cd355c0bfc8e3a5"
+      },
+      "photoshop.document": {
+        "bytes": 21206,
+        "sha256": "308bc2e21c2c17125480ab0afdf92d3ab400a45b423f48f5e17f1b00f4cb4546"
+      },
+      "photoshop.layer": {
+        "bytes": 30362,
+        "sha256": "bcdeeac6772a3cd1e31bc40ec33f04ea839f6eefc3914cd67d3a1045605bf9ca"
+      },
+      "photoshop.executeAsModal": {
+        "bytes": 16779,
+        "sha256": "3ffcb7de05f99975fec567d43982a8614a3280003f1a29dc586d0106428d0873"
+      },
+      "photoshop.changelog": {
+        "bytes": 40353,
+        "sha256": "707a48860beaf52232dced91e9fa368d7d409d899a071f8a7941ba2cc443fbf6"
+      },
+      "known-issues": {
+        "bytes": 9832,
+        "sha256": "bf8ae250beeca70fc0cd60eca7b6bdf83efcb4dabc3f9cf0b1764de9e837e724"
+      },
+      "css-styling": {
+        "bytes": 5172,
+        "sha256": "2d71defa80fe67d0cb74968f8cbf90adf284e4eada468837389f990c90739693"
+      }
+    }
+  },
+  "emptyFolderInstaller": {
+    "package": "create-bolt-uxp",
+    "version": "1.3.27",
+    "command": "scaffoldWithInstaller parent { folderName: selection-panel, framework: react, app: phxs, installDeps: false, webview: false, hybrid: false, sampleCode: false }",
+    "exit": 0,
+    "starterMinVersion": "24.2.0",
+    "manifestVersion": 6,
+    "permissions": "left broad because the session answer was keep"
+  },
+  "requestedGoal": "Show each selected layer id and name in the panel.",
+  "fixture": null,
+  "skillHandoff": {
+    "stateBeforeImplementation": "awaiting-agent-implementation",
+    "successBeforeImplementation": false,
+    "kind": "existing",
+    "record": {
+      "state": "commands-finished",
+      "success": true,
+      "hostExecuted": false,
+      "test": {
+        "args": [
+          "run",
+          "test"
+        ],
+        "status": 0
+      },
+      "package": {
+        "status": "written",
+        "runs": [
+          {
+            "args": [
+              "run",
+              "build"
+            ],
+            "status": 0
+          },
+          {
+            "args": [
+              "run",
+              "ccx"
+            ],
+            "status": 0
+          }
+        ]
+      }
+    }
+  },
+  "artifact": {
+    "file": "ccx/com.example.selection_PS.ccx",
+    "bytes": 101835,
+    "sha256": "134237a0bc5d6cff132ef13d2cb417f380de5375cdce258329f1f018137f97c9"
+  }
+}

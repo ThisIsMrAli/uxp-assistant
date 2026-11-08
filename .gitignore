@@ -1,0 +1,4 @@
+node_modules/
+.claude/skills/uxp-assistant/references/live/
+evidence/work/
+.DS_Store

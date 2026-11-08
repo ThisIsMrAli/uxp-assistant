@@ -1,0 +1,22 @@
+{
+  "name": "uxp-assistant",
+  "displayName": "UXP Assistant",
+  "description": "Builds a project-aware UXP plugin from an empty folder or an existing project. It fetches official docs, classifies host behavior, scaffolds with create-bolt-uxp, and follows along on a loopback dashboard or in chat.",
+  "version": "0.1.0",
+  "author": "uxp-assistant",
+  "license": "MIT",
+  "keywords": ["adobe", "uxp", "photoshop", "premiere", "bolt-uxp"],
+  "platforms": [
+    "claude",
+    "cursor",
+    "codex",
+    "gemini",
+    "windsurf",
+    "copilot",
+    "opencode",
+    "continue",
+    "agents"
+  ],
+  "skillPath": ".claude/skills/uxp-assistant",
+  "install": "npx skills add <owner>/uxp-assistant --skill uxp-assistant -a {{platform}}"
+}
