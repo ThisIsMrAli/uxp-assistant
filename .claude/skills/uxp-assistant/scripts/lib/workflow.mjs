@@ -247,7 +247,7 @@ export async function runWorkflow(options) {
     surface: runtimeChoice === "webview" ? "webview-browser" : runtimeChoice === "hybrid" ? "native-simulation" : "native-simulation",
     hostExecuted: false,
     file: "preview/index.html",
-    note: "Browser preview only. Native mutations are not executed. The Adobe host was NOT TESTED."
+    note: "Source-text preview and mocks. Not a UXP UI preview. Native mutations are not executed. The Adobe host was NOT TESTED."
   };
   fs.mkdirSync(path.join(out, "preview"), { recursive: true });
   fs.writeFileSync(path.join(out, "preview", "index.html"), previewDocument({

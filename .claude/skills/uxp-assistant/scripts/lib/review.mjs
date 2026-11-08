@@ -73,7 +73,9 @@ export function isNoopTestScript(script) {
 /** Local files named by one command. Past this, the graph is refused rather than approved in part. */
 export const GRAPH_LIMIT = 40;
 
-const GRAMMAR = "Supported scripts are: node <local file>, node --import/--require <local file> <local file>, node --test, node -e with no import or require, npm run <name> for one hop into one of those, and cross-env NAME=value vite build. Shell wrappers, extra hops, dynamic imports, and a graph past the file cap are not approved.";
+const GRAMMAR = "Supported scripts are: node <local file>, node --import/--require <local file> <local file>, node --test, node -e with no import or require, npm run <name> for one hop into one of those, and cross-env NAME=value vite build. Shell wrappers, extra hops, dynamic imports, process or eval inside a hashed file, and a graph past the file cap are not approved. This is not a sandbox and not a complete executable closure.";
+
+const CODE_EXT = [".mjs", ".cjs", ".js", ".ts", ".tsx", ".mts", ".cts"];
 
 function tokenize(command) {
   const tokens = [];
@@ -176,12 +178,19 @@ function parseCrossEnv(rest) {
 }
 
 function graphProblem(text, label) {
-  const masked = String(text)
+  const source = String(text);
+  if (/from\s*["'](?:node:)?(?:child_process|vm)["']/.test(source) || /require\(\s*["'](?:node:)?(?:child_process|vm)["']\s*\)/.test(source)) {
+    return `${label} imports child_process or vm. The checker does not hash what that process or eval will run, so the command was not run. This is not a sandbox.`;
+  }
+  const masked = source
     .replace(/'(?:\\.|[^'\n])*'/g, "''")
     .replace(/"(?:\\.|[^"\n])*"/g, '""');
   const code = commentStripped(masked);
   if (/import\s*\(\s*`|require\s*\(\s*`/.test(code) || /import\s*\(\s*(?!['"])/.test(code) || /require\s*\(\s*(?!['"])/.test(code)) {
     return `${label} has a dynamic import or require. The checker cannot hash that graph, so the command was not run.`;
+  }
+  if (/\b(?:spawnSync|spawn|execFileSync|execFile|execSync|fork)\s*\(/.test(code) || /\beval\s*\(/.test(code) || /\bnew\s+Function\s*\(/.test(code) || /\bvm\.run/.test(code)) {
+    return `${label} uses process, eval, or dynamic execution. The checker hashes static local imports only, so the command was not run. This is not a sandbox.`;
   }
   return "";
 }
@@ -456,7 +465,8 @@ function resolveRef(project, spec, fromFull) {
   }
   const root = path.resolve(project);
   const base = fromFull ? path.dirname(fromFull) : root;
-  const candidates = path.extname(spec) ? [spec] : [spec, `${spec}.mjs`, `${spec}.js`, `${spec}.cjs`];
+  const ext = path.extname(spec);
+  const candidates = CODE_EXT.includes(ext) ? [spec] : [spec, ...CODE_EXT.map((item) => `${spec}${item}`)];
   let outside = false;
   for (const candidate of candidates) {
     const full = path.resolve(base, candidate);
@@ -478,9 +488,10 @@ function dependencies(text, key, full) {
   const specs = new Set(literalSpecs(text));
   const deps = [];
   for (const spec of specs) {
+    if (spec.endsWith(".json")) continue;
     if (spec.startsWith(".")) deps.push({ spec, fromFull: full });
     else if (spec.startsWith("file:") || spec.startsWith("/")) deps.push({ spec, fromFull: null });
-    else if (/^[\w.-]+\.(mjs|cjs|js|ts)$/.test(spec)) deps.push({ spec, fromFull: full });
+    else if (CODE_EXT.includes(path.extname(spec))) deps.push({ spec, fromFull: full });
   }
   return { ok: true, deps };
 }
@@ -494,6 +505,10 @@ export function collectGraph(project, scripts) {
     const parsed = parseCommand(command, scripts);
     if (!parsed.ok) return { ok: false, reason: `${name}: ${parsed.reason}`, files: new Map() };
     for (const spec of parsed.refs) queue.push({ spec, fromFull: null });
+  }
+  for (const rel of PACKAGING) {
+    const full = path.join(project, rel);
+    if (fs.existsSync(full) && fs.statSync(full).isFile()) queue.push({ spec: rel, fromFull: null });
   }
   const files = new Map();
   const seen = new Set();

@@ -1,0 +1,25 @@
+{
+  "state": "awaiting-agent-implementation",
+  "fixture": null,
+  "hostExecuted": false,
+  "evidence": [
+    {
+      "id": "discovered.classes.project",
+      "url": "https://developer.adobe.com/premiere-pro/uxp/ppro-reference/classes/project/",
+      "quote": "| | targetBin | [*ProjectItem*](projectitem.md) | - | <HorizontalLine /> ### importFiles Import files in root/target bin of the project Since: **25.6** Returns: Promise\\<*boolean*\\> #### Parameters | Nam",
+      "token": "importFiles"
+    },
+    {
+      "id": "discovered.classes.project",
+      "url": "https://developer.adobe.com/premiere-pro/uxp/ppro-reference/classes/project/",
+      "quote": "n | [*ProjectItem*](projectitem.md) | - | <HorizontalLine /> ### importFiles Import files in root/target bin of the project Since: **25.6** Returns: Promise\\<*boolean*\\> #### Parameters | Name | Type | Des",
+      "token": "import files"
+    },
+    {
+      "id": "discovered.classes.project",
+      "url": "https://developer.adobe.com/premiere-pro/uxp/ppro-reference/classes/project/",
+      "quote": "/> ### isProject Returns true if the file at the given path is openable as a Premiere project Since: **26.2** Returns: *boolean* #### Parameters | Name | Type | Description | | :----| :--- | :---------- | | pr",
+      "token": "premiere project"
+    }
+  ]
+}
