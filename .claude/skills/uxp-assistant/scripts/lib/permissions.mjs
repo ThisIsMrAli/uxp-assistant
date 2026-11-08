@@ -25,10 +25,30 @@ export const LEAST_LOCAL_WEBVIEW = {
   enableMessageBridge: "no"
 };
 
-const BROAD = /localFileSystem\s*:|launchProcess\s*:|clipboard\s*:|allowCodeGenerationFromStrings\s*:|enablePluginCommunication\s*:|enableMessageBridge\s*:\s*"localAndRemote"|domains\s*:\s*"all"|domains\s*:\s*\[\s*"all"\s*\]/;
+const CAPABILITY_KEYS = ["localFileSystem", "launchProcess", "clipboard", "network", "allowCodeGenerationFromStrings", "ipc"];
+
+/** Names the manifest actually declares. enableMessageBridge "no" and domains: [] are not capabilities. */
+export function permissionCapabilities(source) {
+  const text = String(source || "");
+  const present = [];
+  for (const name of CAPABILITY_KEYS) {
+    if (new RegExp(`\\b${name}\\s*:`).test(text)) present.push(name);
+  }
+  if (/\benablePluginCommunication\s*:/.test(text) && !present.includes("ipc")) present.push("ipc");
+  const bridge = text.match(/enableMessageBridge\s*:\s*"(localOnly|localAndRemote|no)"/);
+  if (bridge && bridge[1] !== "no") present.push(`enableMessageBridge:${bridge[1]}`);
+  if (/domains\s*:\s*"all"|domains\s*:\s*\[\s*"all"\s*\]/.test(text)) present.push("domains:all");
+  return present;
+}
 
 export function starterPermissionsAreBroad(source) {
-  return BROAD.test(String(source || ""));
+  return permissionCapabilities(source).length > 0;
+}
+
+export const PERMISSION_CHOICES = ["keep", "narrow"];
+
+export function permissionChoice(value) {
+  return PERMISSION_CHOICES.includes(value) ? value : "";
 }
 
 export function narrowRequiredPermissions(source, options = {}) {

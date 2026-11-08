@@ -49,6 +49,15 @@
     "preserved": "evidence/candidates/072513d87c35fe58b29e2ab5658aa6d532fc986e/",
     "permissionDefect": "The WebView archive from that commit kept the Bolt starter grants: localFileSystem fullAccess, launchProcess, clipboard readAndWrite, webview.domains all, and enableMessageBridge localAndRemote. The React archive was already requiredPermissions {}."
   },
+  "checkpoint8af084": {
+    "commit": "8af084ed4a886336475aa6873d692c4a41913c6c",
+    "independentQa": "Permission scoped PASS. That pass is not closure of the whole tool.",
+    "parentCommand": "node box/run.mjs --acceptance --stacks: 41 pass, 0 fail, 48.9s.",
+    "documentTitleSha256": "55aeed773cabced1bd74be2174f77613e187088e7b56fc3af175c034f851ecea",
+    "existingDocumentTitleSha256": "3d6f8a87a23105fd7221638bcbc158cdd4311953f77a1024cbfc358d0c6e61d7",
+    "preserved": "evidence/candidates/8af084ed4a886336475aa6873d692c4a41913c6c/",
+    "remaining": "An answer other than the exact strings keep and narrow did not pause, so the broad file stayed. A network-only manifest and enableMessageBridge localOnly were not detected. The bridge-no host shell still called postMessage after append."
+  },
   "retracted": [
     {
       "commit": "be20127969498ffb9f9bb3b811f8dfb327cd775c",
@@ -69,8 +78,8 @@
     "tests": {
     "command": "node --test",
     "exit": 0,
-    "tests": 44,
-    "pass": 44,
+    "tests": 46,
+    "pass": 46,
     "fail": 0,
     "log": "evidence/logs/npm-test.log"
   },
@@ -79,7 +88,7 @@
   "emptyFolder": {
     "file": "evidence/artifacts/document-title.ccx",
     "bytes": 127122,
-    "sha256": "55aeed773cabced1bd74be2174f77613e187088e7b56fc3af175c034f851ecea",
+    "sha256": "138e30dfb84d658dfe33350a2a8afe4da9b06947a52db47e8bcaaf4857969602",
     "requiredPermissions": {},
     "containsDocumentTitle": true,
     "containsActiveDocument": true,
@@ -89,7 +98,7 @@
   "existingProject": {
     "file": "evidence/artifacts/existing-document-title.ccx",
     "bytes": 127122,
-    "sha256": "3d6f8a87a23105fd7221638bcbc158cdd4311953f77a1024cbfc358d0c6e61d7",
+    "sha256": "ac6388fb0da457c41177fc8e58f60679bf78be8c31563f9465cb2880feddf7be",
     "containsDocumentTitle": true,
     "containsActiveDocument": true,
     "containsRenameFixturePhrase": false,
@@ -119,8 +128,8 @@
   },
   "stacks": {
     "file": "evidence/stacks.json",
-    "vue": { "ccxStatus": 0, "bytes": 74752, "sha256": "54bfe612e7a3d5d9285ea265ea8ce05ebed8631d40821e45e828b345b47a12b7", "acceptanceTested": false, "requiredPermissions": {} },
-    "svelte": { "ccxStatus": 0, "bytes": 53284, "sha256": "d4e263e5beb067aef3234315f5726744eda59151be1266631d7d8d7a50600e8a", "acceptanceTested": false, "requiredPermissions": {} },
+    "vue": { "ccxStatus": 0, "bytes": 74752, "sha256": "5408899ebd869bc08ef1ee608690ad8c84c54294d7ca58f0ee06bcf3e4bffefa", "acceptanceTested": false, "requiredPermissions": {} },
+    "svelte": { "ccxStatus": 0, "bytes": 53284, "sha256": "fbf615cbbcc87f25f3ff705df165a6c45c63373af928f869250caf550f3354e1", "acceptanceTested": false, "requiredPermissions": {} },
     "note": "Both empty-folder package scripts exited 0 after the sampleCode:false identifier repair. Their packaged manifests are requiredPermissions {}. Vue and Svelte stay acceptanceTested false. These archives are not the React inspector and not a host pass."
   },
   "permissions": {
@@ -157,7 +166,8 @@
         "enableMessageBridge": "no"
       }
     },
-    "note": "The live HTMLWebViewElement page offered WebView. The installer booleans were webview true and hybrid false. The document is a separate Vite build. Its button sets local React state and does not call initWebview or api.notify. The host bundle contains document.createElement(\"webview\") with a plugin:/webview-ui/ src. That function was not run in this browser. Static HTML members do not contain a webview tag. The packaged manifest no longer has the Bolt filesystem, process, clipboard, domains all, or localAndRemote grants. Message-bridge communication is not enabled. This is not a universal shim. Host NOT TESTED."
+    "hostBridge": { "postMessage": false, "themeUpdated": false, "createsWebview": true },
+    "note": "The live HTMLWebViewElement page offered WebView. The installer booleans were webview true and hybrid false. The document is a separate Vite build. Its button sets local React state and does not call initWebview or api.notify. The host bundle creates the webview, sets plugin:/webview-ui/, and appends it. It does not call webview.postMessage or document.theme.onUpdated. Static HTML members do not contain a webview tag. The packaged manifest keeps the documented local keys and enableMessageBridge no. This is not a universal shim. Host NOT TESTED."
   },
   "dashboard": {
     "screenshots": [
@@ -197,6 +207,7 @@
     "The WebView cloud render is the packaged document only. The host script that creates a webview element was not executed. There is no universal cloud shim.",
     "Dashboard screenshots use the test catalog. They are not a live Adobe fetch. The live WebView offer is the stacks record.",
     "The Bolt starter requiredPermissions block is not user approval. Generated native packages are requiredPermissions {}. The local WebView package keeps allow yes, domains [], allowLocalRendering yes, and enableMessageBridge no. An existing project is unchanged until the staged answer is narrow or keep.",
-    "enableMessageBridge no means the packaged host shell's postMessage setup is not granted. The document does not call it. Whether the host still displays the webview element was not executed."
+    "An answer other than the exact strings keep and narrow pauses and does not write. A network key and enableMessageBridge localOnly are detected. An unknown permission name is not added. Existing projects stay unchanged on keep.",
+    "With enableMessageBridge no, the generated host shell creates and appends the webview and does not call webview.postMessage, updateColorScheme, or document.theme.onUpdated. The document stylesheet is the theme fallback. React's scheduler port.postMessage is still in the host bundle and is not the webview bridge. A requested bridge is a separate contract and was not added. The Adobe host was not launched."
   ]
 }

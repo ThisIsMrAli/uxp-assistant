@@ -215,6 +215,39 @@ test("classified origins stay on the contract and are not written into permissio
   assert.doesNotMatch(config, /network/);
 });
 
+test("an answer other than keep or narrow pauses and does not write", async () => {
+  const project = path.join(temp(), "plugin");
+  fs.mkdirSync(project, { recursive: true });
+  const original = "export const manifest = { requiredPermissions: { network: { domains: [\"https://example.com\"] } } };\n";
+  fs.writeFileSync(path.join(project, "uxp.config.ts"), original);
+  const result = await runWorkflow({
+    out: temp(),
+    kind: "existing",
+    projectPath: project,
+    answers: answers({ "narrow-permissions": "yes" }),
+    fetchImpl: fetchImpl()
+  });
+  assert.equal(result.blocked, "narrow-permissions");
+  assert.equal(fs.readFileSync(path.join(project, "uxp.config.ts"), "utf8"), original);
+  assert.equal(fs.existsSync(path.join(project, "design-constraints.md")), false);
+});
+
+test("a localOnly bridge pauses until the answer is exactly keep or narrow", async () => {
+  const project = path.join(temp(), "plugin");
+  fs.mkdirSync(project, { recursive: true });
+  const original = "export const manifest = { requiredPermissions: { webview: { allow: \"yes\", domains: [], enableMessageBridge: \"localOnly\" } } };\n";
+  fs.writeFileSync(path.join(project, "uxp.config.ts"), original);
+  const result = await runWorkflow({
+    out: temp(),
+    kind: "existing",
+    projectPath: project,
+    answers: answers({ "narrow-permissions": "localOnly" }),
+    fetchImpl: fetchImpl()
+  });
+  assert.equal(result.blocked, "narrow-permissions");
+  assert.equal(fs.readFileSync(path.join(project, "uxp.config.ts"), "utf8"), original);
+});
+
 test("an existing project's permissions stay when the answer is keep", async () => {
   const project = path.join(temp(), "plugin");
   fs.mkdirSync(project, { recursive: true });

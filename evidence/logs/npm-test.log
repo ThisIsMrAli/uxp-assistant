@@ -44,43 +44,43 @@ Run `npm audit` for details.
 │  To get started, run: cd com-example-title && npm run build and see the README for more help.  │
 │                                                                                                │
 ├────────────────────────────────────────────────────────────────────────────────────────────────╯
-✔ create-bolt-uxp scaffolds from a cwd that is not the repository, and both entry paths package the document title (21139.606504ms)
-✔ the live Premiere class pages resolve importFiles when the index does not list it (417.580216ms)
-✔ bolt cross-env and node --test stay inside the supported grammar (3.181283ms)
-✔ sh -c is refused and cannot be approved into running pack.mjs (24.093736ms)
-✔ node --import hashes the loader and the script, and a later script edit does not run (393.940744ms)
-✔ npm run zip hashes the inner node script, and a later edit does not run (480.963707ms)
-✔ spawnSync of a sibling is refused and the sibling edit cannot run (31.88395ms)
-✔ globalThis eval is outside the finite call list, runs after approval, and a later edit blocks (383.630321ms)
-✔ a third-level vite config import is hashed, and editing it does not run the package (347.982405ms)
-✔ a graph past 40 files is refused with no approvable partial hash (10.957675ms)
-✔ a non-rename goal stays on the agent path and is not marked done (81.622235ms)
-✔ recording the show-selection files runs the real scripts and still says the host was not tested (378.298063ms)
-✔ an existing project keeps its behaviors and the requested goal (361.80686ms)
-✔ the rename fixture is applied only for the rename goal and still needs a real package (412.074531ms)
-✔ unknown, unsupported, incomplete output, and a failed package cannot report success (373.359778ms)
-✔ a failed docs fetch is not fresh and does not let package be marked done (4.642657ms)
-✔ the dashboard snapshot and CLI refuse a false success (85.593016ms)
-✔ a documented document title and Premiere importFiles are handoffs, not a dead end (372.125217ms)
-✔ a stock error module and a no-op test cannot finish the feature (13.024312ms)
-✔ drop removes only the assessed listener files (5.702193ms)
-✔ an existing project without a host does not skip host pages (1.293276ms)
-✔ importFiles missing from the Premiere index is resolved from the official class page (5.634167ms)
-✔ static text, comment-only API, a noop assertion, and starter tokens do not finish (87.829326ms)
-✔ a documented layer opacity feature finishes without being the document-title fixture (462.941968ms)
-✔ a swapped ccx command is not run, and every new archive is reviewed (1287.258622ms)
-✔ an approved build command is recorded as a change, and a starter-only zip is not the feature (1394.870373ms)
-✔ the dashboard shows the outcome and does not call a skipped feature finished (2925.180639ms)
-✔ the dashboard shows each staged choice before the session continues (12474.095473ms)
-✔ floors do not invent the WebView floor or apiVersion (1.827852ms)
-✔ commandName 23.0 is read across lines and a nested permission object stays valid (1.588318ms)
-✔ a failed refresh keeps old text and is not fresh (2.29762ms)
-✔ stale check lists every newer file and ignores an equal mtime (0.450662ms)
-✔ chrome cleanup reports a profile that is still there (0.98932ms)
-✔ the loopback socket rejects a public host (0.404437ms)
-✔ a split known-issues quote is unsupported only when that page is fresh (0.353616ms)
-✔ rename preview warns on a duplicate and does not invent a host ban (0.246595ms)
-✔ the browser preview blocks native mutation and a missing host bridge (1227.564131ms)
+✔ create-bolt-uxp scaffolds from a cwd that is not the repository, and both entry paths package the document title (21198.589315ms)
+✔ the live Premiere class pages resolve importFiles when the index does not list it (342.075335ms)
+✔ bolt cross-env and node --test stay inside the supported grammar (4.665588ms)
+✔ sh -c is refused and cannot be approved into running pack.mjs (26.242269ms)
+✔ node --import hashes the loader and the script, and a later script edit does not run (382.792172ms)
+✔ npm run zip hashes the inner node script, and a later edit does not run (458.540769ms)
+✔ spawnSync of a sibling is refused and the sibling edit cannot run (13.342255ms)
+✔ globalThis eval is outside the finite call list, runs after approval, and a later edit blocks (358.524151ms)
+✔ a third-level vite config import is hashed, and editing it does not run the package (331.093766ms)
+✔ a graph past 40 files is refused with no approvable partial hash (9.800573ms)
+✔ a non-rename goal stays on the agent path and is not marked done (86.489578ms)
+✔ recording the show-selection files runs the real scripts and still says the host was not tested (362.299229ms)
+✔ an existing project keeps its behaviors and the requested goal (370.439647ms)
+✔ the rename fixture is applied only for the rename goal and still needs a real package (354.932875ms)
+✔ unknown, unsupported, incomplete output, and a failed package cannot report success (348.681967ms)
+✔ a failed docs fetch is not fresh and does not let package be marked done (6.584269ms)
+✔ the dashboard snapshot and CLI refuse a false success (89.427657ms)
+✔ a documented document title and Premiere importFiles are handoffs, not a dead end (389.239926ms)
+✔ a stock error module and a no-op test cannot finish the feature (10.189873ms)
+✔ drop removes only the assessed listener files (6.126248ms)
+✔ an existing project without a host does not skip host pages (1.202891ms)
+✔ importFiles missing from the Premiere index is resolved from the official class page (6.507742ms)
+✔ static text, comment-only API, a noop assertion, and starter tokens do not finish (108.53107ms)
+✔ a documented layer opacity feature finishes without being the document-title fixture (510.478232ms)
+✔ a swapped ccx command is not run, and every new archive is reviewed (1174.705578ms)
+✔ an approved build command is recorded as a change, and a starter-only zip is not the feature (1385.422583ms)
+✔ the dashboard shows the outcome and does not call a skipped feature finished (2807.601948ms)
+✔ the dashboard shows each staged choice before the session continues (11694.607284ms)
+✔ floors do not invent the WebView floor or apiVersion (1.699208ms)
+✔ commandName 23.0 is read across lines and a nested permission object stays valid (2.396139ms)
+✔ a failed refresh keeps old text and is not fresh (2.645184ms)
+✔ stale check lists every newer file and ignores an equal mtime (0.194195ms)
+✔ chrome cleanup reports a profile that is still there (0.450028ms)
+✔ the loopback socket rejects a public host (0.592171ms)
+✔ a split known-issues quote is unsupported only when that page is fresh (0.471705ms)
+✔ rename preview warns on a duplicate and does not invent a host ban (0.493121ms)
+✔ the browser preview blocks native mutation and a missing host bridge (1128.560141ms)
 BOLT_MODULEONLY true
 
 ┌   create-bolt-uxp  
@@ -92,7 +92,7 @@ BOLT_MODULEONLY true
 │                            │
 ├────────────────────────────╯
 [?25l│
-[999D[J◒  Installing dependencies[999D[J◐  Installing dependencies[999D[J◓  Installing dependencies[999D[J◑  Installing dependencies[999D[J◒  Installing dependencies[999D[J◐  Installing dependencies[999D[J◓  Installing dependencies[999D[J◑  Installing dependencies[999D[J◒  Installing dependencies.[999D[J◐  Installing dependencies.[999D[J◓  Installing dependencies.[999D[J◑  Installing dependencies.[999D[J◒  Installing dependencies.[999D[J◐  Installing dependencies.[999D[J◓  Installing dependencies.[999D[J◑  Installing dependencies.[999D[J◒  Installing dependencies..[999D[J◐  Installing dependencies..[999D[J◓  Installing dependencies..[999D[J◑  Installing dependencies..[999D[J◒  Installing dependencies..[999D[J◐  Installing dependencies..[999D[J◓  Installing dependencies..[999D[J◑  Installing dependencies..[999D[J◒  Installing dependencies...[999D[J◐  Installing dependencies...[999D[J◓  Installing dependencies...[999D[J◑  Installing dependencies...[999D[J◒  Installing dependencies...[999D[J◐  Installing dependencies...[999D[J◓  Installing dependencies...[999D[J◑  Installing dependencies...[999D[J◒  Installing dependencies...[999D[J◐  Installing dependencies[999D[J◓  Installing dependencies[999D[J◑  Installing dependencies[999D[J◒  Installing dependencies[999D[J◐  Installing dependencies[999D[J◓  Installing dependencies[999D[J◑  Installing dependencies[999D[J◒  Installing dependencies[999D[J◐  Installing dependencies.[999D[J◓  Installing dependencies.[999D[J◑  Installing dependencies.[999D[J◒  Installing dependencies.[999D[J◐  Installing dependencies.[999D[J◓  Installing dependencies.[999D[J◑  Installing dependencies.[999D[J◒  Installing dependencies.[999D[J◐  Installing dependencies..[999D[J◓  Installing dependencies..[999D[J◑  Installing dependencies..[999D[J◒  Installing dependencies..[999D[J◐  Installing dependencies..[999D[J◓  Installing dependencies..[999D[J◑  Installing dependencies..[999D[J◒  Installing dependencies..[999D[J◐  Installing dependencies...[999D[J◓  Installing dependencies...[999D[J◑  Installing dependencies...[999D[J◒  Installing dependencies...[999D[J◐  Installing dependencies...[999D[J◓  Installing dependencies...[999D[J◑  Installing dependencies...[999D[J◒  Installing dependencies...[999D[J◐  Installing dependencies...[999D[J◓  Installing dependencies[999D[J◑  Installing dependencies[999D[J◒  Installing dependencies[999D[J◐  Installing dependencies[999D[J◓  Installing dependencies[999D[J◑  Installing dependencies[999D[J◒  Installing dependencies[999D[J◐  Installing dependencies[999D[J◓  Installing dependencies.[999D[J◑  Installing dependencies.[999D[J◒  Installing dependencies.[999D[J◐  Installing dependencies.[999D[J◓  Installing dependencies.[999D[J◑  Installing dependencies.[999D[J◒  Installing dependencies.[999D[J◐  Installing dependencies.[999D[J◓  Installing dependencies..[999D[J◑  Installing dependencies..
+[999D[J◒  Installing dependencies[999D[J◐  Installing dependencies[999D[J◓  Installing dependencies[999D[J◑  Installing dependencies[999D[J◒  Installing dependencies[999D[J◐  Installing dependencies[999D[J◓  Installing dependencies[999D[J◑  Installing dependencies[999D[J◒  Installing dependencies.[999D[J◐  Installing dependencies.[999D[J◓  Installing dependencies.[999D[J◑  Installing dependencies.[999D[J◒  Installing dependencies.[999D[J◐  Installing dependencies.[999D[J◓  Installing dependencies.[999D[J◑  Installing dependencies.[999D[J◒  Installing dependencies..[999D[J◐  Installing dependencies..[999D[J◓  Installing dependencies..[999D[J◑  Installing dependencies..[999D[J◒  Installing dependencies..[999D[J◐  Installing dependencies..[999D[J◓  Installing dependencies..[999D[J◑  Installing dependencies..[999D[J◒  Installing dependencies...[999D[J◐  Installing dependencies...[999D[J◓  Installing dependencies...[999D[J◑  Installing dependencies...[999D[J◒  Installing dependencies...[999D[J◐  Installing dependencies...[999D[J◓  Installing dependencies...[999D[J◑  Installing dependencies...[999D[J◒  Installing dependencies...[999D[J◐  Installing dependencies[999D[J◓  Installing dependencies[999D[J◑  Installing dependencies[999D[J◒  Installing dependencies[999D[J◐  Installing dependencies[999D[J◓  Installing dependencies[999D[J◑  Installing dependencies[999D[J◒  Installing dependencies[999D[J◐  Installing dependencies.[999D[J◓  Installing dependencies.[999D[J◑  Installing dependencies.[999D[J◒  Installing dependencies.[999D[J◐  Installing dependencies.[999D[J◓  Installing dependencies.[999D[J◑  Installing dependencies.[999D[J◒  Installing dependencies.[999D[J◐  Installing dependencies..[999D[J◓  Installing dependencies..[999D[J◑  Installing dependencies..[999D[J◒  Installing dependencies..[999D[J◐  Installing dependencies..[999D[J◓  Installing dependencies..[999D[J◑  Installing dependencies..[999D[J◒  Installing dependencies..[999D[J◐  Installing dependencies...[999D[J◓  Installing dependencies...[999D[J◑  Installing dependencies...[999D[J◒  Installing dependencies...[999D[J◐  Installing dependencies...[999D[J◓  Installing dependencies...[999D[J◑  Installing dependencies...[999D[J◒  Installing dependencies...[999D[J◐  Installing dependencies...[999D[J◓  Installing dependencies[999D[J◑  Installing dependencies[999D[J◒  Installing dependencies[999D[J◐  Installing dependencies[999D[J◓  Installing dependencies[999D[J◑  Installing dependencies[999D[J◒  Installing dependencies[999D[J◐  Installing dependencies[999D[J◓  Installing dependencies.[999D[J◑  Installing dependencies.[999D[J◒  Installing dependencies.[999D[J◐  Installing dependencies.[999D[J◓  Installing dependencies.[999D[J◑  Installing dependencies.[999D[J◒  Installing dependencies.[999D[J◐  Installing dependencies.
 added 350 packages, and audited 352 packages in 7s
 
 93 packages are looking for funding
@@ -137,7 +137,7 @@ Run `npm audit` for details.
 │                               │
 ├───────────────────────────────╯
 [?25l│
-[999D[J◒  Installing dependencies[999D[J◐  Installing dependencies[999D[J◓  Installing dependencies[999D[J◑  Installing dependencies[999D[J◒  Installing dependencies[999D[J◐  Installing dependencies[999D[J◓  Installing dependencies[999D[J◑  Installing dependencies[999D[J◒  Installing dependencies.[999D[J◐  Installing dependencies.[999D[J◓  Installing dependencies.[999D[J◑  Installing dependencies.[999D[J◒  Installing dependencies.[999D[J◐  Installing dependencies.[999D[J◓  Installing dependencies.[999D[J◑  Installing dependencies.[999D[J◒  Installing dependencies..[999D[J◐  Installing dependencies..[999D[J◓  Installing dependencies..[999D[J◑  Installing dependencies..[999D[J◒  Installing dependencies..[999D[J◐  Installing dependencies..[999D[J◓  Installing dependencies..[999D[J◑  Installing dependencies..[999D[J◒  Installing dependencies...[999D[J◐  Installing dependencies...[999D[J◓  Installing dependencies...[999D[J◑  Installing dependencies...[999D[J◒  Installing dependencies...[999D[J◐  Installing dependencies...[999D[J◓  Installing dependencies...[999D[J◑  Installing dependencies...[999D[J◒  Installing dependencies...[999D[J◐  Installing dependencies[999D[J◓  Installing dependencies[999D[J◑  Installing dependencies[999D[J◒  Installing dependencies[999D[J◐  Installing dependencies[999D[J◓  Installing dependencies[999D[J◑  Installing dependencies[999D[J◒  Installing dependencies[999D[J◐  Installing dependencies.[999D[J◓  Installing dependencies.[999D[J◑  Installing dependencies.[999D[J◒  Installing dependencies.[999D[J◐  Installing dependencies.[999D[J◓  Installing dependencies.[999D[J◑  Installing dependencies.[999D[J◒  Installing dependencies.[999D[J◐  Installing dependencies..[999D[J◓  Installing dependencies..[999D[J◑  Installing dependencies..[999D[J◒  Installing dependencies..[999D[J◐  Installing dependencies..[999D[J◓  Installing dependencies..[999D[J◑  Installing dependencies..[999D[J◒  Installing dependencies..[999D[J◐  Installing dependencies...[999D[J◓  Installing dependencies...[999D[J◑  Installing dependencies...[999D[J◒  Installing dependencies...
+[999D[J◒  Installing dependencies[999D[J◐  Installing dependencies[999D[J◓  Installing dependencies[999D[J◑  Installing dependencies[999D[J◒  Installing dependencies[999D[J◐  Installing dependencies[999D[J◓  Installing dependencies[999D[J◑  Installing dependencies[999D[J◒  Installing dependencies.[999D[J◐  Installing dependencies.[999D[J◓  Installing dependencies.[999D[J◑  Installing dependencies.[999D[J◒  Installing dependencies.[999D[J◐  Installing dependencies.[999D[J◓  Installing dependencies.[999D[J◑  Installing dependencies.[999D[J◒  Installing dependencies..[999D[J◐  Installing dependencies..[999D[J◓  Installing dependencies..[999D[J◑  Installing dependencies..[999D[J◒  Installing dependencies..[999D[J◐  Installing dependencies..[999D[J◓  Installing dependencies..[999D[J◑  Installing dependencies..[999D[J◒  Installing dependencies...[999D[J◐  Installing dependencies...[999D[J◓  Installing dependencies...[999D[J◑  Installing dependencies...[999D[J◒  Installing dependencies...[999D[J◐  Installing dependencies...[999D[J◓  Installing dependencies...[999D[J◑  Installing dependencies...[999D[J◒  Installing dependencies...[999D[J◐  Installing dependencies[999D[J◓  Installing dependencies[999D[J◑  Installing dependencies[999D[J◒  Installing dependencies[999D[J◐  Installing dependencies[999D[J◓  Installing dependencies[999D[J◑  Installing dependencies[999D[J◒  Installing dependencies[999D[J◐  Installing dependencies.[999D[J◓  Installing dependencies.[999D[J◑  Installing dependencies.[999D[J◒  Installing dependencies.[999D[J◐  Installing dependencies.[999D[J◓  Installing dependencies.[999D[J◑  Installing dependencies.[999D[J◒  Installing dependencies.[999D[J◐  Installing dependencies..[999D[J◓  Installing dependencies..[999D[J◑  Installing dependencies..[999D[J◒  Installing dependencies..[999D[J◐  Installing dependencies..[999D[J◓  Installing dependencies..[999D[J◑  Installing dependencies..[999D[J◒  Installing dependencies..[999D[J◐  Installing dependencies...[999D[J◓  Installing dependencies...
 added 362 packages, and audited 364 packages in 5s
 
 95 packages are looking for funding
@@ -185,8 +185,8 @@ Run `npm audit` for details.
 │                                │
 ├────────────────────────────────╯
 [?25l│
-[999D[J◒  Installing dependencies[999D[J◐  Installing dependencies[999D[J◓  Installing dependencies[999D[J◑  Installing dependencies[999D[J◒  Installing dependencies[999D[J◐  Installing dependencies[999D[J◓  Installing dependencies[999D[J◑  Installing dependencies[999D[J◒  Installing dependencies.[999D[J◐  Installing dependencies.[999D[J◓  Installing dependencies.[999D[J◑  Installing dependencies.[999D[J◒  Installing dependencies.[999D[J◐  Installing dependencies.[999D[J◓  Installing dependencies.[999D[J◑  Installing dependencies.[999D[J◒  Installing dependencies..[999D[J◐  Installing dependencies..[999D[J◓  Installing dependencies..[999D[J◑  Installing dependencies..[999D[J◒  Installing dependencies..[999D[J◐  Installing dependencies..[999D[J◓  Installing dependencies..[999D[J◑  Installing dependencies..[999D[J◒  Installing dependencies...[999D[J◐  Installing dependencies...[999D[J◓  Installing dependencies...[999D[J◑  Installing dependencies...[999D[J◒  Installing dependencies...[999D[J◐  Installing dependencies...[999D[J◓  Installing dependencies...[999D[J◑  Installing dependencies...[999D[J◒  Installing dependencies...[999D[J◐  Installing dependencies[999D[J◓  Installing dependencies[999D[J◑  Installing dependencies[999D[J◒  Installing dependencies[999D[J◐  Installing dependencies[999D[J◓  Installing dependencies[999D[J◑  Installing dependencies[999D[J◒  Installing dependencies[999D[J◐  Installing dependencies.[999D[J◓  Installing dependencies.[999D[J◑  Installing dependencies.[999D[J◒  Installing dependencies.[999D[J◐  Installing dependencies.[999D[J◓  Installing dependencies.[999D[J◑  Installing dependencies.[999D[J◒  Installing dependencies.[999D[J◐  Installing dependencies..[999D[J◓  Installing dependencies..[999D[J◑  Installing dependencies..[999D[J◒  Installing dependencies..[999D[J◐  Installing dependencies..[999D[J◓  Installing dependencies..[999D[J◑  Installing dependencies..[999D[J◒  Installing dependencies..[999D[J◐  Installing dependencies...[999D[J◓  Installing dependencies...[999D[J◑  Installing dependencies...[999D[J◒  Installing dependencies...[999D[J◐  Installing dependencies...
-added 385 packages, and audited 387 packages in 5s
+[999D[J◒  Installing dependencies[999D[J◐  Installing dependencies[999D[J◓  Installing dependencies[999D[J◑  Installing dependencies[999D[J◒  Installing dependencies[999D[J◐  Installing dependencies[999D[J◓  Installing dependencies[999D[J◑  Installing dependencies[999D[J◒  Installing dependencies.[999D[J◐  Installing dependencies.[999D[J◓  Installing dependencies.[999D[J◑  Installing dependencies.[999D[J◒  Installing dependencies.[999D[J◐  Installing dependencies.[999D[J◓  Installing dependencies.[999D[J◑  Installing dependencies.[999D[J◒  Installing dependencies..[999D[J◐  Installing dependencies..[999D[J◓  Installing dependencies..[999D[J◑  Installing dependencies..[999D[J◒  Installing dependencies..[999D[J◐  Installing dependencies..[999D[J◓  Installing dependencies..[999D[J◑  Installing dependencies..[999D[J◒  Installing dependencies...[999D[J◐  Installing dependencies...[999D[J◓  Installing dependencies...[999D[J◑  Installing dependencies...[999D[J◒  Installing dependencies...[999D[J◐  Installing dependencies...[999D[J◓  Installing dependencies...[999D[J◑  Installing dependencies...[999D[J◒  Installing dependencies...[999D[J◐  Installing dependencies[999D[J◓  Installing dependencies[999D[J◑  Installing dependencies[999D[J◒  Installing dependencies[999D[J◐  Installing dependencies[999D[J◓  Installing dependencies[999D[J◑  Installing dependencies[999D[J◒  Installing dependencies[999D[J◐  Installing dependencies.[999D[J◓  Installing dependencies.[999D[J◑  Installing dependencies.[999D[J◒  Installing dependencies.[999D[J◐  Installing dependencies.[999D[J◓  Installing dependencies.[999D[J◑  Installing dependencies.[999D[J◒  Installing dependencies.[999D[J◐  Installing dependencies..[999D[J◓  Installing dependencies..[999D[J◑  Installing dependencies..[999D[J◒  Installing dependencies..[999D[J◐  Installing dependencies..[999D[J◓  Installing dependencies..
+added 385 packages, and audited 387 packages in 4s
 
 96 packages are looking for funding
   run `npm fund` for details
@@ -220,19 +220,21 @@ Run `npm audit` for details.
 │  To get started, run: cd webview && npm run build and see the README for more help.  │
 │                                                                                      │
 ├──────────────────────────────────────────────────────────────────────────────────────╯
-✔ vue and svelte empty folders package, and the webview document is a separate build (39006.029193ms)
+✔ vue and svelte empty folders package, and the webview document is a separate build (36813.906756ms)
 BOLT_MODULEONLY true
-✔ cep facts classify a webview page, a domain, and a non-opener process (1.438116ms)
-✔ staged choices block before edits, and native is not a hidden webview default (47.220048ms)
-✔ design discovery reports a missing example and records a skill that is on disk (16.000453ms)
-✔ classified origins stay on the contract and are not written into permissions (8.824885ms)
-✔ an existing project's permissions stay when the answer is keep (6.249931ms)
-✔ the installer refuses to invent webview or hybrid when the booleans are omitted (34.534351ms)
-ℹ tests 44
+✔ cep facts classify a webview page, a domain, and a non-opener process (1.732479ms)
+✔ staged choices block before edits, and native is not a hidden webview default (63.470216ms)
+✔ design discovery reports a missing example and records a skill that is on disk (17.972879ms)
+✔ classified origins stay on the contract and are not written into permissions (7.990408ms)
+✔ an answer other than keep or narrow pauses and does not write (4.676367ms)
+✔ a localOnly bridge pauses until the answer is exactly keep or narrow (4.868759ms)
+✔ an existing project's permissions stay when the answer is keep (16.698962ms)
+✔ the installer refuses to invent webview or hybrid when the booleans are omitted (31.431426ms)
+ℹ tests 46
 ℹ suites 0
-ℹ pass 44
+ℹ pass 46
 ℹ fail 0
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 45880.93636
+ℹ duration_ms 43439.852353
