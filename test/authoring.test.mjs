@@ -11,7 +11,7 @@ import { nextAction } from "../.claude/skills/uxp-assistant/scripts/lib/next.mjs
 import { pagesForRequest } from "../.claude/skills/uxp-assistant/scripts/lib/registry.mjs";
 import { createDashboardServer } from "../.claude/skills/uxp-assistant/scripts/lib/server.mjs";
 import { assetsDir } from "../.claude/skills/uxp-assistant/scripts/lib/paths.mjs";
-import { finish, publishAsk, readReport, readSession, setStep } from "../.claude/skills/uxp-assistant/scripts/lib/session.mjs";
+import { answerFromChat, finish, publishAsk, readReport, readSession, setStep } from "../.claude/skills/uxp-assistant/scripts/lib/session.mjs";
 import { recordImplementation, runWorkflow } from "../.claude/skills/uxp-assistant/scripts/lib/workflow.mjs";
 
 const SHOW = "Show each selected layer id and name in the panel.";
@@ -55,6 +55,11 @@ function answers(goal, extra = {}) {
     "keep-listener": "keep",
     "keep-native-addon": "keep",
     "keep-system": "keep",
+    feasibility: "continue",
+    runtime: "native",
+    design: "uxp-constraints",
+    validation: "commands",
+    "context-evidence": "keep-unverified",
     goal,
     ...extra
   };
@@ -313,6 +318,15 @@ test("unknown, unsupported, incomplete output, and a failed package cannot repor
   pkg.scripts.ccx = "node -e \"process.exit(1)\"";
   fs.writeFileSync(path.join(failedReady.project, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
   const files = writeShow(failedReady.project);
+  const unapproved = recordImplementation(failedOut, {
+    goal: SHOW,
+    files,
+    approveScripts: { reason: "x", build: pkg.scripts.build, ccx: pkg.scripts.ccx }
+  });
+  assert.equal(unapproved.success, false);
+  assert.equal(unapproved.blocked, "script-change");
+  assert.match(unapproved.say, /approveScripts/);
+  answerFromChat(failedOut, "script-change", "approve");
   const failed = recordImplementation(failedOut, { goal: SHOW, files });
   assert.equal(failed.success, false);
   assert.equal(failed.state, "failed");
@@ -694,17 +708,56 @@ test("an approved build command is recorded as a change, and a starter-only zip 
   const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
   pkg.scripts.ccx = "node pack-approved.mjs";
   fs.writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
-  const silent = recordImplementation(out, { goal: SHOW, files: ["src/Selection.tsx", "src/selection-read.mjs"] });
-  assert.equal(silent.success, false);
-  assert.match(silent.say, /approveScripts|ccx/);
-  const approved = recordImplementation(out, {
+  const silent = recordImplementation(out, {
     goal: SHOW,
     files: ["src/Selection.tsx", "src/selection-read.mjs"],
-    approveScripts: { build: pkg.scripts.build, ccx: pkg.scripts.ccx, reason: "Use the reviewed packer." }
+    approveScripts: { build: pkg.scripts.build, ccx: pkg.scripts.ccx, reason: "x" }
   });
+  assert.equal(silent.success, false);
+  assert.equal(silent.blocked, "script-change");
+  assert.match(silent.say, /approveScripts|not a session answer/);
+  assert.equal(fs.existsSync(path.join(ready.project, "out.ccx")), false);
+  answerFromChat(out, "script-change", "approve");
+  const approved = recordImplementation(out, { goal: SHOW, files: ["src/Selection.tsx", "src/selection-read.mjs"] });
   assert.equal(approved.success, true);
-  assert.equal(approved.package.provenance, "explicit-approval");
+  assert.equal(approved.package.provenance, "session-answer");
   assert.equal(approved.featureCorrectness, "not-decided");
+
+  const body = temp();
+  const bodyReady = await runWorkflow({ out: body, kind: "empty", answers: answers(SHOW), fetchImpl: fetchImpl(), scaffoldImpl: scaffold });
+  writeShow(bodyReady.project);
+  const packPath = path.join(bodyReady.project, "pack.mjs");
+  const originalPack = fs.readFileSync(packPath, "utf8");
+  fs.writeFileSync(path.join(bodyReady.project, "pack-step.mjs"), "import fs from \"node:fs\";\nfs.writeFileSync(\"packer-body-ran.txt\", \"ran\");\n");
+  fs.writeFileSync(packPath, `import "./pack-step.mjs";\n${originalPack}`);
+  fs.writeFileSync(path.join(bodyReady.project, "APPROVED.md"), "approveScripts reason x. This file is not a session answer.\n");
+  const sameCommand = JSON.parse(fs.readFileSync(path.join(bodyReady.project, "package.json"), "utf8"));
+  const forged = recordImplementation(body, {
+    goal: SHOW,
+    files: ["src/Selection.tsx", "src/selection-read.mjs"],
+    approveScripts: { build: sameCommand.scripts.build, ccx: sameCommand.scripts.ccx, reason: "x" }
+  });
+  assert.equal(forged.success, false);
+  assert.equal(forged.blocked, "script-change");
+  assert.equal(fs.existsSync(path.join(bodyReady.project, "packer-body-ran.txt")), false);
+  const asked = readSession(body).asks.find((item) => item.id === "script-change");
+  assert.ok(asked.scope.files.some((item) => item.name === "pack.mjs"));
+  assert.ok(asked.scope.files.some((item) => item.name === "pack-step.mjs"));
+  assert.equal(asked.scope.commands.length, 0);
+  answerFromChat(body, "script-change", "approve");
+  const ran = recordImplementation(body, { goal: SHOW, files: ["src/Selection.tsx", "src/selection-read.mjs"] });
+  assert.equal(ran.success, true, ran.say);
+  assert.equal(ran.package.provenance, "session-answer");
+  assert.equal(fs.readFileSync(path.join(bodyReady.project, "packer-body-ran.txt"), "utf8"), "ran");
+  fs.writeFileSync(path.join(bodyReady.project, "pack-step.mjs"), "import fs from \"node:fs\";\nfs.writeFileSync(\"packer-body-again.txt\", \"again\");\n");
+  const stale = recordImplementation(body, {
+    goal: SHOW,
+    files: ["src/Selection.tsx", "src/selection-read.mjs"],
+    approveScripts: { build: sameCommand.scripts.build, ccx: sameCommand.scripts.ccx, reason: "x" }
+  });
+  assert.equal(stale.success, false);
+  assert.equal(stale.blocked, "script-change");
+  assert.equal(fs.existsSync(path.join(bodyReady.project, "packer-body-again.txt")), false);
 
   const starter = temp();
   const starterReady = await runWorkflow({

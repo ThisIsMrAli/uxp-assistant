@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
-import { appendAnswerLine, files, matchOption, now, readMerged, readReport, readSession } from "./session.mjs";
+import { appendAnswerLine, dashboardAnswerLine, files, matchOption, now, readMerged, readReport, readSession } from "./session.mjs";
 
 const MAX_BODY = 64 * 1024;
 const IMAGE_TYPES = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" };
@@ -159,7 +159,9 @@ export function createDashboardServer({ out, assets, token = crypto.randomBytes(
       if (secret.length > 2000) return send(res, 400, { error: "That is too long." });
       secrets.set(ask.nonce, secret);
     }
-    appendAnswerLine(out, { type: "answer", askId: ask.id, nonce: ask.nonce, value: option.id, via: "dashboard", secret: Boolean(secret), at: now() });
+    const line = dashboardAnswerLine(ask, option.id);
+    if (secret) line.secret = true;
+    appendAnswerLine(out, line);
     wake();
     return send(res, 200, { ok: true });
   }

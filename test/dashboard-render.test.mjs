@@ -77,6 +77,11 @@ function answers(goal) {
     id: "com.example.selection",
     consequential: "proceed",
     "narrow-permissions": "narrow",
+    feasibility: "continue",
+    runtime: "native",
+    design: "uxp-constraints",
+    validation: "commands",
+    "context-evidence": "keep-unverified",
     goal
   };
 }

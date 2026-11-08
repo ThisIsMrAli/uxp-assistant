@@ -1,3 +1,5 @@
+import { extractDocFacts, mergeDocFacts as mergeCepFacts } from "./cep/docs-facts.mjs";
+
 /**
  * Shared UXP pages. The ids and URLs match cep-to-uxp scripts/lib/docs.mjs
  * DOC_PAGES at b2fa98eb28e935dcdfc08cb30d7f66e7bd86f40a (ten pages).
@@ -43,19 +45,16 @@ export function pagesForRequest({ host, goal = "", behaviors = [] } = {}) {
 }
 
 export function mergeDocFacts(pages) {
-  const limits = new Set();
-  let manifestApps = [];
-  for (const page of pages) {
-    if (!page.ok) continue;
-    const text = String(page.text || "");
-    if (/text-transform is not supported/i.test(text)) limits.add("text-transform");
-    if (/font shorthand/i.test(text)) limits.add("font-shorthand");
-    if (/CSS transitions and animations are not supported/i.test(text)) limits.add("css-animations");
-    if (page.id === "manifest") {
-      const apps = [];
-      for (const id of ["PS", "ID", "premierepro", "ame"]) if (text.includes(`"${id}"`) || text.includes(id)) apps.push(id);
-      manifestApps = [...new Set(apps)];
-    }
-  }
-  return { limits: [...limits].sort(), manifestApps };
+  const merged = mergeCepFacts((pages || []).map((page) => ({
+    ok: page.ok !== false && page.freshness !== "failed",
+    facts: page.facts || extractDocFacts(page.text || "")
+  })));
+  return {
+    limits: merged.limits,
+    manifestApps: merged.apps,
+    apps: merged.apps,
+    webview: merged.webview,
+    spectrum: merged.spectrum,
+    commands: merged.commands
+  };
 }

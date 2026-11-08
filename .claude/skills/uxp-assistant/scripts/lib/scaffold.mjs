@@ -66,14 +66,17 @@ export async function scaffoldWithInstaller(parent, options) {
   const previous = process.cwd();
   process.chdir(parent);
   try {
-    const result = await create({
+    if (typeof options.webview !== "boolean" || typeof options.hybrid !== "boolean") {
+    throw new Error("Runtime was not chosen. The installer will not force webview or hybrid.");
+  }
+  const result = await create({
       folder: options.folderName,
       displayName: options.displayName,
       id: options.id,
       framework: options.framework,
       apps: [options.app],
-      hybrid: false,
-      webview: false,
+      hybrid: options.hybrid,
+      webview: options.webview,
       sampleCode: false,
       installDeps: Boolean(options.installDeps)
     });
@@ -83,8 +86,8 @@ export async function scaffoldWithInstaller(parent, options) {
     return {
       folder,
       installer: "create-bolt-uxp@1.3.27",
-      webview: false,
-      hybrid: false,
+      webview: options.webview,
+      hybrid: options.hybrid,
       repair,
       icons,
       result: result ?? null
