@@ -37,7 +37,10 @@ export function nextAction(out, { dashboardUp = false } = {}) {
     };
   }
   if (session.outcome === "unknown") {
-    return { action: "unknown", success: false, state: "unknown", hostExecuted: false, say: "The capability is unknown. Do not invent an API, do not swap in the rename fixture, and do not mark the feature done." };
+    return { action: "resolve-evidence", success: false, state: "unknown", hostExecuted: false, say: "Pause. No fresh page documents a symbol from this goal. Name the host API or refresh that page, then continue. Do not invent an API, do not swap in the rename fixture, and do not mark the feature done." };
+  }
+  if (session.outcome === "docs-incomplete") {
+    return { action: "refresh-docs", success: false, state: "docs-incomplete", hostExecuted: false, say: "Docs are failed or stale. Refresh them before writing the feature. This is not an implementation handoff." };
   }
   if (session.outcome === "unsupported-with-evidence") {
     return { action: "unsupported", success: false, state: "unsupported-with-evidence", hostExecuted: false, say: "A fresh page says this is unsupported. Do not implement it and do not report success." };

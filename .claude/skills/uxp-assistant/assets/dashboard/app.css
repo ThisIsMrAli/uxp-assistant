@@ -438,8 +438,10 @@ dialog.lightbox::backdrop { background: rgba(5, 8, 20, 0.7); backdrop-filter: bl
   .rail { position: static; }
   .steps { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; }
   .step { grid-template-columns: auto; padding: 8px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); flex: none; }
-  .step::before, .step .detail, .step .took, .step .bar, .rail-head { display: none; }
-  .step { display: flex; align-items: center; gap: 8px; }
+  .step::before, .step .took, .step .bar, .rail-head { display: none; }
+  .step .detail { display: block; flex: 1 0 100%; white-space: normal; }
+  .step[data-status="failed"] { border-color: var(--bad, #c44040); }
+  .step { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
   .step .name { padding-top: 0; }
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .alert { grid-template-columns: auto 1fr; }

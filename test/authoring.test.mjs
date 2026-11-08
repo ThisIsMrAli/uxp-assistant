@@ -5,6 +5,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { pathToFileURL } from "node:url";
 import { implementLayerRename } from "../.claude/skills/uxp-assistant/scripts/lib/implement.mjs";
 import { nextAction } from "../.claude/skills/uxp-assistant/scripts/lib/next.mjs";
 import { pagesForRequest } from "../.claude/skills/uxp-assistant/scripts/lib/registry.mjs";
@@ -15,14 +16,18 @@ import { recordImplementation, runWorkflow } from "../.claude/skills/uxp-assista
 
 const SHOW = "Show each selected layer id and name in the panel.";
 const RENAME = "Rename each selected layer with a prefix, suffix, and padded sequence.";
-const catalog = pagesForRequest({ host: "phxs", goal: "layer activeLayers" });
+const catalog = [
+  ...pagesForRequest({ host: "phxs", goal: "layer document title" }),
+  ...pagesForRequest({ host: "ppro", goal: "importFiles" })
+];
 const byUrl = new Map(catalog.map((page) => [page.url, page.id]));
 const TEXT = {
   "photoshop.layer": "name string R W 22.5 Name of the layer.\nid number R 22.5 The identifier of the layer.\n",
-  "photoshop.document": "activeLayers Layers R W 22.5 The selected layers in the document. (26.9)\n",
+  "photoshop.document": "activeLayers\n\nLayers\n\nR W\n\n22.5\n\nThe selected layers in the document. (26.9)\n\ntitle\n\nstring\n\nR\n\n22.5\n\nDocument title\n",
   "photoshop.executeAsModal": "commandName string required 23.0 This description is shown above the progress bar.\nsuspendHistory 23.0\n",
   "photoshop.changelog": "set Document activeLayers by providing an array of Layer objects.\n",
   manifest: "Current UXP hosts use manifest version 5.\nminVersion is a required string.\n",
+  "premiere.reference": "importFiles\n\nfunction\n\nImport files into the active project.\n",
   "css-styling": "CSS transitions and animations are not supported\n",
   "css-styles": "text-transform is not supported\n"
 };
@@ -36,7 +41,7 @@ function fetchImpl(failId) {
   };
 }
 
-function answers(goal) {
+function answers(goal, extra = {}) {
   return {
     mode: "chat",
     framework: "react",
@@ -50,35 +55,47 @@ function answers(goal) {
     "keep-listener": "keep",
     "keep-native-addon": "keep",
     "keep-system": "keep",
-    goal
+    goal,
+    ...extra
   };
 }
 
 async function scaffold(parent, intake) {
   const folder = path.join(parent, "plugin");
-  fs.mkdirSync(path.join(folder, "src"), { recursive: true });
-  writePackage(folder, { ccx: "node -e \"require('fs').writeFileSync('out.ccx','PK')\"" });
+  fs.mkdirSync(path.join(folder, "src", "api"), { recursive: true });
+  fs.writeFileSync(path.join(folder, "src", "api", "errors.ts"), "export const errors = { error: \"starter\" };\n");
+  writePackage(folder);
   fs.writeFileSync(path.join(folder, "uxp.config.ts"), "export const manifest = {\n  host: [{ app: \"PS\", minVersion: \"24.2.0\" }],\n  requiredPermissions: {\n    localFileSystem: \"fullAccess\",\n  },\n};\n");
   fs.writeFileSync(path.join(folder, "src", "main.tsx"), "export const App = () => null;\n");
   fs.writeFileSync(path.join(folder, "implementation-note.txt"), intake.goal);
   return { folder, installer: "test-double" };
 }
 
-function writePackage(folder, scripts) {
+function writePackage(folder) {
+  const mod = pathToFileURL(path.resolve(".claude/skills/uxp-assistant/scripts/lib/archive.mjs")).href;
+  fs.writeFileSync(path.join(folder, "pack.mjs"), `import fs from "node:fs";
+import { writeStoredZip } from ${JSON.stringify(mod)};
+const names = ["src/Selection.tsx", "src/selection-read.mjs", "src/DocumentTitle.tsx", "src/document-title.mjs", "src/layer-rename/Panel.tsx", "src/layer-rename/host.ts"];
+const entries = names.filter((name) => fs.existsSync(name)).map((name) => ({ name, data: fs.readFileSync(name) }));
+entries.push({ name: "manifest.json", data: Buffer.from('{"name":"unit"}') });
+writeStoredZip("out.ccx", entries);
+`);
   fs.writeFileSync(path.join(folder, "package.json"), `${JSON.stringify({
     name: "plugin",
     scripts: {
-      test: "node -e \"process.exit(0)\"",
+      test: "node --test",
       build: "node -e \"process.exit(0)\"",
-      ...scripts
+      ccx: "node pack.mjs"
     }
   }, null, 2)}\n`);
 }
 
 function writeShow(project) {
   fs.mkdirSync(path.join(project, "src"), { recursive: true });
+  fs.mkdirSync(path.join(project, "test"), { recursive: true });
   const panel = "src/Selection.tsx";
   const reader = "src/selection-read.mjs";
+  const spec = "test/selection.test.mjs";
   fs.writeFileSync(path.join(project, panel), `export function SelectionPanel() {
   return (
     <main>
@@ -98,7 +115,15 @@ function writeShow(project) {
   return { ok: true, status: "Read outside executeAsModal.", layers: layers.map((layer) => ({ id: layer.id, name: layer.name })) };
 }
 `);
-  return [panel, reader];
+  fs.writeFileSync(path.join(project, spec), `import assert from "node:assert/strict";
+import { test } from "node:test";
+import { readSelection } from "../src/selection-read.mjs";
+test("readSelection reports a missing host", async () => {
+  const result = await readSelection(null);
+  assert.equal(result.ok, false);
+});
+`);
+  return [panel, reader, spec];
 }
 
 function step(out, id) {
@@ -181,7 +206,7 @@ test("an existing project keeps its behaviors and the requested goal", async () 
   fs.writeFileSync(path.join(project, "native", "filter-loader.js"), "require(\"./filter.node\");\n");
   fs.writeFileSync(path.join(project, "system", "call.js"), "app.system(\"echo hi\");\n");
   fs.writeFileSync(path.join(project, "shim", "webview.js"), "window.uxpHost.postMessage(\"no\");\n");
-  writePackage(project, { ccx: "node -e \"require('fs').writeFileSync('out.ccx','PK')\"" });
+  writePackage(project);
   const result = await runWorkflow({ out, kind: "existing", projectPath: project, answers: answers(SHOW), fetchImpl: fetchImpl() });
   assert.equal(result.state, "awaiting-agent-implementation");
   assert.equal(result.contract.goal, SHOW);
@@ -207,6 +232,15 @@ test("the rename fixture is applied only for the rename goal and still needs a r
   assert.equal(result.success, false);
   assert.equal(fs.existsSync(path.join(result.project, "src", "layer-rename", "Panel.tsx")), false);
   const written = implementLayerRename(result.project);
+  fs.mkdirSync(path.join(result.project, "test"), { recursive: true });
+  fs.writeFileSync(path.join(result.project, "test", "rename.test.mjs"), `import assert from "node:assert/strict";
+import { test } from "node:test";
+import { previewRename } from "../src/layer-rename/preview.mjs";
+test("previewRename keeps the current name", () => {
+  const preview = previewRename([{ id: 1, name: "A" }], { prefix: "Shot " });
+  assert.equal(preview.rows[0].next, "Shot A");
+});
+`);
   const recorded = recordImplementation(out, { goal: RENAME, files: written.files });
   assert.equal(recorded.state, "commands-finished");
   assert.equal(recorded.hostExecuted, false);
@@ -226,6 +260,9 @@ test("unknown, unsupported, incomplete output, and a failed package cannot repor
   assert.equal(unknown.success, false);
   assert.equal(unknown.state, "unknown");
   assert.equal(unknown.contract.goal, "Export a hologram with app.fluxCapacitor().");
+  assert.match(unknown.contract.handoff, /Pause/);
+  assert.doesNotMatch(unknown.contract.handoff, /Do not write feature code/);
+  assert.equal(nextAction(unknownOut).action, "resolve-evidence");
   assert.notEqual(step(unknownOut, "implementation").status, "done");
   assert.notEqual(step(unknownOut, "tests").status, "done");
   assert.notEqual(step(unknownOut, "package").status, "done");
@@ -264,7 +301,10 @@ test("unknown, unsupported, incomplete output, and a failed package cannot repor
 
   const failedOut = temp();
   const failedReady = await runWorkflow({ out: failedOut, kind: "empty", answers: answers(SHOW), fetchImpl: fetchImpl(), scaffoldImpl: scaffold });
-  writePackage(failedReady.project, { ccx: "node -e \"process.exit(1)\"" });
+  writePackage(failedReady.project);
+  const pkg = JSON.parse(fs.readFileSync(path.join(failedReady.project, "package.json"), "utf8"));
+  pkg.scripts.ccx = "node -e \"process.exit(1)\"";
+  fs.writeFileSync(path.join(failedReady.project, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
   const files = writeShow(failedReady.project);
   const failed = recordImplementation(failedOut, { goal: SHOW, files });
   assert.equal(failed.success, false);
@@ -288,9 +328,9 @@ test("a failed docs fetch is not fresh and does not let package be marked done",
   });
   assert.equal(step(out, "docs").status, "failed");
   assert.equal(result.success, false);
-  const files = writeShow(result.project);
-  const recorded = recordImplementation(out, { goal: SHOW, files });
-  assert.equal(recorded.success, false);
+  assert.equal(result.state, "docs-incomplete");
+  assert.equal(nextAction(out).action, "refresh-docs");
+  assert.notEqual(step(out, "implementation").status, "waiting");
   assert.notEqual(step(out, "tests").status, "done");
   assert.notEqual(step(out, "package").status, "done");
 });
@@ -335,6 +375,9 @@ test("the dashboard snapshot and CLI refuse a false success", async () => {
     const disk = fs.readFileSync(path.join(out, "answers.jsonl"), "utf8");
     assert.equal(disk.includes("super-secret-value"), false);
     assert.match(disk, /secretHeld/);
+    const leaked = await request({ port: info.port, path: "/api/secret?id=license", token: "token" });
+    assert.equal(leaked.status, 403);
+    assert.equal(leaked.body.includes("super-secret-value"), false);
   } finally {
     await dash.close();
   }
@@ -362,6 +405,145 @@ test("the dashboard snapshot and CLI refuse a false success", async () => {
   ], { encoding: "utf8" });
   assert.equal(marked.status, 1);
   assert.match(marked.stdout, /Refusing to mark package done/);
+});
+
+test("a documented document title and Premiere importFiles are handoffs, not a dead end", async () => {
+  const titleOut = temp();
+  const title = await runWorkflow({
+    out: titleOut,
+    kind: "empty",
+    answers: answers("Show the active document title in the panel."),
+    fetchImpl: fetchImpl(),
+    scaffoldImpl: scaffold
+  });
+  assert.equal(title.state, "awaiting-agent-implementation");
+  assert.equal(title.fixture, null);
+  assert.match(title.contract.handoff, /writes this goal/);
+  assert.match(JSON.stringify(title.contract.evidence), /Document title/i);
+  fs.mkdirSync(path.join(title.project, "test"), { recursive: true });
+  fs.writeFileSync(path.join(title.project, "src", "document-title.mjs"), `export async function readDocumentTitle(app) {
+  if (!app || !app.activeDocument) return { ok: false, status: "No document is open." };
+  return { ok: true, status: "Read document.title outside executeAsModal.", title: app.activeDocument.title };
+}
+`);
+  fs.writeFileSync(path.join(title.project, "src", "DocumentTitle.tsx"), `export function DocumentTitlePanel() {
+  return <section><h1>Document title</h1><p className="status">Idle</p><button type="button" disabled={false}>Read title</button></section>;
+}
+`);
+  fs.writeFileSync(path.join(title.project, "test", "document-title.test.mjs"), `import assert from "node:assert/strict";
+import { test } from "node:test";
+import { readDocumentTitle } from "../src/document-title.mjs";
+test("readDocumentTitle reports a missing document", async () => {
+  const result = await readDocumentTitle(null);
+  assert.equal(result.ok, false);
+});
+`);
+  const recorded = recordImplementation(titleOut, { goal: "Show the active document title in the panel.", files: ["src/document-title.mjs", "src/DocumentTitle.tsx"] });
+  assert.equal(recorded.success, true);
+  assert.equal(recorded.hostExecuted, false);
+  assert.match(recorded.limits, /not semantic proof/);
+
+  const premiereOut = temp();
+  const premiere = await runWorkflow({
+    out: premiereOut,
+    kind: "existing",
+    projectPath: title.project,
+    answers: answers("Import files into the active Premiere project with importFiles.", { host: "ppro", framework: "react" }),
+    fetchImpl: fetchImpl()
+  });
+  assert.equal(premiere.state, "awaiting-agent-implementation");
+  assert.equal(premiere.fixture, null);
+  assert.match(JSON.stringify(premiere.contract.evidence), /importFiles/);
+  assert.doesNotMatch(premiere.contract.handoff, /Do not write feature code/);
+});
+
+test("a stock error module and a no-op test cannot finish the feature", async () => {
+  const out = temp();
+  const result = await runWorkflow({ out, kind: "empty", answers: answers(SHOW), fetchImpl: fetchImpl(), scaffoldImpl: scaffold });
+  const pkgPath = path.join(result.project, "package.json");
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+  pkg.scripts.test = "node -e \"process.exit(0)\"";
+  fs.writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
+  const stock = recordImplementation(out, { goal: SHOW, files: ["src/api/errors.ts"] });
+  assert.equal(stock.success, false);
+  assert.notEqual(stock.state, "commands-finished");
+  fs.writeFileSync(path.join(result.project, "src", "Stub.tsx"), "export const label = \"status: not the feature\";\n<button type=\"button\" disabled>Go</button>\n");
+  const stub = recordImplementation(out, { goal: SHOW, files: ["src/Stub.tsx"] });
+  assert.equal(stub.success, false);
+  assert.match(stub.say, /documented symbol|stock file|feature/);
+});
+
+test("drop removes only the assessed listener files", async () => {
+  const out = temp();
+  const project = path.join(out, "existing");
+  fs.mkdirSync(path.join(project, "src", "legacy"), { recursive: true });
+  fs.mkdirSync(path.join(project, "bridge"), { recursive: true });
+  fs.mkdirSync(path.join(project, "jsx"), { recursive: true });
+  fs.writeFileSync(path.join(project, "src", "App.tsx"), "export function App(){ return <main>Keep</main>; }\n");
+  fs.writeFileSync(path.join(project, "bridge", "listen.js"), "var cs = new CSInterface();\ncs.addEventListener(\"a\", function(){});\n");
+  fs.writeFileSync(path.join(project, "src", "legacy", "cep-bridge.js"), "var cs = new CSInterface();\ncs.addEventListener(\"b\", function(){});\ncs.evalScript(\"1\");\n");
+  fs.writeFileSync(path.join(project, "jsx", "rename.jsx"), "layer.name = \"same\";\n");
+  fs.writeFileSync(path.join(project, "src", "unrelated.js"), "export const keep = true;\n");
+  const result = await runWorkflow({
+    out,
+    kind: "existing",
+    projectPath: project,
+    answers: answers(SHOW, { "keep-listener": "drop" }),
+    fetchImpl: fetchImpl()
+  });
+  assert.equal(result.success, false);
+  assert.equal(fs.existsSync(path.join(project, "bridge", "listen.js")), false);
+  assert.equal(fs.existsSync(path.join(project, "src", "legacy", "cep-bridge.js")), false);
+  assert.equal(fs.existsSync(path.join(project, "jsx", "rename.jsx")), true);
+  assert.equal(fs.existsSync(path.join(project, "src", "unrelated.js")), true);
+  assert.equal(fs.existsSync(path.join(project, "src", "App.tsx")), true);
+});
+
+test("an existing project without a host does not skip host pages", async () => {
+  const out = temp();
+  const project = path.join(out, "existing");
+  fs.mkdirSync(project, { recursive: true });
+  fs.writeFileSync(path.join(project, "src-placeholder.js"), "export const keep = 1;\n");
+  const result = await runWorkflow({
+    out,
+    kind: "existing",
+    projectPath: project,
+    answers: answers(SHOW, { host: "" }),
+    fetchImpl: fetchImpl()
+  });
+  assert.equal(result.blocked, "host");
+  assert.equal(result.success, false);
+});
+
+test("importFiles missing from the Premiere index is resolved from the official class page", async () => {
+  const out = temp();
+  const project = path.join(out, "existing");
+  fs.mkdirSync(project, { recursive: true });
+  fs.writeFileSync(path.join(project, "src.js"), "export const keep = 1;\n");
+  const tree = {
+    tree: [
+      { type: "blob", path: "src/pages/ppro-reference/index.md" },
+      { type: "blob", path: "src/pages/ppro-reference/classes/project.md" }
+    ]
+  };
+  const markdown = "# Project\n\n### importFiles\n\nImport files into the project.\n";
+  const result = await runWorkflow({
+    out,
+    kind: "existing",
+    projectPath: project,
+    answers: answers("Import files into the active Premiere project with importFiles.", { host: "ppro" }),
+    fetchImpl: async (url) => {
+      const target = String(url);
+      if (target.includes("/git/trees/")) return { ok: true, async text() { return JSON.stringify(tree); } };
+      if (target.endsWith("/classes/project.md")) return { ok: true, async text() { return markdown; } };
+      return { ok: true, async text() { return "Premiere API overview. The method list is on the class pages."; } };
+    }
+  });
+  assert.equal(result.state, "awaiting-agent-implementation");
+  assert.equal(result.fixture, null);
+  assert.match(JSON.stringify(result.contract.evidence), /importFiles/);
+  assert.match(JSON.stringify(result.contract.evidence), /ppro-reference\/classes\/project/);
+  assert.doesNotMatch(result.contract.handoff, /Do not write feature code/);
 });
 
 function request({ port, path: pathname, host, origin, token, method = "GET", body }) {

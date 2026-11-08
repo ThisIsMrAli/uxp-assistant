@@ -1,0 +1,11 @@
+{
+  "goal": "Show the active document title in the panel.",
+  "hostExecuted": false,
+  "empty": {
+    "bytes": 126207,
+    "sha256": "7deba2d3ad3857877647f3b38912c3b0ccb79297cb13150e4db38dc3aa4379cb",
+    "project": "/tmp/uxp-accept-BjmtGR/empty-work/com-example-title"
+  },
+  "existingBytes": 126207,
+  "limits": "Zip timestamps can change a later digest. These files are the retained archives from this run. Photoshop and Premiere were not launched."
+}
