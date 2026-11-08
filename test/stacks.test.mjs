@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { readZip } from "../.claude/skills/uxp-assistant/scripts/lib/archive.mjs";
 import { LEAST_LOCAL_WEBVIEW, narrowRequiredPermissions, starterPermissionsAreBroad } from "../.claude/skills/uxp-assistant/scripts/lib/permissions.mjs";
 import { runtimeOffer } from "../.claude/skills/uxp-assistant/scripts/lib/runtime.mjs";
+import { writeLocalWebviewHost } from "../.claude/skills/uxp-assistant/scripts/lib/webview-shell.mjs";
 import { scaffoldWithInstaller } from "../.claude/skills/uxp-assistant/scripts/lib/scaffold.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -36,6 +37,10 @@ test("vue and svelte empty folders package, and the webview document is a separa
   assert.match(web.documentHtml, /Mark read/);
   assert.doesNotMatch(web.documentHtml, /api\.notify/);
   assert.deepEqual(web.packagedPermissions, { webview: LEAST_LOCAL_WEBVIEW });
+  assert.equal(web.shellWrote, true);
+  assert.equal(web.hostBridge.postMessage, false);
+  assert.equal(web.hostBridge.themeUpdated, false);
+  assert.equal(web.hostBridge.createsWebview, true);
   report.unavoidable = {
     native: {},
     localWebview: { webview: LEAST_LOCAL_WEBVIEW },
@@ -144,6 +149,7 @@ export const App = () => {
   const install = spawnSync("npm", ["install"], { cwd: ui, encoding: "utf8", timeout: 180000 });
   const documentBuild = spawnSync("npm", ["run", "build"], { cwd: ui, encoding: "utf8", timeout: 180000 });
   const least = applyLeast(result.folder, "webview");
+  const shell = writeLocalWebviewHost(result.folder);
   const panel = spawnSync("npm", ["run", "ccx"], { cwd: result.folder, encoding: "utf8", timeout: 180000 });
   const documentFile = [
     path.join(result.folder, "public/webview-ui/index.html"),
@@ -169,6 +175,8 @@ export const App = () => {
     scriptCreatesWebview: readZip(panelFile).some((member) => member.name.endsWith(".js") && /document\.createElement\("webview"\)/.test(member.data.toString("utf8")) && /plugin:\/webview-ui\//.test(member.data.toString("utf8"))),
     configHasBroadGrant: least.broad,
     packagedPermissions: panelFile ? packagedPermissions(panelFile) : null,
+    shellWrote: shell.wrote,
+    hostBridge: panelFile ? hostBridge(panelFile) : null,
     panelMembers: panelMembers.filter((name) => /html|webview|index/.test(name)).slice(0, 30)
   };
 }
@@ -179,6 +187,16 @@ function applyLeast(folder, runtime) {
   assert.equal(narrowed.ok, true, narrowed.reason);
   fs.writeFileSync(config, narrowed.source);
   return { broad: starterPermissionsAreBroad(narrowed.source) };
+}
+
+function hostBridge(ccxFile) {
+  const member = readZip(ccxFile).find((item) => /^assets\/index-.*\.js$/.test(item.name));
+  const text = member ? member.data.toString("utf8") : "";
+  return {
+    postMessage: /webview\.postMessage|updateColorScheme|windowEndpoint|uxpHost\.postMessage/.test(text),
+    themeUpdated: /theme\.onUpdated|theme\.getCurrent/.test(text),
+    createsWebview: /createElement\("webview"\)/.test(text) && /plugin:\/webview-ui\//.test(text)
+  };
 }
 
 function packagedPermissions(ccxFile) {

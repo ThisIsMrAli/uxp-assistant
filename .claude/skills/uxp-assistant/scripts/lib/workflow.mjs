@@ -12,7 +12,8 @@ import { extractSuppliedUi, previewDocument } from "./preview.mjs";
 import { stageDecision } from "./stages.mjs";
 import { effectiveHostFloor, floorsFromText } from "./floors.mjs";
 import { spectrumGuidance } from "./runtime.mjs";
-import { narrowRequiredPermissions, starterPermissionsAreBroad } from "./permissions.mjs";
+import { narrowRequiredPermissions, permissionChoice, starterPermissionsAreBroad } from "./permissions.mjs";
+import { writeLocalWebviewHost } from "./webview-shell.mjs";
 import { runPackage } from "./package-project.mjs";
 import { rememberOut } from "./paths.mjs";
 import { REVIEW_LIMIT, reviewArchive, reviewClaim, reviewCommandProvenance, selectArchives, snapshotProject, testsCoverFeature } from "./review.mjs";
@@ -224,7 +225,7 @@ export async function runWorkflow(options) {
   const configPath = project && path.join(project, "uxp.config.ts");
   const configSource = configPath && fs.existsSync(configPath) ? fs.readFileSync(configPath, "utf8") : "";
   const broad = Boolean(configSource) && starterPermissionsAreBroad(configSource);
-  const permissions = choice("narrow-permissions");
+  const permissions = permissionChoice(choice("narrow-permissions"));
   if (broad && !permissions) return block(out, narrowAsk());
   if (broad && permissions === "narrow") {
     const narrowed = narrowRequiredPermissions(configSource, {
@@ -236,7 +237,8 @@ export async function runWorkflow(options) {
       return { ok: false, success: false, state: "failed", out, hostExecuted: false, say: narrowed.reason };
     }
     fs.writeFileSync(configPath, narrowed.source);
-    recordFacts(out, { permissions: { choice: "narrow", runtime: narrowed.runtime, kept: narrowed.kept } });
+    const shell = intake.webview ? writeLocalWebviewHost(project) : { wrote: false };
+    recordFacts(out, { permissions: { choice: "narrow", runtime: narrowed.runtime, kept: narrowed.kept, shell: shell.wrote } });
   } else if (broad && permissions === "keep") {
     recordFacts(out, { permissions: { choice: "keep", runtime: intake.webview ? "webview" : "native" } });
   }

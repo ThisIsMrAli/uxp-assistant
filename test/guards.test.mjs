@@ -5,7 +5,8 @@ import path from "node:path";
 import { test } from "node:test";
 import { removeProfile } from "../.claude/skills/uxp-assistant/scripts/lib/chrome.mjs";
 import { effectiveHostFloor, floorsFromText, WEBVIEW_FLOOR_NOT_USED } from "../.claude/skills/uxp-assistant/scripts/lib/floors.mjs";
-import { LEAST_LOCAL_WEBVIEW, narrowRequiredPermissions, starterPermissionsAreBroad } from "../.claude/skills/uxp-assistant/scripts/lib/permissions.mjs";
+import { LEAST_LOCAL_WEBVIEW, narrowRequiredPermissions, permissionCapabilities, permissionChoice, starterPermissionsAreBroad } from "../.claude/skills/uxp-assistant/scripts/lib/permissions.mjs";
+import { mountLocalWebviews, stripThemeBridge } from "../.claude/skills/uxp-assistant/scripts/lib/webview-shell.mjs";
 import { installerEntry } from "../.claude/skills/uxp-assistant/scripts/lib/scaffold.mjs";
 import { resolveCapability } from "../.claude/skills/uxp-assistant/scripts/lib/capability.mjs";
 import { previewRename, findCollisions } from "../.claude/skills/uxp-assistant/scripts/lib/rename-preview.mjs";
@@ -69,6 +70,36 @@ test("commandName 23.0 is read across lines and a nested permission object stays
   const nativeKept = narrowRequiredPermissions(starter, { requested: ["clipboard"] });
   assert.match(nativeKept.source, /clipboard: "readAndWrite"/);
   assert.doesNotMatch(nativeKept.source, /localFileSystem|launchProcess|webview:/);
+  const unknown = narrowRequiredPermissions(starter, { requested: ["not-a-permission", "localOnly"] });
+  assert.doesNotMatch(unknown.source, /not-a-permission|localOnly/);
+  assert.match(unknown.source, /requiredPermissions: \{\}/);
+  const networkOnly = `export const manifest = { requiredPermissions: { network: { domains: ["https://example.com"] } } };\n`;
+  assert.deepEqual(permissionCapabilities(networkOnly), ["network"]);
+  assert.equal(starterPermissionsAreBroad(networkOnly), true);
+  const localOnly = `webview: { allow: "yes", domains: [], allowLocalRendering: "yes", enableMessageBridge: "localOnly" }`;
+  assert.ok(permissionCapabilities(localOnly).includes("enableMessageBridge:localOnly"));
+  assert.equal(permissionChoice("keep"), "keep");
+  assert.equal(permissionChoice("narrow"), "narrow");
+  assert.equal(permissionChoice("yes"), "");
+  assert.equal(permissionChoice("KEEP"), "");
+  const calls = [];
+  const element = () => {
+    const node = { className: "", id: "", src: "", uxpAllowInspector: "", appendChild(child) { calls.push(["append", child.id]); return child; } };
+    return node;
+  };
+  const document = {
+    createElement(tag) { calls.push(["create", tag]); return element(); },
+    getElementById() { return element(); },
+    getElementsByTagName() { return []; }
+  };
+  const mounted = mountLocalWebviews(document, { pages: ["main"], pluginId: "com.example.webview", mode: "package" });
+  assert.deepEqual(calls.filter((item) => item[0] === "create"), [["create", "webview"]]);
+  assert.equal(mounted.created.length, 1);
+  assert.equal(mounted.created[0].src, "plugin:/webview-ui/main.html");
+  assert.equal(JSON.stringify(mounted).includes("postMessage"), false);
+  const stripped = stripThemeBridge("export const polyfillUXPVars = () => {\n  document.theme.onUpdated.addListener(() => {});\n};\n");
+  assert.doesNotMatch(stripped, /theme\.onUpdated/);
+  assert.match(stripped, /return;/);
   assert.deepEqual(LEAST_LOCAL_WEBVIEW.enableMessageBridge, "no");
   const previous = process.cwd();
   process.chdir(os.tmpdir());
