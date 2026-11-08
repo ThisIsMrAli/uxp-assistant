@@ -215,6 +215,22 @@ test("classified origins stay on the contract and are not written into permissio
   assert.doesNotMatch(config, /network/);
 });
 
+test("an existing project's permissions stay when the answer is keep", async () => {
+  const project = path.join(temp(), "plugin");
+  fs.mkdirSync(project, { recursive: true });
+  const original = "export const manifest = { requiredPermissions: { localFileSystem: \"fullAccess\", clipboard: \"readAndWrite\" } };\n";
+  fs.writeFileSync(path.join(project, "uxp.config.ts"), original);
+  const result = await runWorkflow({
+    out: temp(),
+    kind: "existing",
+    projectPath: project,
+    answers: answers({ "narrow-permissions": "keep" }),
+    fetchImpl: fetchImpl()
+  });
+  assert.equal(result.state, "awaiting-agent-implementation");
+  assert.equal(fs.readFileSync(path.join(project, "uxp.config.ts"), "utf8"), original);
+});
+
 test("the installer refuses to invent webview or hybrid when the booleans are omitted", async () => {
   await assert.rejects(
     () => scaffoldWithInstaller(temp(), {

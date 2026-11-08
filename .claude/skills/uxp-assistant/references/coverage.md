@@ -8,6 +8,8 @@ A live refresh on 8 Nov 2026 returned all 14 requested pages fresh. The Layer pa
 
 The Bolt starter Photoshop `minVersion` is 24.2.0. When that is newer than the proven API floor, the starter value stays. The WebView floor 26.0.0 is not applied.
 
+On 8 Nov 2026 the manifest page said `requiredPermissions` defaults to `{}`, `localFileSystem` defaults to `"plugin"`, and clipboard, launchProcess, and webview default to no access. `WebviewPermission.allow` must be `"yes"` to enable webviews. `domains` is required and may be a list or `"all"`. `enableMessageBridge` defaults to `"no"`. The HTMLWebViewElement page said `allow` `"yes"` is mandatory, `domains` `"all"` is not recommended, and local `plugin:/` content needs `allowLocalRendering` `"yes"`. Its local example uses `domains: []`. `enableMessageBridge` `"no"` does not allow communication. Those sentences are the permission floor for a local WebView that does not call a host API. They are not a host pass.
+
 The Document page also lists `title` as a read string at 22.5, described as "Document title". `commandName` is read when the property name and the version are on separate lines. The table header "Name" is not the layer `name` property.
 
 A camelCase API that is absent from the first fetched pages is looked up in the official AdobeDocs class tree for that host. Premiere `importFiles` is on the Project class page, not on the short Premiere API index. A miss stays `unknown` and pauses. It does not become a permanent refusal.
