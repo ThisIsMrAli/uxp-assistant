@@ -64,14 +64,15 @@ export function narrowAsk() {
   };
 }
 
-export function keepAsk(id, label) {
+export function keepAsk(id, label, files = []) {
+  const listed = files.length ? files.join(", ") : "the assessed file";
   return {
     id,
     title: `Keep ${label}`,
-    prompt: `The project has a ${label}. It is a different behavior from the requested goal. Keep the file?`,
+    prompt: `These assessed files are a ${label}: ${listed}. They are a different behavior from the requested goal. Keep them?`,
     options: [
-      { id: "keep", label: "Keep it (Recommended)", detail: "The file stays. The recipe does not claim to replace this behavior." },
-      { id: "drop", label: "Remove it", detail: "Deletes that file. This is a separate decision from implementing the rename." }
+      { id: "keep", label: "Keep them (Recommended)", detail: "Nothing in that list is deleted." },
+      { id: "drop", label: "Remove only those files", detail: "Deletes the assessed paths named above and no other path." }
     ]
   };
 }

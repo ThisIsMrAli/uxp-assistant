@@ -319,10 +319,11 @@ function paintRail() {
     const showDetail = step.detail && ["done", "running", "waiting", "skipped", "failed"].includes(step.status);
     const live = step.status === "running";
     return h("li", { class: "step", "data-status": step.status, "aria-current": live ? "step" : null },
-      h("span", { class: "mark-step" }, step.status === "done" ? icon("check", 3.4) : step.status === "skipped" ? icon("dash", 3) : step.status === "waiting" ? icon("hand", 2.2) : live ? h("span", { class: "spin" }) : null),
+      h("span", { class: "mark-step" }, step.status === "done" ? icon("check", 3.4) : step.status === "failed" ? icon("x", 3) : step.status === "skipped" ? icon("dash", 3) : step.status === "waiting" ? icon("hand", 2.2) : live ? h("span", { class: "spin" }) : null),
       h("div", null,
         h("div", { class: "name" }, step.label,
           step.status === "running" ? h("span", { class: "tag", "data-k": "running", text: "Now" }) : null,
+          step.status === "failed" ? h("span", { class: "tag", "data-k": "bad", text: "Failed" }) : null,
           step.status === "waiting" ? h("span", { class: "tag", "data-k": "waiting", text: "Your turn" }) : null,
           step.optional ? h("span", { class: "tag", text: "Optional" }) : null,
           h("span", { class: "sr", text: `. ${statusWord(step.status)}` })),
@@ -478,7 +479,7 @@ function paintStats() {
   const outcome = s?.outcome || report().state || "none";
   const commandsRecorded = outcome === "commands-finished" && report().success === true && report().hostExecuted !== true && s?.verification?.hostExecuted !== true;
   const tiles = [
-    { tone: commandsRecorded ? "work" : "warn", icon: commandsRecorded ? "info" : "alert", k: "Feature", v: outcome, s: commandsRecorded ? "Commands recorded. Host NOT TESTED." : "Not complete. A missing recipe is not success." },
+    { tone: commandsRecorded ? "work" : "warn", icon: commandsRecorded ? "info" : "alert", k: "Feature", v: outcome, s: commandsRecorded ? "Commands recorded. Not semantic proof. Host NOT TESTED." : "Not complete. A missing recipe is not success." },
     { tone: d.errors.length ? "bad" : "work", icon: d.errors.length ? "x" : "info", k: "Code errors", v: d.errors.length, s: d.total ? `${d.fixed.length} of ${d.total} findings fixed` : "An empty scan is not a finished feature." },
     { tone: d.warnings.length || !commandsRecorded ? "warn" : "work", icon: d.warnings.length || !commandsRecorded ? "alert" : "info", k: "Warnings", v: d.warnings.length, s: commandsRecorded ? `${d.patterns.length} review ${plural(d.patterns.length, "pattern")}` : "Not a completed feature." },
     { tone: d.bugsOpen.length ? "bad" : audit ? "ok" : "work", icon: "bug", k: "Panel bugs open", v: audit || d.bugsOpen.length || d.bugsFixed.length ? d.bugsOpen.length : "–", s: audit ? `${d.bugsFixed.length} fixed, ${audit.screens ?? 0} ${plural(audit.screens ?? 0, "screen")} measured` : "Measured at 320px" },

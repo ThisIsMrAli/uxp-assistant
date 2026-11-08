@@ -205,13 +205,9 @@ export function createDashboardServer({ out, assets, token = crypto.randomBytes(
     });
   }
 
-  /** For the audit script only: a bearer token and no Origin header, so a web page cannot ask for it. */
-  function secret(req, res, url) {
-    if (req.headers.origin || !/^Bearer\s+/i.test(String(req.headers.authorization || ""))) return send(res, 403, { error: "Not available to a web page." });
-    const ask = readMerged(out)?.asks.find((item) => item.id === url.searchParams.get("id") && item.status === "answered");
-    const value = ask ? secrets.get(ask.nonce) : "";
-    if (!value) return send(res, 404, { error: "No secret is held for that question." });
-    return send(res, 200, { id: ask.id, secret: value });
+  /** The secret stays in this process. A bearer client with no Origin does not receive it. */
+  function secret(req, res) {
+    return send(res, 403, { error: "The secret stays in this process and is not returned." });
   }
 
   function wake() {

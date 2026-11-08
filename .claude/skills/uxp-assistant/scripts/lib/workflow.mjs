@@ -2,11 +2,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { assessGoal, assessTree, summarize } from "./assess.mjs";
 import { resolveCapability } from "./capability.mjs";
-import { buildContract, goalWasReplaced, writeContractFiles } from "./contract.mjs";
+import { discoverOfficialPages } from "./discover.mjs";
+import { buildContract, writeContractFiles } from "./contract.mjs";
 import { consequentialAsk, frameworkAsk, hostAsk, keepAsk, modeAsk, narrowAsk } from "./ask.mjs";
 import { effectiveHostFloor, floorsFromText } from "./floors.mjs";
+import { narrowRequiredPermissions } from "./permissions.mjs";
 import { runPackage } from "./package-project.mjs";
 import { rememberOut } from "./paths.mjs";
+import { REVIEW_LIMIT, reviewArchive, reviewClaim, snapshotProject, testsCoverFeature } from "./review.mjs";
 import { refreshPages, readPageText } from "./refresh.mjs";
 import { pagesForRequest } from "./registry.mjs";
 import { publishAsk, readMerged, recordFacts, setMode, setStep, startSession } from "./session.mjs";
@@ -59,7 +62,7 @@ export async function runWorkflow(options) {
     return { ok: false, blocked: "intake", say: "Set goal, name, and id in the answers. The skill does not invent them." };
   }
   if (options.kind !== "existing" && !intake.framework) return block(out, frameworkAsk());
-  if (options.kind !== "existing" && !intake.host) return block(out, hostAsk());
+  if (!intake.host) return block(out, hostAsk());
   const framework = findFramework(intake.framework);
   const app = findApp(intake.host);
   if (options.kind !== "existing" && (!framework || !app)) {
@@ -91,24 +94,58 @@ export async function runWorkflow(options) {
   plan.hostExecuted = false;
   recordFacts(out, { plan });
   writeReport(out, intake, plan, summary, behaviors);
-  const capability = resolveCapability({ goal: intake.goal, pages: pageText });
+  let capability = resolveCapability({ goal: intake.goal, pages: pageText });
+  if (capability.state === "unknown" && summary.ok) {
+    const extra = await discoverOfficialPages({
+      host: intake.host,
+      goal: intake.goal,
+      fetchImpl: options.fetchImpl,
+      docsDir: path.join(out, "docs")
+    });
+    if (extra.length) {
+      pageText.push(...extra);
+      for (const page of extra) {
+        summary.pages.push({ id: page.id, url: page.url, scope: page.scope, ok: true, freshness: "fresh", source: page.source });
+        summary.fresh.push(page.id);
+      }
+      capability = resolveCapability({ goal: intake.goal, pages: pageText });
+    }
+  }
   plan.capability = capability;
   plan.fixture = capability.fixture;
   plan.recipe = capability.fixture;
   recordFacts(out, { plan });
   setStep(out, "plan", "done", `${capability.state}. ${capability.detail}`);
 
-  for (const item of plan.askBeforeDrop) {
-    const id = KEEP[item.behavior];
-    if (!id) continue;
-    const picked = choice(id);
-    if (!picked) return block(out, keepAsk(id, item.behavior));
-    if (picked === "drop") plan.drops = [...(plan.drops || []), item.behavior];
+  if (!summary.ok) {
+    const paused = {
+      ...capability,
+      state: "docs-incomplete",
+      detail: `Docs are not fresh. Failed: ${summary.failed.join(", ") || "none"}. Stale: ${summary.stale.join(", ") || "none"}. Failed or stale pages are not evidence.`
+    };
+    const held = hold(out, intake, paused, options.projectPath || "", summary, plan, behaviors, []);
+    return { ok: false, success: false, state: "docs-incomplete", out, hostExecuted: false, contract: held, say: paused.detail };
   }
 
   if (capability.state !== "awaiting-agent-implementation") {
     const held = hold(out, intake, capability, options.projectPath || "", summary, plan, behaviors, []);
     return { ok: false, success: false, state: capability.state, out, hostExecuted: false, contract: held, say: capability.detail };
+  }
+
+  const groups = new Map();
+  for (const item of plan.askBeforeDrop) {
+    if (!KEEP[item.behavior] || !item.file) continue;
+    const list = groups.get(item.behavior) || [];
+    list.push(item.file);
+    groups.set(item.behavior, list);
+  }
+  const drops = [];
+  for (const [behavior, files] of groups) {
+    const id = KEEP[behavior];
+    const unique = [...new Set(files)];
+    const picked = choice(id);
+    if (!picked) return block(out, keepAsk(id, behavior, unique));
+    if (picked === "drop") drops.push({ behavior, files: unique });
   }
 
   const consequential = choice("consequential");
@@ -147,12 +184,18 @@ export async function runWorkflow(options) {
   if (broad && permissions === "narrow") {
     const config = path.join(project, "uxp.config.ts");
     const source = fs.readFileSync(config, "utf8");
-    const next = source.replace(/requiredPermissions:\s*\{[\s\S]*?\n\s*\},/m, "requiredPermissions: {},");
-    if (next !== source) fs.writeFileSync(config, next);
+    const narrowed = narrowRequiredPermissions(source);
+    if (!narrowed.ok) {
+      setStep(out, "scaffold", "failed", narrowed.reason);
+      return { ok: false, success: false, state: "failed", out, hostExecuted: false, say: narrowed.reason };
+    }
+    fs.writeFileSync(config, narrowed.source);
   }
 
-  const kept = listKept(project, plan.drops || []);
-  const contract = hold(out, intake, capability, project, summary, plan, behaviors, kept);
+  const removed = applyDrops(project, drops);
+  const kept = [...new Set(behaviors.map((item) => item.file).filter((file) => file && !removed.includes(file)))];
+  const notes = entryNotes(project, options.kind);
+  const contract = hold(out, intake, capability, project, summary, plan, behaviors, kept, { baseline: snapshotProject(project), notes });
   setStep(out, "implementation", "waiting", "awaiting-agent-implementation");
   return {
     ok: false,
@@ -171,6 +214,9 @@ export function recordImplementation(out, claimed, { runner } = {}) {
   const session = readMerged(out);
   const contract = session?.contract;
   if (!contract) throw new Error("There is no implementation contract.");
+  if (contract.state !== "awaiting-agent-implementation") {
+    return incomplete(out, contract.state || "unknown", "The contract is not waiting for an implementation. Refresh evidence before recording files.");
+  }
   const project = contract.projectPath;
   if (claimed?.goal !== contract.goal) {
     return incomplete(out, "not-yet-implemented", "The recorded goal does not match the requested goal.");
@@ -184,18 +230,22 @@ export function recordImplementation(out, claimed, { runner } = {}) {
     if (!fs.existsSync(full) || !fs.statSync(full).size) return incomplete(out, "not-yet-implemented", `${relative} is missing or empty.`);
     bodies.push(fs.readFileSync(full, "utf8"));
   }
-  if (goalWasReplaced(contract, bodies.join("\n"))) {
-    return incomplete(out, "not-yet-implemented", "The written files replace the requested goal with the rename fixture.");
-  }
-  setStep(out, "implementation", "done", "The assistant wrote the files named in agent-result.", { verified: true });
-  const uiOk = bodies.some((body) => /disabled|error|Loading|status/i.test(body));
-  if (!uiOk) return incomplete(out, "not-yet-implemented", "The files do not show an error, disabled, or loading state.");
-  setStep(out, "ui", "done", "The written panel includes a visible error, disabled, or loading state.", { verified: true });
+  const claim = reviewClaim({ contract, files, bodies });
+  if (!claim.ok) return incomplete(out, "not-yet-implemented", claim.say);
+  setStep(out, "implementation", "done", `Changed files mention ${claim.hit.join(", ")}. ${REVIEW_LIMIT}`, { verified: true });
+  setStep(out, "ui", "done", "A changed file shows an error, disabled, or loading state. That marker is not the feature by itself.", { verified: true });
   const docsStep = session.steps.find((step) => step.id === "docs");
   if (docsStep?.status !== "done") {
     recordFacts(out, { outcome: "failed", verification: { hostExecuted: false, status: "NOT TESTED" } });
     publishOutcome(out, "failed", false);
     return { ok: false, success: false, state: "failed", hostExecuted: false, say: "Official docs are not all fresh. Tests and package were not run and were not marked done." };
+  }
+  const covered = testsCoverFeature(project, claim.changed);
+  if (!covered.ok) {
+    setStep(out, "tests", "failed", covered.say);
+    recordFacts(out, { outcome: "failed", verification: { hostExecuted: false, status: "NOT TESTED" } });
+    publishOutcome(out, "failed", false);
+    return { ok: false, success: false, state: "failed", hostExecuted: false, say: covered.say };
   }
 
   const tests = runPackage(project, { runner, only: ["test"] });
@@ -205,22 +255,36 @@ export function recordImplementation(out, claimed, { runner } = {}) {
     publishOutcome(out, "failed", false);
     return { ok: false, success: false, state: "failed", hostExecuted: false, say: tests.reason };
   }
-  setStep(out, "tests", "done", `test exited 0. ${tests.note}`, { verified: true });
+  setStep(out, "tests", "done", `test exited 0 and a test file references the changed feature. ${tests.note || ""} ${REVIEW_LIMIT}`, { verified: true });
 
   const packed = runPackage(project, { runner, only: ["build", "ccx"] });
-  recordFacts(out, { packageResult: packed, verification: { hostExecuted: false, status: "NOT TESTED" } });
   if (packed.status !== "written") {
     setStep(out, "package", "failed", packed.reason || packed.status);
-    recordFacts(out, { outcome: "failed", verification: { hostExecuted: false, status: "NOT TESTED" } });
+    recordFacts(out, { outcome: "failed", packageResult: packed, verification: { hostExecuted: false, status: "NOT TESTED" } });
     publishOutcome(out, "failed", false);
     return { ok: false, success: false, state: "failed", hostExecuted: false, say: packed.reason || packed.status };
   }
-  setStep(out, "package", "done", `${packed.status}. The host was not executed.`, { verified: true });
+  const archive = reviewArchive({
+    project,
+    artifact: packed.artifacts[0],
+    changed: claim.changed,
+    baselineArchives: contract.baseline?.archives || []
+  });
+  packed.review = archive;
+  packed.hostExecuted = false;
+  recordFacts(out, { packageResult: packed, verification: { hostExecuted: false, status: "NOT TESTED" } });
+  if (!archive.ok) {
+    setStep(out, "package", "failed", archive.say);
+    recordFacts(out, { outcome: "failed" });
+    publishOutcome(out, "failed", false);
+    return { ok: false, success: false, state: "failed", hostExecuted: false, say: archive.say, package: packed };
+  }
+  setStep(out, "package", "done", `Archive ${archive.digest} (${archive.bytes} bytes) contains feature text. Digests can change when zip timestamps change. ${REVIEW_LIMIT}`, { verified: true });
   fs.writeFileSync(path.join(out, "host-verification.md"), hostManual({ goal: contract.goal, host: contract.host }, session.docs?.effective));
   setStep(out, "host-verification", "done", "NOT TESTED. Manual steps are in host-verification.md.", { verified: true });
   recordFacts(out, { outcome: "commands-finished" });
   publishOutcome(out, "commands-finished", true);
-  return { ok: true, success: true, state: "commands-finished", hostExecuted: false, package: packed };
+  return { ok: true, success: true, state: "commands-finished", hostExecuted: false, limits: REVIEW_LIMIT, package: packed };
 }
 
 function publishOutcome(out, state, success) {
@@ -235,16 +299,18 @@ function publishOutcome(out, state, success) {
   report.success = Boolean(success);
   report.hostExecuted = false;
   fs.writeFileSync(file, `${JSON.stringify(report, null, 2)}\n`);
-  fs.writeFileSync(path.join(out, "report.md"), `# Status\n\nSuccess: ${success ? "command results recorded" : "no"}\n\nState: ${state}\n\nGoal: ${report.goal || ""}\n\nHost executed: no\n`);
+  fs.writeFileSync(path.join(out, "report.md"), `# Status\n\nSuccess: ${success ? "command results recorded" : "no"}\n\nState: ${state}\n\nGoal: ${report.goal || ""}\n\nHost executed: no\n\n${success ? REVIEW_LIMIT : "A failed or paused state is not a finished feature."}\n`);
 }
 
-function hold(out, intake, capability, projectPath, summary, plan, behaviors, kept) {
+function hold(out, intake, capability, projectPath, summary, plan, behaviors, kept, extras = {}) {
   const contract = buildContract({
     intake: { ...intake, kind: intake.kind || "" },
     capability,
     projectPath,
     docs: summary.pages,
-    kept
+    kept,
+    baseline: extras.baseline,
+    notes: extras.notes
   });
   if (projectPath) writeContractFiles(projectPath, contract);
   fs.writeFileSync(path.join(out, "implementation-contract.json"), `${JSON.stringify(contract, null, 2)}\n`);
@@ -260,31 +326,37 @@ function incomplete(out, state, say) {
   return { ok: false, success: false, state, hostExecuted: false, say };
 }
 
-function listKept(project, drops) {
+function applyDrops(project, drops) {
   if (!project || !fs.existsSync(project)) return [];
-  const drop = new Set(drops);
-  const mapped = {
-    "bridge/listen.js": "cep-listener",
-    "native/filter-loader.js": "native-addon",
-    "system/call.js": "host-system-call"
-  };
-  const kept = [];
-  for (const [relative, behavior] of Object.entries(mapped)) {
-    const full = path.join(project, relative);
-    if (!fs.existsSync(full)) continue;
-    if (drop.has(behavior)) fs.rmSync(full, { force: true });
-    else kept.push(relative);
+  const root = path.resolve(project);
+  const removed = [];
+  for (const drop of drops) {
+    for (const relative of drop.files || []) {
+      const full = path.resolve(project, relative);
+      if (full !== root && !full.startsWith(`${root}${path.sep}`)) continue;
+      if (!fs.existsSync(full) || !fs.statSync(full).isFile()) continue;
+      fs.rmSync(full, { force: true });
+      removed.push(relative);
+    }
   }
-  for (const relative of ["jsx/rename.jsx", "shim/webview.js"]) {
-    if (fs.existsSync(path.join(project, relative))) kept.push(relative);
+  return removed;
+}
+
+function entryNotes(project, kind) {
+  if (kind === "empty" || !project) return [];
+  const main = path.join(project, "src", "main.tsx");
+  if (!fs.existsSync(main)) return [];
+  const text = fs.readFileSync(main, "utf8");
+  if (/\buxp\s*\./.test(text) && !/import\s*\{[^}]*\buxp\b/.test(text)) {
+    return ["src/main.tsx references uxp without importing it. Fix that import as part of the feature. This existing project was not rewritten automatically."];
   }
-  return kept;
+  return [];
 }
 
 function block(out, ask) {
   const session = readMerged(out);
   if (!session.asks.some((item) => item.id === ask.id && item.status === "pending")) publishAsk(out, ask);
-  return { ok: false, blocked: ask.id, say: `Answer ${ask.id} before the skill writes or drops files.` };
+  return { ok: false, success: false, blocked: ask.id, say: `Answer ${ask.id} before the skill writes or drops files.` };
 }
 
 function hostManual(intake, floor) {

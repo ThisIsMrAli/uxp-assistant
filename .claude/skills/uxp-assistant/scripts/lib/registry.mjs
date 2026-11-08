@@ -31,8 +31,8 @@ export const HOST_PAGES = {
 export function pagesForRequest({ host, goal = "", behaviors = [] } = {}) {
   const pages = SHARED_PAGES.map((page) => ({ ...page, scope: "shared" }));
   const text = `${goal} ${behaviors.join(" ")}`.toLowerCase();
-  const photoshop = host === "phxs" || host === "PS" || /photoshop|layer\.name|activeLayers|executeAsModal/.test(text);
-  const premiere = host === "ppro" || host === "premierepro" || /premiere|importFiles/.test(text);
+  const photoshop = host === "phxs" || host === "PS" || /photoshop|\blayer\b|document title|document\.title|activeLayers|executeAsModal/.test(text);
+  const premiere = host === "ppro" || host === "premierepro" || /premiere|importfiles/.test(text);
   if (photoshop) {
     for (const id of ["photoshop.document", "photoshop.layer", "photoshop.executeAsModal", "photoshop.changelog"]) {
       pages.push({ id, url: HOST_PAGES[id], scope: "host" });

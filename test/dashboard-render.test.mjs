@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { pathToFileURL } from "node:url";
 import { launch } from "../.claude/skills/uxp-assistant/scripts/lib/cdp.mjs";
 import { findChrome } from "../.claude/skills/uxp-assistant/scripts/lib/chrome.mjs";
 import { assetsDir } from "../.claude/skills/uxp-assistant/scripts/lib/paths.mjs";
@@ -53,6 +54,11 @@ test("the dashboard shows the outcome and does not call a skipped feature finish
     assert.match(doneText, /Show each selected layer id and name/);
     assert.doesNotMatch(doneText, /Review finished/);
     assert.doesNotMatch(doneText, /Everything you chose is done/);
+    await page.send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+    await page.goto(doneInfo.url);
+    await page.eval("new Promise((resolve) => setTimeout(resolve, 400))");
+    const phone = await page.eval("document.body.innerText");
+    assert.match(phone, /Manual steps are in host-verification.md/);
   } finally {
     await page.close();
     await unknownDash.close();
@@ -80,7 +86,7 @@ async function fetchImpl(url) {
   const text = id === "photoshop.layer"
     ? "name string R W 22.5 Name of the layer.\n"
     : id === "photoshop.document"
-      ? "activeLayers Layers R W 22.5 The selected layers in the document. (26.9)\n"
+      ? "activeLayers\n\nLayers\n\nR W\n\n22.5\n\nThe selected layers in the document. (26.9)\n"
       : id === "photoshop.executeAsModal"
         ? "commandName string required 23.0 shown above the progress bar.\n"
         : `shared ${id || "page"}\n`;
@@ -90,12 +96,18 @@ async function fetchImpl(url) {
 async function scaffoldImpl(parent) {
   const folder = path.join(parent, "plugin");
   fs.mkdirSync(path.join(folder, "src"), { recursive: true });
+  const mod = pathToFileURL(path.resolve(".claude/skills/uxp-assistant/scripts/lib/archive.mjs")).href;
+  fs.writeFileSync(path.join(folder, "pack.mjs"), `import fs from "node:fs";
+import { writeStoredZip } from ${JSON.stringify(mod)};
+const entries = ["src/Selection.tsx", "src/selection-read.mjs"].filter((name) => fs.existsSync(name)).map((name) => ({ name, data: fs.readFileSync(name) }));
+writeStoredZip("out.ccx", entries);
+`);
   fs.writeFileSync(path.join(folder, "package.json"), `${JSON.stringify({
     name: "plugin",
     scripts: {
-      test: "node -e \"process.exit(0)\"",
+      test: "node --test",
       build: "node -e \"process.exit(0)\"",
-      ccx: "node -e \"require('fs').writeFileSync('out.ccx','PK')\""
+      ccx: "node pack.mjs"
     }
   }, null, 2)}\n`);
   fs.writeFileSync(path.join(folder, "uxp.config.ts"), "export const manifest = { requiredPermissions: {} };\n");
@@ -104,6 +116,8 @@ async function scaffoldImpl(parent) {
 }
 
 function writeShow(project) {
-  fs.writeFileSync(path.join(project, "src", "Selection.tsx"), "export function SelectionPanel(){ return <button type=\"button\" disabled>Read selection</button>; }\n");
-  fs.writeFileSync(path.join(project, "src", "selection-read.mjs"), "export function readSelection(){ return { status: \"Read outside executeAsModal.\" }; }\n");
+  fs.mkdirSync(path.join(project, "test"), { recursive: true });
+  fs.writeFileSync(path.join(project, "src", "Selection.tsx"), "export function SelectionPanel(){ return <section><h1>Selected layer ids</h1><button type=\"button\" disabled>Read selection</button></section>; }\n");
+  fs.writeFileSync(path.join(project, "src", "selection-read.mjs"), "export function readSelection(app){ const layers = app?.activeDocument?.activeLayers || []; return { status: layers.length ? \"Read outside executeAsModal.\" : \"No selected layer.\" }; }\n");
+  fs.writeFileSync(path.join(project, "test", "selection.test.mjs"), "import assert from \"node:assert/strict\"; import { test } from \"node:test\"; import { readSelection } from \"../src/selection-read.mjs\"; test(\"missing host\", () => { assert.match(readSelection(null).status, /selected layer/); });\n");
 }

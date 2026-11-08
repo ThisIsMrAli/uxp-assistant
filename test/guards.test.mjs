@@ -5,6 +5,8 @@ import path from "node:path";
 import { test } from "node:test";
 import { removeProfile } from "../.claude/skills/uxp-assistant/scripts/lib/chrome.mjs";
 import { effectiveHostFloor, floorsFromText, WEBVIEW_FLOOR_NOT_USED } from "../.claude/skills/uxp-assistant/scripts/lib/floors.mjs";
+import { narrowRequiredPermissions } from "../.claude/skills/uxp-assistant/scripts/lib/permissions.mjs";
+import { installerEntry } from "../.claude/skills/uxp-assistant/scripts/lib/scaffold.mjs";
 import { resolveCapability } from "../.claude/skills/uxp-assistant/scripts/lib/capability.mjs";
 import { previewRename, findCollisions } from "../.claude/skills/uxp-assistant/scripts/lib/rename-preview.mjs";
 import { refreshPages } from "../.claude/skills/uxp-assistant/scripts/lib/refresh.mjs";
@@ -34,6 +36,28 @@ test("floors do not invent the WebView floor or apiVersion", () => {
     activeLayers: null
   }, null);
   assert.equal(unknown.minVersion, null);
+});
+
+test("commandName 23.0 is read across lines and a nested permission object stays valid", () => {
+  const parsed = floorsFromText([
+    { id: "photoshop.executeAsModal", ok: true, text: "commandName\n\nstring\n\nrequired\n\n23.0\n\nThis description is shown above the progress bar.\n" },
+    { id: "photoshop.layer", ok: true, text: "Name\n\nname\n\nstring\n\nR W\n\n22.5\n\nName of the layer.\n" }
+  ]);
+  assert.equal(parsed.executeAsModalCommand, "23.0");
+  assert.equal(parsed.layerName, "22.5");
+  const source = `export const manifest = {\n  requiredPermissions: {\n    localFileSystem: "fullAccess",\n    launchProcess: {\n      schemes: ["https"],\n    },\n    network: {\n      domains: ["all"],\n    },\n  },\n  featureFlags: { enableAlerts: true },\n};\n`;
+  const narrowed = narrowRequiredPermissions(source);
+  assert.equal(narrowed.ok, true);
+  assert.match(narrowed.source, /requiredPermissions: \{\}/);
+  assert.doesNotMatch(narrowed.source, /network:/);
+  assert.match(narrowed.source, /featureFlags/);
+  const previous = process.cwd();
+  process.chdir(os.tmpdir());
+  try {
+    assert.equal(fs.existsSync(installerEntry()), true);
+  } finally {
+    process.chdir(previous);
+  }
 });
 
 test("a failed refresh keeps old text and is not fresh", async () => {

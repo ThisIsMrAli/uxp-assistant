@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-export function buildContract({ intake, capability, projectPath, docs, kept }) {
+export function buildContract({ intake, capability, projectPath, docs, kept, baseline, notes }) {
   return {
     goal: intake.goal,
     state: capability.state,
@@ -23,7 +23,13 @@ export function buildContract({ intake, capability, projectPath, docs, kept }) {
     })),
     evidence: capability.evidence || [],
     kept: kept || [],
+    baseline: baseline || { files: {}, archives: [] },
+    notes: notes || [],
     detail: capability.detail,
+    unverified: [
+      "The Adobe host was not executed.",
+      "A documented name in fresh pages is not semantic proof of the implementation."
+    ],
     doNot: [
       "Do not replace the goal text.",
       "Do not apply the selected-layer rename fixture unless fixture is selected-layer-rename and the goal is still that rename.",
@@ -33,8 +39,12 @@ export function buildContract({ intake, capability, projectPath, docs, kept }) {
       "Do not claim the Adobe host executed."
     ],
     handoff: capability.state === "awaiting-agent-implementation"
-      ? "The invoking assistant writes the feature in this project, then records agent-result.json. The skill runs the project's test, build, and ccx scripts and keeps their exit codes."
-      : "Do not write feature code for this state."
+      ? "The invoking assistant writes this goal in the project, then records agent-result.json with the files that changed. A stock file or a no-op test is not the feature. The skill keeps the real command exits and does not treat them as semantic proof."
+      : capability.state === "unknown"
+        ? "Pause. Name the host API or refresh the page that should document it, then continue. Do not invent the call, do not swap in the rename fixture, and do not mark the feature done."
+        : capability.state === "docs-incomplete"
+          ? "Refresh the pages that are failed or stale before writing feature code. A failed fetch is not fresh and is not a reason to implement from memory."
+          : "Do not write feature code for this state."
   };
 }
 
@@ -74,7 +84,7 @@ export function writeContractFiles(project, contract) {
 }
 
 export function goalWasReplaced(contract, filesText) {
-  if (contract.fixture === "selected-layer-rename") return false;
-  if (!/rename/i.test(contract.goal) && /Rename selected layers/.test(filesText)) return true;
-  return false;
+  if (contract?.fixture === "selected-layer-rename") return false;
+  if (/rename/i.test(contract?.goal || "")) return false;
+  return /Rename selected layers|previewRename|function padNumber/.test(filesText);
 }

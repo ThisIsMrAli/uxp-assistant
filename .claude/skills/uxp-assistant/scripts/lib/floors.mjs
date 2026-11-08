@@ -38,6 +38,19 @@ export function compareVersions(left, right) {
   return 0;
 }
 
+function propertyBlock(text, name, description) {
+  const lines = String(text || "").split(/\r?\n/);
+  for (let i = 0; i < lines.length; i += 1) {
+    if (lines[i].trim() !== name) continue;
+    const window = lines.slice(i, i + 16).join("\n");
+    if (description && !description.test(window)) continue;
+    const version = window.match(/\b(\d+\.\d+)\b/);
+    if (version) return version[1];
+  }
+  const compact = String(text || "").match(new RegExp(`(?:^|\\n)\\s*${name}\\b[\\s\\S]{0,160}?(\\d+\\.\\d+)[\\s\\S]{0,160}?(?:${description.source})`, "i"));
+  return compact ? compact[1] : null;
+}
+
 function near(text, token) {
   const index = text.toLowerCase().indexOf(token.toLowerCase());
   if (index < 0) return "";
@@ -54,20 +67,18 @@ export function floorsFromText(pages) {
   const active = near(document, "activeLayers");
   const activeVersion = active.match(/(\d+\.\d+)/);
   const activeNote = active.match(/\((\d+\.\d+)\)/);
-  const layerName = near(layer, "name");
-  const nameVersion = /name of the layer/i.test(layer) ? (layerName.match(/(\d+\.\d+)/) || layer.match(/Name of the layer[\s\S]{0,40}?(\d+\.\d+)/i)) : null;
-  const nameLine = layer.match(/name[^\n]{0,80}?(\d+\.\d+)[^\n]{0,80}Name of the layer/i);
-  const modalVersion = modal.match(/commandName[^\n]{0,80}?(\d+\.\d+)/i) || modal.match(/(\d+\.\d+)[^\n]{0,40}progress bar/i);
+  const nameLine = propertyBlock(layer, "name", /Name of the layer/i);
+  const modalVersion = propertyBlock(modal, "commandName", /\d+\.\d+/);
   const historyVersion = modal.match(/suspendHistory[\s\S]{0,80}?(\d+\.\d+)/i);
   const manifestHostFloor = /minVersion[^\n]{0,80}?(\d+\.\d+\.\d+)/.exec(manifest);
   const manifestSchema = /manifest version\s+`?(\d+)`?/i.exec(manifest);
   const changelogWrite = /set Document\s*`?activeLayers`?|activeLayers` by providing an array/i.test(changelog);
   return {
-    layerName: nameLine?.[1] || (nameVersion ? nameVersion[1] : null),
+    layerName: nameLine,
     activeLayers: activeVersion ? activeVersion[1] : null,
     activeLayersParenthetical: activeNote ? activeNote[1] : null,
     activeLayersWriteByArrayInChangelog: changelog ? changelogWrite : null,
-    executeAsModalCommand: modalVersion ? modalVersion[1] : null,
+    executeAsModalCommand: modalVersion,
     suspendHistory: historyVersion ? historyVersion[1] : null,
     manifestStatesNumericHostFloor: Boolean(manifestHostFloor),
     manifestSchemaVersion: manifestSchema ? manifestSchema[1] : null,

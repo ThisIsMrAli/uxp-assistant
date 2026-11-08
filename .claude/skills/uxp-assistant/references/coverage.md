@@ -8,4 +8,8 @@ A live refresh on 8 Nov 2026 returned all 14 requested pages fresh. The Layer pa
 
 The Bolt starter Photoshop `minVersion` is 24.2.0. When that is newer than the proven API floor, the starter value stays. The WebView floor 26.0.0 is not applied.
 
+The Document page also lists `title` as a read string at 22.5, described as "Document title". `commandName` is read when the property name and the version are on separate lines. The table header "Name" is not the layer `name` property.
+
+A camelCase API that is absent from the first fetched pages is looked up in the official AdobeDocs class tree for that host. Premiere `importFiles` is on the Project class page, not on the short Premiere API index. A miss stays `unknown` and pauses. It does not become a permanent refusal.
+
 Missing text stays unknown. This file is not a host pass.
