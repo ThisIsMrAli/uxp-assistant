@@ -10,6 +10,19 @@ import { readZip } from "./archive.mjs";
  * them itself. They are not the host theme and not Spectrum components.
  */
 
+const BOLT_LIGHT = {
+  "--uxp-host-background-color": "#b8b8b8",
+  "--uxp-host-text-color": "#424242",
+  "--uxp-host-border-color": "#9c9c9c",
+  "--uxp-host-link-text-color": "#4b9cf5",
+  "--uxp-host-widget-hover-background-color": "#9d9d9d",
+  "--uxp-host-widget-hover-text-color": "#424242",
+  "--uxp-host-widget-hover-border-color": "#9d9d9d",
+  "--uxp-host-text-color-secondary": "#424242",
+  "--uxp-host-link-hover-text-color": "#424242",
+  "--uxp-host-label-text-color": "#424242"
+};
+
 const BOLT_DARK = {
   "--uxp-host-background-color": "#535353",
   "--uxp-host-text-color": "#ffffff",
@@ -33,21 +46,25 @@ export function bundleEntries(ccxPath) {
 }
 
 export function bundlePreviewHtml(scriptName) {
-  const variables = Object.entries(BOLT_DARK).map(([key, value]) => `${key}: ${value};`).join(" ");
+  const dark = Object.entries(BOLT_DARK).map(([key, value]) => `${key}: ${value};`).join(" ");
+  const light = Object.entries(BOLT_LIGHT).map(([key, value]) => `${key}: ${value};`).join(" ");
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <title>Built panel bundle with a labelled shim</title>
   <style>
-    :root { ${variables} }
-    body { margin: 0; background: var(--uxp-host-background-color); color: var(--uxp-host-text-color); font-family: sans-serif; }
-    .shim-banner { background: #3a2a12; color: #ffd59a; padding: 12px 16px; font-size: 14px; }
-    #app { padding: 16px; }
+    :root, :root[data-theme="dark"] { ${dark} }
+    :root[data-theme="light"] { ${light} }
+    html, body { margin: 0; background: var(--uxp-host-background-color); color: var(--uxp-host-text-color); font-family: sans-serif; }
+    #shim-fill { position: fixed; inset: 0; z-index: -1; background: var(--uxp-host-background-color); }
+    .shim-banner { background: #3a2a12; color: #ffd59a; padding: 8px 12px; font-size: 12px; line-height: 16px; }
+    #app { padding: 0; }
   </style>
 </head>
 <body data-surface="built-bundle-shim" data-host-executed="false">
-  <p class="shim-banner" id="shim-banner">Built panel bundle with a labelled UXP and Photoshop shim. Poster is mock host data, not a Photoshop document. CSS variables are Bolt's dark table, not Spectrum and not the host theme. This panel uses plain HTML, not Spectrum components. Adobe host: NOT TESTED. Not a UXP equivalence claim.</p>
+  <div id="shim-fill"></div>
+  <p class="shim-banner" id="shim-banner">Shim label, separate from the generated component. Poster is mock host data, not a Photoshop document. Colors are Bolt host-variable tables, not Spectrum and not the host theme. The panel is plain HTML. sp-* is not mocked. Adobe host: NOT TESTED.</p>
   <p id="shim-error"></p>
   <div id="app"></div>
   <script>

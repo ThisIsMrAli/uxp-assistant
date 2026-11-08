@@ -4,18 +4,24 @@
   "npm": "10.9.9",
   "candidate": "The commit that adds this file. The file cannot contain its own commit SHA.",
   "priorCandidateUnderReview": {
-    "commit": "dc173ce8985d35f0a684f2d684d750c655f0cde0",
-    "tests": "38 pass on this cloud. The bot computer ran the exported artifact with node box/run.mjs --acceptance: 36 pass, 0 fail, about 30.9s. Browser options were not in that run.",
-    "independentQa": "PASS with residuals. The four command holes stayed closed. Residuals were spawnSync of an unhashed sibling and a vite.config.ts import outside the packaging hash. This later candidate closes those two without claiming executable closure.",
+    "commit": "bbbb390f8d859ca93233dcf02047b720f8cbe360",
+    "tests": "40 pass, 0 fail on this cloud. The bot computer ran that exact export with node box/run.mjs --acceptance: 38 pass, 0 fail, 29783ms. No browser flags.",
+    "independentQa": "Correctness and regression PASS. Visual GAP on the generated panel: app.css h1 at 3.2em, body flex with a full viewport, and index.scss making the button transparent so its text stayed black on #535353. transition remained in the starter CSS. This later candidate deletes those declarations from the generated app.css and index.scss. globalThis[\"eval\"] still runs after approval and a later edit still blocks. That spelling stays off the finite call list.",
     "documentTitle": {
-      "file": "evidence/candidates/dc173ce8985d35f0a684f2d684d750c655f0cde0/document-title.ccx",
+      "file": "evidence/candidates/bbbb390f8d859ca93233dcf02047b720f8cbe360/document-title.ccx",
       "bytes": 126207,
-      "sha256": "f6cb10463be16cd5799a58dd5134a791f097047fccd001f6a91e9125a98b384e"
+      "sha256": "c9c3429c5adeb892068209d5de391fc068d3ae734e1cd0da8b082be40be1d66a"
     },
     "existingDocumentTitle": {
-      "file": "evidence/candidates/dc173ce8985d35f0a684f2d684d750c655f0cde0/existing-document-title.ccx",
+      "file": "evidence/candidates/bbbb390f8d859ca93233dcf02047b720f8cbe360/existing-document-title.ccx",
       "bytes": 126207,
-      "sha256": "029dcc86f8f0b4fb98426a2719d085db2b027f5b55c49d3193c46f4eda88d703"
+      "sha256": "e08dca3b05ca28241a804cf6808e732d28645f0c8bdf8078557f86420bd859ac"
+    },
+    "dc173": {
+      "commit": "dc173ce8985d35f0a684f2d684d750c655f0cde0",
+      "botComputerAcceptance": "36 pass, 0 fail, about 30.9s, no browser",
+      "documentTitleSha256": "f6cb10463be16cd5799a58dd5134a791f097047fccd001f6a91e9125a98b384e",
+      "existingDocumentTitleSha256": "029dcc86f8f0b4fb98426a2719d085db2b027f5b55c49d3193c46f4eda88d703"
     },
     "earlierPass": {
       "commit": "92dd2bca76dcd82376453d794fd0f19e25f9359a",
@@ -42,11 +48,11 @@
   "premiere": "NOT TESTED",
   "sourceReview": "pending",
   "featureCorrectness": "not-decided",
-  "tests": {
+    "tests": {
     "command": "node --test",
     "exit": 0,
-    "tests": 40,
-    "pass": 40,
+    "tests": 41,
+    "pass": 41,
     "fail": 0,
     "log": "evidence/logs/npm-test.log"
   },
@@ -54,8 +60,8 @@
   "fixture": null,
   "emptyFolder": {
     "file": "evidence/artifacts/document-title.ccx",
-    "bytes": 126207,
-    "sha256": "c9c3429c5adeb892068209d5de391fc068d3ae734e1cd0da8b082be40be1d66a",
+    "bytes": 126797,
+    "sha256": "411c2cc91b21cdb98ab4ee5e20975f33ed36b478adf534e2c53e945b588edcd5",
     "containsDocumentTitle": true,
     "containsActiveDocument": true,
     "containsRenameFixturePhrase": false,
@@ -63,8 +69,8 @@
   },
   "existingProject": {
     "file": "evidence/artifacts/existing-document-title.ccx",
-    "bytes": 126207,
-    "sha256": "e08dca3b05ca28241a804cf6808e732d28645f0c8bdf8078557f86420bd859ac",
+    "bytes": 126797,
+    "sha256": "6fe8b7d7142feaadb43f311d562c4f38d4caec586ba912445d6343efb9d20ad3",
     "containsDocumentTitle": true,
     "containsActiveDocument": true,
     "containsRenameFixturePhrase": false,
@@ -79,11 +85,17 @@
     "hostExecuted": false,
     "note": "The session page is a source-text preview plus mocks. It is not a UXP UI preview. The built-bundle screenshots load the acceptance package script behind a labelled shim. Poster is mock data. Adobe host NOT TESTED.",
     "bundle": {
-      "idle": "evidence/preview/bundle-idle.png",
-      "afterRead": "evidence/preview/bundle-after-read.png",
+      "views": [
+        "evidence/preview/bundle-320-dark.png",
+        "evidence/preview/bundle-320-light.png",
+        "evidence/preview/bundle-420-dark.png",
+        "evidence/preview/bundle-420-light.png",
+        "evidence/preview/bundle-320-dark-after-read.png"
+      ],
       "log": "evidence/preview/bundle-preview-log.json",
-      "script": "assets/index-Chc7lSNg.js",
-      "scriptSha256": "3116a2d703849c4826cbdfadc42f3d1bd8d00de91e73b8c4833924952b03f9a3"
+      "script": "assets/index-sOgqP8N4.js",
+      "scriptSha256": "aea224c88588a6916d7b17f9613bca920cf432f4958c0f5eea3e75749011497a",
+      "starterRules": "The generated app.css and index.scss no longer contain font-size 3.2em, 100vh, place-items, display flex, a transparent button, border none, or a transition declaration. The panel button is a real button with host color variables. The brown banner is the preview page, not the component."
     }
   },
   "acceptanceNote": "Zip timestamps can change a later digest. These files are the retained archives from this later run. Photoshop and Premiere were not launched. webview false and hybrid false on the empty-folder installer were the answered native choice.",
@@ -103,8 +115,9 @@
     "A later rebuild can produce a different SHA-256 because zip timestamps differ.",
     "importFiles is a handoff from the official Project class page. This run did not package a Premiere plugin.",
     "Passing this suite does not declare the product ready.",
-    "The command checker hashes static local code imports from the supported scripts and from vite.config.ts and uxp.config.ts. JSON, including package.json, package modules, and node builtins are outside that set. Process and eval in a hashed file are refused. This is not a sandbox and not a complete executable closure.",
-    "npm audit reports 7 moderate advisories through pinned create-bolt-uxp@1.3.27. The suggested fix is create-bolt-uxp@0.2.5, an older major, and was not applied. See evidence/audit.json.",
-    "The built-bundle page is this cloud environment. It is not the box browser and not Photoshop. The generated plugin install reported its own advisories during acceptance and is a separate tree from the skill audit."
+    "The command checker hashes static local code imports from the supported scripts and from vite.config.ts and uxp.config.ts. JSON, including package.json, package modules, and node builtins are outside that set. Direct eval(, new Function(, and vm.run in a hashed file are refused. globalThis[\"eval\"] is not on that finite list, so an approved file that uses it can run. A later edit of that file still blocks. The list is not being extended. This is not a sandbox and not a complete executable closure.",
+    "npm audit on the skill tree still reports 7 moderate advisories through pinned create-bolt-uxp@1.3.27. The suggested fix is create-bolt-uxp@0.2.5, an older major, and was not applied. See evidence/audit.json.",
+    "The generated plugin tree started at shell-quote 1.8.1 through dev npm-run-all 4.1.5, vite 6.3.5, and ws 8.14.2, with 1 critical, 14 high, and 2 low. Those packages are dev toolchain, not the panel runtime. npm audit fix --package-lock-only then npm ci, without --force, installed shell-quote 1.12.0, vite 6.4.5, and ws 8.22.2. The acceptance audit then reported 0 critical and 0 high. Seven moderate advisories remain through vite-uxp-plugin and meta-bolt. The offered fix is vite-uxp-plugin 0.2.5, a breaking downgrade, and was not applied. See evidence/generated-plugin-audit.json and evidence/generated-plugin-audit-observed.json. A passing test does not close the remaining advisories.",
+    "The built-bundle page is this cloud environment. It is not the box browser and not Photoshop. Poster is mock data. Spectrum web components were not loaded."
   ]
 }
