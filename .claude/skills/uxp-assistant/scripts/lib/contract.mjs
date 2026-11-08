@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-export function buildContract({ intake, capability, projectPath, docs, kept, baseline, notes }) {
+export function buildContract({ intake, capability, projectPath, docs, kept, baseline, notes, runtime, design, preview }) {
   return {
     goal: intake.goal,
     state: capability.state,
@@ -25,6 +25,9 @@ export function buildContract({ intake, capability, projectPath, docs, kept, bas
     kept: kept || [],
     baseline: baseline || { files: {}, archives: [] },
     notes: notes || [],
+    runtime: runtime || null,
+    design: design || null,
+    preview: preview || null,
     detail: capability.detail,
     unverified: [
       "The Adobe host was not executed.",
@@ -41,7 +44,7 @@ export function buildContract({ intake, capability, projectPath, docs, kept, bas
       "Do not claim the Adobe host executed."
     ],
     handoff: capability.state === "awaiting-agent-implementation"
-      ? "The invoking assistant writes this goal in the project, then records agent-result.json with the files that changed. A stock file or a no-op test is not the feature. The skill keeps the real command exits and does not treat them as semantic proof."
+      ? "The invoking assistant writes this goal in the project using design-constraints.md and the chosen runtime, then records agent-result.json with the files that changed. A stock file or a no-op test is not the feature. A browser preview is not the host. The skill keeps the real command exits and does not treat them as semantic proof."
       : capability.state === "unknown"
         ? "Pause. Name the host API or refresh the page that should document it, then continue. Do not invent the call, do not swap in the rename fixture, and do not mark the feature done."
         : capability.state === "docs-incomplete"

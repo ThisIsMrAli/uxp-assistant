@@ -12,6 +12,7 @@ export const STEPS = [
   { id: "intake", label: "Intake", hint: "Goal, host, framework, OS, context, name, id, and permissions." },
   { id: "docs", label: "Official docs", hint: "Fetch shared UXP pages and the host pages this goal needs." },
   { id: "plan", label: "Plan", hint: "Classify by behavior. A missing shared page is not an unsupported host API." },
+  { id: "design", label: "Design", hint: "Choose a design source that is on disk, then apply the retrieved UXP limits." },
   { id: "scaffold", label: "Scaffold", hint: "An empty folder uses create-bolt-uxp. An existing project keeps its files." },
   { id: "implementation", label: "Implementation", hint: "The invoking assistant writes the requested goal in the project. A missing recipe is not success and is not a rename." },
   { id: "ui", label: "UI", hint: "Visible errors, disabled actions, loading, and keyboard." },
@@ -196,7 +197,7 @@ export function setStep(out, id, status, detail, extra = {}) {
 
 export function recordFacts(out, patch) {
   return mutate(out, (draft) => {
-    for (const key of ["intake", "plan", "docs", "verification", "packageResult", "scaffold", "outcome", "contract"]) {
+    for (const key of ["intake", "plan", "docs", "verification", "packageResult", "scaffold", "outcome", "contract", "commandProvenance"]) {
       if (patch[key] !== undefined) draft[key] = patch[key];
     }
     if (patch.addon) draft.addon = { ...draft.addon, ...patch.addon };
@@ -229,7 +230,8 @@ export function publishAsk(out, ask) {
     affects: ask.affects || [],
     images: ask.images || [],
     blocks: ask.blocks || [],
-    askedAt: now()
+    askedAt: now(),
+    ...(ask.scope ? { scope: ask.scope, scopeSha: bindScope(ask.scope) } : {})
   };
   const session = mutate(out, (draft) => {
     draft.asks = draft.asks.filter((item) => item.id !== ask.id);
@@ -241,13 +243,18 @@ export function publishAsk(out, ask) {
   return { session, ask: normalized };
 }
 
+export function bindScope(scope) {
+  if (!scope) return "";
+  return crypto.createHash("sha256").update(JSON.stringify(scope)).digest("hex");
+}
+
 export function answerFromChat(out, id, value) {
   const session = readSession(out);
   const ask = session?.asks.find((item) => item.id === id);
   if (!ask) throw new Error(`No question named ${id}. Publish it with the ask command first.`);
   const option = matchOption(ask, value);
   if (!option) throw new Error(`"${value}" is not one of: ${ask.options.map((item) => item.id).join(", ")}.`);
-  appendAnswerLine(out, { type: "answer", askId: ask.id, nonce: ask.nonce, value: option.id, via: "chat", at: now() });
+  appendAnswerLine(out, answerLine(ask, option.id, "chat"));
   mutate(out, (draft) => {
     const step = stepForAsk(id, draft);
     if (step) setStepIn(draft, step, "running", `You chose: ${plainLabel(option.label)}`);
@@ -298,7 +305,13 @@ const ASK_STEP = {
   framework: "intake",
   host: "intake",
   consequential: "implementation",
+  feasibility: "plan",
+  "context-evidence": "plan",
+  runtime: "plan",
+  design: "design",
+  validation: "design",
   "narrow-permissions": "scaffold",
+  "script-change": "package",
   "keep-listener": "plan",
   "keep-native-addon": "plan",
   "keep-system": "plan"
@@ -307,6 +320,22 @@ const ASK_STEP = {
 export function stepForAsk(id, draft) {
   if (ASK_STEP[id]) return ASK_STEP[id];
   return draft.steps.find((step) => step.status === "running")?.id || "plan";
+}
+
+function answerLine(ask, value, via) {
+  return {
+    type: "answer",
+    askId: ask.id,
+    nonce: ask.nonce,
+    value,
+    via,
+    at: now(),
+    ...(ask.scope ? { scopeSha: ask.scopeSha || bindScope(ask.scope) } : {})
+  };
+}
+
+export function dashboardAnswerLine(ask, value) {
+  return answerLine(ask, value, "dashboard");
 }
 
 function setStepIn(draft, id, status, detail, extra = {}) {

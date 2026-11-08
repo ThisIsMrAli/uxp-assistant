@@ -4,7 +4,12 @@ import { assessGoal, assessTree, summarize } from "./assess.mjs";
 import { resolveCapability } from "./capability.mjs";
 import { discoverOfficialPages } from "./discover.mjs";
 import { buildContract, writeContractFiles } from "./contract.mjs";
-import { consequentialAsk, frameworkAsk, hostAsk, keepAsk, modeAsk, narrowAsk } from "./ask.mjs";
+import { consequentialAsk, frameworkAsk, hostAsk, keepAsk, modeAsk, narrowAsk, scriptChangeAsk } from "./ask.mjs";
+import { assessCepSources } from "./cep/signals.mjs";
+import { writeDesignConstraints } from "./design-skill.mjs";
+import { skillRoot } from "./paths.mjs";
+import { previewDocument } from "./preview.mjs";
+import { stageDecision } from "./stages.mjs";
 import { effectiveHostFloor, floorsFromText } from "./floors.mjs";
 import { narrowRequiredPermissions } from "./permissions.mjs";
 import { runPackage } from "./package-project.mjs";
@@ -12,7 +17,7 @@ import { rememberOut } from "./paths.mjs";
 import { REVIEW_LIMIT, reviewArchive, reviewClaim, reviewCommandProvenance, selectArchives, snapshotProject, testsCoverFeature } from "./review.mjs";
 import { refreshPages, readPageText } from "./refresh.mjs";
 import { pagesForRequest } from "./registry.mjs";
-import { publishAsk, readMerged, recordFacts, setMode, setStep, startSession } from "./session.mjs";
+import { bindScope, publishAsk, readAnswers, readMerged, recordFacts, setMode, setStep, startSession } from "./session.mjs";
 import { findApp, findFramework, stackInventory } from "./stack.mjs";
 
 const KEEP = {
@@ -127,10 +132,39 @@ export async function runWorkflow(options) {
     return { ok: false, success: false, state: "docs-incomplete", out, hostExecuted: false, contract: held, say: paused.detail };
   }
 
-  if (capability.state !== "awaiting-agent-implementation") {
-    const held = hold(out, intake, capability, options.projectPath || "", summary, plan, behaviors, []);
-    return { ok: false, success: false, state: capability.state, out, hostExecuted: false, contract: held, say: capability.detail };
+  const cep = assessCepSources(files);
+  plan.cep = { hybrid: cep.hybrid, origins: cep.origins, rejected: cep.rejected, notes: cep.notes };
+  const staged = stageDecision({
+    choice,
+    capability,
+    pages: pageText,
+    behaviors,
+    goal: intake.goal,
+    context: intake.context,
+    skillRoots: options.skillRoots || [path.resolve(skillRoot, "..")],
+    skipDesign: options.skipDesign || [skillRoot],
+    cepHybrid: cep.hybrid
+  });
+  if (staged.action === "ask") return block(out, staged.ask);
+  if (staged.action === "reject-continue" || staged.action === "hold-state") {
+    const held = hold(out, intake, capability, options.projectPath || "", summary, plan, behaviors, [], { notes: cep.notes });
+    return {
+      ok: false,
+      success: false,
+      state: capability.state,
+      out,
+      hostExecuted: false,
+      contract: held,
+      say: staged.say || capability.detail
+    };
   }
+  if (staged.action === "stop" || staged.action === "reject-runtime" || staged.action === "reject-design") {
+    recordFacts(out, { outcome: "stopped", verification: { hostExecuted: false, status: "NOT TESTED" } });
+    return { ok: false, success: false, state: "stopped", out, hostExecuted: false, say: staged.say };
+  }
+  const runtimeChoice = staged.runtime;
+  intake.webview = runtimeChoice === "webview";
+  intake.hybrid = runtimeChoice === "hybrid";
 
   const groups = new Map();
   for (const item of plan.askBeforeDrop) {
@@ -168,12 +202,14 @@ export async function runWorkflow(options) {
         id: intake.id,
         framework: intake.framework,
         app: intake.host,
-        installDeps: Boolean(options.installDeps)
+        installDeps: Boolean(options.installDeps),
+        webview: intake.webview,
+        hybrid: intake.hybrid
       });
     project = scaffold.folder;
     const manifestFloor = readStarterMin(project, app?.manifestApp);
-    recordFacts(out, { scaffold: { ...scaffold, manifestMinVersion: manifestFloor, effective: floor }, addon: { path: project } });
-    setStep(out, "scaffold", "done", `Installer wrote ${project}. WebView was not requested.`);
+    recordFacts(out, { scaffold: { ...scaffold, manifestMinVersion: manifestFloor, effective: floor, webview: intake.webview, hybrid: intake.hybrid }, addon: { path: project } });
+    setStep(out, "scaffold", "done", `Installer wrote ${project}. webview=${intake.webview} hybrid=${intake.hybrid}. Those flags are the answered runtime, not a hidden default.`);
   } else {
     setStep(out, "scaffold", "skipped", "Existing project. The installer did not replace it.");
   }
@@ -194,8 +230,39 @@ export async function runWorkflow(options) {
 
   const removed = applyDrops(project, drops);
   const kept = [...new Set(behaviors.map((item) => item.file).filter((file) => file && !removed.includes(file)))];
-  const notes = entryNotes(project, options.kind);
-  const contract = hold(out, intake, capability, project, summary, plan, behaviors, kept, { baseline: snapshotProject(project), notes });
+  const constraints = writeDesignConstraints({
+    runtime: runtimeChoice,
+    discovery: staged.discovery,
+    limits: staged.offer.limits,
+    contextNote: staged.contextCheck?.reason
+  });
+  fs.writeFileSync(path.join(project, "design-constraints.md"), constraints);
+  const preview = {
+    surface: runtimeChoice === "webview" ? "webview-browser" : runtimeChoice === "hybrid" ? "native-simulation" : "native-simulation",
+    hostExecuted: false,
+    file: "preview/index.html",
+    note: "Browser preview only. Native mutations are not executed. The Adobe host was NOT TESTED."
+  };
+  fs.mkdirSync(path.join(out, "preview"), { recursive: true });
+  fs.writeFileSync(path.join(out, "preview", "index.html"), previewDocument({
+    mode: runtimeChoice,
+    goal: intake.goal,
+    limits: staged.offer.limits.map((item) => item.quote)
+  }));
+  setStep(out, "design", "done", staged.design.skill
+    ? `Recorded ${staged.design.skill.name} at ${staged.design.skill.path}. It was not called as a model. design-constraints.md quotes the retrieved limits.`
+    : `No separate design skill was selected. design-constraints.md quotes the retrieved limits. ${staged.design.example.note}`);
+  const notes = [...entryNotes(project, options.kind), ...cep.notes];
+  if (runtimeChoice === "webview" || runtimeChoice === "hybrid") {
+    notes.push("A shim or a browser preview does not add a host API that the fresh pages did not document.");
+  }
+  const contract = hold(out, intake, capability, project, summary, plan, behaviors, kept, {
+    baseline: snapshotProject(project),
+    notes,
+    runtime: { id: runtimeChoice, webview: intake.webview, hybrid: intake.hybrid },
+    design: staged.design,
+    preview
+  });
   setStep(out, "implementation", "waiting", "awaiting-agent-implementation");
   return {
     ok: false,
@@ -240,8 +307,15 @@ export function recordImplementation(out, claimed, { runner } = {}) {
     publishOutcome(out, "failed", false);
     return { ok: false, success: false, state: "failed", hostExecuted: false, say: "Official docs are not all fresh. Tests and package were not run and were not marked done." };
   }
-  const provenance = reviewCommandProvenance(project, contract.baseline, claimed.approveScripts);
+  const grant = readScriptGrant(out);
+  const provenance = reviewCommandProvenance(project, contract.baseline, grant, { ignoredClaim: Boolean(claimed?.approveScripts) });
   if (!provenance.ok) {
+    if (provenance.scope) {
+      const current = readMerged(out).asks.find((item) => item.id === "script-change");
+      const pendingSame = current && current.status !== "answered" && JSON.stringify(current.scope) === JSON.stringify(provenance.scope);
+      if (!pendingSame) publishAsk(out, scriptChangeAsk(provenance));
+      return { ok: false, success: false, state: "script-change", blocked: "script-change", hostExecuted: false, say: provenance.say };
+    }
     setStep(out, "package", "failed", provenance.say);
     recordFacts(out, { outcome: "failed", verification: { hostExecuted: false, status: "NOT TESTED" }, commandProvenance: provenance });
     publishOutcome(out, "failed", false);
@@ -327,6 +401,19 @@ function publishOutcome(out, state, success, archives = "") {
   fs.writeFileSync(path.join(out, "report.md"), `# Status\n\nCommand success: ${success ? "recorded" : "not recorded"}\n\nFeature correctness: not decided\n\nSource and behavior review: pending\n\nState: ${state}\n\nGoal: ${report.goal || ""}\n\nHost executed: no\n\n${archives ? `New archives: ${archives}\n\n` : ""}${success ? REVIEW_LIMIT : "A failed or paused state is not a finished feature."}\n`);
 }
 
+function readScriptGrant(out) {
+  const session = readMerged(out);
+  const ask = session?.asks.find((item) => item.id === "script-change" && item.status === "answered");
+  if (!ask) return null;
+  if (ask.answer === "stop") return { source: "session-answer", declined: true, via: ask.via, scope: ask.scope };
+  if (ask.answer !== "approve") return null;
+  const line = readAnswers(out).find((item) => item.type === "answer" && item.askId === ask.id && item.nonce === ask.nonce && item.value === "approve");
+  if (!line) return null;
+  if (ask.scopeSha && line.scopeSha !== ask.scopeSha) return { source: "session-answer", via: line.via, scope: ask.scope, scopeSha: line.scopeSha || "" };
+  if (ask.scopeSha && ask.scopeSha !== bindScope(ask.scope)) return { source: "session-answer", via: line.via, scope: ask.scope, scopeSha: "" };
+  return { source: "session-answer", via: line.via, at: line.at, nonce: line.nonce, scope: ask.scope, scopeSha: line.scopeSha };
+}
+
 function hold(out, intake, capability, projectPath, summary, plan, behaviors, kept, extras = {}) {
   const contract = buildContract({
     intake: { ...intake, kind: intake.kind || "" },
@@ -335,7 +422,10 @@ function hold(out, intake, capability, projectPath, summary, plan, behaviors, ke
     docs: summary.pages,
     kept,
     baseline: extras.baseline,
-    notes: extras.notes
+    notes: extras.notes,
+    runtime: extras.runtime,
+    design: extras.design,
+    preview: extras.preview
   });
   if (projectPath) writeContractFiles(projectPath, contract);
   fs.writeFileSync(path.join(out, "implementation-contract.json"), `${JSON.stringify(contract, null, 2)}\n`);
@@ -381,7 +471,7 @@ function entryNotes(project, kind) {
 function block(out, ask) {
   const session = readMerged(out);
   if (!session.asks.some((item) => item.id === ask.id && item.status === "pending")) publishAsk(out, ask);
-  return { ok: false, success: false, blocked: ask.id, say: `Answer ${ask.id} before the skill writes or drops files.` };
+  return { ok: false, success: false, blocked: ask.id, out, hostExecuted: false, say: `Answer ${ask.id} before the skill writes or drops files.` };
 }
 
 function hostManual(intake, floor) {

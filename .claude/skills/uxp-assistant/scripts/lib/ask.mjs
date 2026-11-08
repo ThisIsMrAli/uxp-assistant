@@ -77,6 +77,98 @@ export function keepAsk(id, label, files = []) {
   };
 }
 
+export function feasibilityAsk(capability) {
+  const awaiting = capability?.state === "awaiting-agent-implementation";
+  const options = awaiting
+    ? [
+      { id: "continue", label: "Use this evidence and continue", detail: "A fresh page names a symbol from the goal. That is not proof the implementation is correct, and the host was not launched." },
+      { id: "stop", label: "Stop before any edit", detail: "Writes nothing." }
+    ]
+    : [
+      { id: "pause", label: "Pause before any edit", detail: capability?.state === "unsupported-with-evidence"
+        ? "A fresh page says this is unsupported. Do not implement it."
+        : "No fresh page establishes this goal. Name the API or refresh the page. Do not invent the call." },
+      { id: "stop", label: "Stop before any edit", detail: "Writes nothing." }
+    ];
+  return {
+    id: "feasibility",
+    title: "Evidence before edits",
+    prompt: `${capability?.detail || "Feasibility is not established."} Host execution is NOT TESTED. Continue is offered only when a fresh page names a symbol from the goal.`,
+    options
+  };
+}
+
+export function contextEvidenceAsk(check) {
+  return {
+    id: "context-evidence",
+    title: "Context is not confirmed",
+    prompt: `${check?.reason || "The context was not confirmed by a fresh page."} Keep it as unverified, or stop before any edit.`,
+    options: [
+      { id: "keep-unverified", label: "Keep the context as unverified", detail: "The session records the gap. It does not pretend the page confirmed the context." },
+      { id: "stop", label: "Stop before any edit", detail: "Writes nothing." }
+    ]
+  };
+}
+
+export function runtimeAsk(offer) {
+  const choices = offer?.choices || [];
+  return {
+    id: "runtime",
+    title: "Native UXP, WebView, or a bridge",
+    prompt: `Choose a surface the fresh pages support. ${ (offer?.gaps || []).join(" ") } A browser preview is not the Adobe host.`,
+    options: choices.map((item) => ({ id: item.id, label: item.label, detail: item.detail }))
+  };
+}
+
+export function designAsk(discovery) {
+  const options = [
+    { id: "uxp-constraints", label: "Use the retrieved UXP constraints", detail: discovery?.example?.note || "No design skill was searched." }
+  ];
+  for (const skill of discovery?.skills || []) {
+    options.push({
+      id: skill.id,
+      label: `Use ${skill.name}`,
+      detail: `Found at ${skill.path}. sha256 ${skill.sha256}. This is not a latest-version claim, and the skill is not run as another model.`
+    });
+  }
+  return {
+    id: "design",
+    title: "Design source",
+    prompt: "Which available design source should the panel follow? The retrieved UXP limits still apply. A skill that is not on disk is not offered.",
+    options
+  };
+}
+
+export function validationAsk() {
+  return {
+    id: "validation",
+    title: "What validation can record",
+    prompt: "Later test, build, and package commands record their exits. They do not decide feature correctness, and they do not launch Photoshop or Premiere.",
+    options: [
+      { id: "commands", label: "Record command exits later", detail: "The host stays NOT TESTED. Source and behavior review stays pending." },
+      { id: "stop", label: "Stop before any edit", detail: "Writes nothing." }
+    ]
+  };
+}
+
+export function scriptChangeAsk(provenance) {
+  const lines = (provenance?.changes || []).map((item) => (
+    item.kind === "command"
+      ? `${item.name} command: ${item.to}`
+      : `${item.name} sha256 ${item.to || "missing"}`
+  ));
+  return {
+    id: "script-change",
+    title: "Approve exact command and file changes",
+    prompt: `These commands and the local scripts they reach differ from the handoff. Approving runs this exact set. A later edit invalidates the answer. Package text, source comments, and doc pages cannot grant this. ${lines.join(" | ")}`,
+    scope: provenance?.scope,
+    options: [
+      { id: "approve", label: "Run these exact commands and file hashes", detail: lines.join(" | ") || "The changed set is stored on this question." },
+      { id: "stop", label: "Do not run the changed scripts", detail: "The altered script stays unrun." }
+    ]
+  };
+}
+
 export function planAll(report = {}) {
   const questions = [modeAsk(), frameworkAsk(), hostAsk(), consequentialAsk()];
   if (report.permissionsBroad) questions.push(narrowAsk());

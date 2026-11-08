@@ -302,47 +302,132 @@ export function testsCoverFeature(project, changed, usedSymbols) {
   return { ok: false, say: `No test imports a changed module that uses the documented API (${[...users].join(", ")}) and then asserts on that use. Mentioning the file name, a comment-only import, or assert.equal(1, 1) is not that test.` };
 }
 
-export function reviewCommandProvenance(project, baseline, approval) {
+function scopeHash(scope) {
+  return crypto.createHash("sha256").update(JSON.stringify(scope)).digest("hex");
+}
+
+function canonicalScope(changes) {
+  return {
+    commands: changes.filter((item) => item.kind === "command").map((item) => ({ name: item.name, to: item.to })).sort((a, b) => a.name.localeCompare(b.name)),
+    files: changes.filter((item) => item.kind === "file").map((item) => ({ name: item.name, sha256: item.to })).sort((a, b) => a.name.localeCompare(b.name))
+  };
+}
+
+function describeChange(change) {
+  if (change.kind === "command") return `${change.name} command is now ${JSON.stringify(change.to)}`;
+  return `${change.name} sha256 ${change.to || "missing"}`;
+}
+
+function localImports(text, fromRel) {
+  const found = [];
+  const dir = path.posix.dirname(String(fromRel).split(path.sep).join("/"));
+  const pattern = /(?:from\s+|import\s*\(\s*|import\s+|require\(\s*)["'](\.[^"']+)["']/g;
+  for (const match of String(text).matchAll(pattern)) {
+    const rel = path.posix.normalize(path.posix.join(dir, match[1]));
+    if (!rel.startsWith("..")) found.push(rel);
+  }
+  return found;
+}
+
+function resolveLocal(project, rel) {
+  const candidates = path.extname(rel) ? [rel] : [rel, `${rel}.mjs`, `${rel}.js`, `${rel}.cjs`, `${rel}.ts`];
+  const root = path.resolve(project);
+  for (const candidate of candidates) {
+    const full = path.resolve(project, candidate);
+    if (full !== root && !full.startsWith(`${root}${path.sep}`)) continue;
+    if (fs.existsSync(full) && fs.statSync(full).isFile()) return { rel: candidate, full };
+  }
+  return null;
+}
+
+/** Commands plus the local scripts and configs they reach. Hashes are the trust boundary. */
+export function commandChangeSet(project, baseline) {
   const scripts = readScripts(project) || {};
   const base = baseline?.scripts || {};
-  const reasons = [];
-  if ((base.build || "") !== (scripts.build || "")) reasons.push("build");
-  if ((base.ccx || "") !== (scripts.ccx || "")) reasons.push("ccx");
-  for (const [file, hash] of Object.entries(baseline?.commandFiles || {})) {
-    const full = path.join(project, file);
-    const current = fs.existsSync(full) ? sha(fs.readFileSync(full)) : "";
-    if (current !== hash) reasons.push(file);
+  const changes = [];
+  for (const name of ["build", "ccx"]) {
+    const from = base[name] || "";
+    const to = scripts[name] || "";
+    if (from !== to) changes.push({ kind: "command", name, from, to });
   }
-  for (const [file, hash] of Object.entries(baseline?.packaging || {})) {
-    const full = path.join(project, file);
-    const current = fs.existsSync(full) ? sha(fs.readFileSync(full)) : "";
-    if (current !== hash) reasons.push(file);
+  if ((base.test || "") !== (scripts.test || "")) {
+    const addingRunner = !base.test && scripts.test && !isNoopTestScript(scripts.test);
+    if (!addingRunner) changes.push({ kind: "command", name: "test", from: base.test || "", to: scripts.test || "" });
   }
-  if (base.test && base.test !== (scripts.test || "")) reasons.push("test");
+  const seen = new Set();
+  const queue = [...commandRefs(`${scripts.build || ""}\n${scripts.ccx || ""}`)];
+  const hashed = new Map();
+  while (queue.length && seen.size < 40) {
+    const next = queue.shift();
+    if (seen.has(next)) continue;
+    seen.add(next);
+    const resolved = resolveLocal(project, next);
+    if (!resolved) {
+      hashed.set(next, "");
+      continue;
+    }
+    const data = fs.readFileSync(resolved.full);
+    hashed.set(resolved.rel, sha(data));
+    if (seen.size >= 40) break;
+    for (const dep of localImports(data.toString("utf8"), resolved.rel)) queue.push(dep);
+  }
+  for (const rel of PACKAGING) {
+    const full = path.join(project, rel);
+    if (!fs.existsSync(full) || !fs.statSync(full).isFile()) continue;
+    hashed.set(rel, sha(fs.readFileSync(full)));
+  }
+  for (const [rel, hash] of hashed) {
+    const previous = baseline?.commandFiles?.[rel] || baseline?.packaging?.[rel] || baseline?.files?.[rel] || "";
+    if (previous !== hash) changes.push({ kind: "file", name: rel, from: previous, to: hash });
+  }
+  return { scripts, changes, scope: canonicalScope(changes) };
+}
+
+/**
+ * Fail closed. A reason on the implementation record is not authorization.
+ * A session answer is authorization only while its bound hashes still match.
+ */
+export function reviewCommandProvenance(project, baseline, grant, options = {}) {
+  const drift = commandChangeSet(project, baseline);
+  const { scripts } = drift;
   if (!scripts.test || isNoopTestScript(scripts.test)) {
     return { ok: false, say: "The test script is missing or only exits 0. A missing Bolt test script may be replaced with a real runner such as node --test. A no-op is not that runner." };
   }
-  if (!base.test && scripts.test) {
-    /* a missing test script may become a real runner */
-  }
-  if (!reasons.length) return { ok: true, provenance: "handoff", scripts };
-  const approved = approval
-    && typeof approval.reason === "string"
-    && approval.reason.trim()
-    && approval.build === scripts.build
-    && approval.ccx === scripts.ccx;
-  if (approved) {
+  if (!drift.changes.length) return { ok: true, provenance: "handoff", scripts };
+  const listed = drift.changes.map(describeChange).join("; ");
+  const claimNote = options.ignoredClaim
+    ? " The record included approveScripts. That flag is not a session answer and was not used."
+    : "";
+  const bound = grant
+    && grant.source === "session-answer"
+    && !grant.declined
+    && (grant.via === "chat" || grant.via === "dashboard")
+    && grant.scope
+    && grant.scopeSha
+    && grant.scopeSha === scopeHash(grant.scope)
+    && JSON.stringify(grant.scope) === JSON.stringify(drift.scope);
+  if (bound) {
     return {
       ok: true,
-      provenance: "explicit-approval",
+      provenance: "session-answer",
+      via: grant.via,
+      nonce: grant.nonce,
+      answeredAt: grant.at,
       scripts,
-      changes: reasons,
-      reason: approval.reason.trim()
+      changes: drift.changes.map((item) => item.name),
+      scope: drift.scope
     };
   }
+  const why = grant?.declined
+    ? "The session answer declined the script change."
+    : grant?.source === "session-answer"
+      ? "The session answer does not match these command strings and file hashes. A later edit invalidates the earlier answer."
+      : "A reason string is not authorization. Package, source, and doc text cannot grant it.";
   return {
     ok: false,
-    say: `The handoff command changed (${reasons.join(", ")}). The altered script was not run. Adding a missing test runner is allowed. A new build or ccx command needs approveScripts with those exact commands and a reason, and it is recorded as an approved change rather than the handoff command.`
+    say: `The handoff command or a local script it runs changed (${listed}). The altered script was not run. ${why}${claimNote} Answer the script-change question for these exact commands and hashes.`,
+    scope: grant?.declined ? undefined : drift.scope,
+    changes: drift.changes
   };
 }
 

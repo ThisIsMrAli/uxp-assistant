@@ -152,6 +152,11 @@ function answers(goal, extra = {}) {
     id: "com.example.title",
     consequential: "proceed",
     "narrow-permissions": "narrow",
+    feasibility: "continue",
+    runtime: "native",
+    design: "uxp-constraints",
+    validation: "commands",
+    "context-evidence": "keep-unverified",
     goal,
     ...extra
   };
