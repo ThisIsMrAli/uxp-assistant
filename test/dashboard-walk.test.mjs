@@ -67,12 +67,12 @@ test("the dashboard walk answers every stage from the page and hands off the goa
       if (nxt.action === "refresh") {
         const refreshed = await run(["refresh", "--out", out]);
         assert.equal(refreshed.ok, true, JSON.stringify(refreshed));
-        assert.equal(refreshed.fresh.length, 19);
+        assert.equal(refreshed.fresh.length, 20);
         assert.deepEqual(refreshed.stale, []);
         assert.deepEqual(refreshed.failed, []);
         const state = await dashboardState(out);
         assert.equal(state.session.addon.path, parent);
-        assert.equal(state.session.docs.fresh.length, 19);
+        assert.equal(state.session.docs.fresh.length, 20);
         assert.equal(state.session.addon.docsSha || "", "");
         const page = await dashboardText(out, `/?t=${serverInfo(out).token}`);
         assert.match(page, /Skip to the session/);

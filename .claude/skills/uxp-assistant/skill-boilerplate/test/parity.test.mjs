@@ -15,9 +15,15 @@ const bins = {
   refreshBin: "node scripts/refresh.mjs"
 };
 
+const created = [];
 function temp() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "skill-bp-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "skill-bp-"));
+  created.push(dir);
+  return dir;
 }
+process.on("exit", () => {
+  for (const dir of created) fs.rmSync(dir, { recursive: true, force: true });
+});
 
 test("start asks mode before any network call", async () => {
   const out = temp();

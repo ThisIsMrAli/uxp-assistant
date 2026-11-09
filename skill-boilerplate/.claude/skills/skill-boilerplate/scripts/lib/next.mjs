@@ -66,7 +66,8 @@ export function nextAction(out, { dashboardUp = false } = {}) {
     }
     return { action: "apply", step: work.id, say: `Apply the answers for \`${work.id}\`. Do not mark tests, package, or the host done unless those commands ran.` };
   }
-  return { action: "finish", command: `${sessionCmd} done --summary "<one short paragraph>" ${outArg}`, say: `Everything asked so far is answered. Run \`${sessionCmd} done --summary "<one short paragraph>" ${outArg}\`, then stop the dashboard. Do not mark tests, package, or the host done unless those commands ran.` };
+  const summary = "Session finished. The host was NOT TESTED.";
+  return { action: "finish", command: `${sessionCmd} done --summary "${summary}" ${outArg}`, say: `Everything asked so far is answered. Run \`${sessionCmd} done --summary "${summary}" ${outArg}\`, then stop the dashboard. Do not mark tests, package, or the host done unless those commands ran.` };
 }
 
 export function reminder(out, options) {

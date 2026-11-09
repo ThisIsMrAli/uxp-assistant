@@ -13,7 +13,8 @@ export function loopbackJson(url, { headers = {}, timeoutMs = 8000 } = {}) {
       path: `${target.pathname}${target.search}`,
       method: "GET",
       headers,
-      timeout: timeoutMs
+      timeout: timeoutMs,
+      agent: false
     }, (res) => {
       const chunks = [];
       res.on("data", (chunk) => chunks.push(chunk));

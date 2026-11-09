@@ -330,7 +330,7 @@ export function reviewClaim({ contract, files, bodies }) {
   }
   const ui = feature.filter((item) => /\.(tsx|jsx|vue|svelte|html)$/.test(item.rel));
   if (ui.length && !ui.some((item) => showsHonestUiState(item.body))) {
-    return { ok: false, say: "The changed panel does not show a visible waiting, loading, or error state, or a disabled control. A variable named status is not that state." };
+    return { ok: false, say: "The changed panel does not wire a state variable into the view, or a disabled control to a handler. Static text that mentions an error is not that state." };
   }
   return { ok: true, changed, feature, hit: usedSymbols, usedSymbols, introducedFiles: introduced.map((item) => item.rel), limits: REVIEW_LIMIT };
 }
@@ -340,11 +340,17 @@ const RECEIVER_SKIP = new Set(["console", "JSON", "Math", "Object", "Promise", "
 
 export function showsHonestUiState(source) {
   const text = String(source || "").replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^\\])\/\/.*$/gm, "$1");
-  if (/\b(?:disabled|aria-disabled|aria-busy)\b/.test(text)) return true;
-  const visible = [];
-  for (const match of text.matchAll(/>([^<{]+)</g)) visible.push(match[1]);
-  for (const match of text.matchAll(/\{\s*["'`]([^"'`]{2,})["'`]\s*\}/g)) visible.push(match[1]);
-  return /\b(waiting|loading|error|failed|unavailable|empty|nothing to show)\b/i.test(visible.join("\n"));
+  const states = [];
+  for (const match of text.matchAll(/\b(?:const|let)\s*\[\s*([A-Za-z_$][\w$]*)\s*,\s*([A-Za-z_$][\w$]*)\s*\]\s*=\s*use(?:State|Reducer)\b/g)) {
+    states.push({ name: match[1], setter: match[2] });
+  }
+  for (const match of text.matchAll(/\blet\s+([A-Za-z_$][\w$]*)\b/g)) states.push({ name: match[1], setter: "" });
+  const rendered = (name) => new RegExp(`\\{[^}]*\\b${name}\\b`).test(text);
+  const updated = (item) => (item.setter
+    ? new RegExp(`\\b${item.setter}\\s*\\(`).test(text)
+    : new RegExp(`\\b${item.name}\\s*=`).test(text));
+  if (states.some((item) => rendered(item.name) && updated(item))) return true;
+  return /\b(?:disabled|aria-busy|aria-disabled)\s*=\s*\{/.test(text) && /\bon[A-Z][A-Za-z]+\s*=/.test(text);
 }
 
 export function renameOutsideModal(contract, feature) {
@@ -353,14 +359,42 @@ export function renameOutsideModal(contract, feature) {
   for (const item of feature || []) {
     if (isTestPath(item.rel)) continue;
     const code = codeSurface(item.body);
-    const re = /(?:layer|item)\.name\s*=/g;
-    for (const match of code.matchAll(re)) {
-      if (!insideCall(code, "executeAsModal", match.index)) {
-        return "A layer rename assigns .name outside executeAsModal. The fetched modal page requires that wrapper.";
+    const writes = [];
+    for (const match of code.matchAll(/\.name\s*=/g)) writes.push(match.index);
+    for (const match of code.matchAll(/Object\.assign\s*\(\s*[^,]+,\s*\{[^}]*\bname\b/g)) writes.push(match.index);
+    for (const index of writes) {
+      if (!hostModalWraps(code, index)) {
+        return "A layer rename writes .name, or Object.assign of name, outside executeAsModal. An alias, an index, or a local function named executeAsModal does not count. The fetched modal page requires the host wrapper.";
       }
     }
   }
   return "";
+}
+
+function hostModalWraps(code, index) {
+  const local = /(?:function\s+executeAsModal\b|(?:const|let|var)\s+executeAsModal\s*=)/.test(code);
+  if (!local) return insideCall(code, "executeAsModal", index);
+  let from = 0;
+  while (from < index) {
+    const at = code.indexOf(".executeAsModal", from);
+    if (at < 0 || at > index) return false;
+    const open = code.indexOf("(", at);
+    if (open > 0 && parenWraps(code, open, index)) return true;
+    from = at + ".executeAsModal".length;
+  }
+  return false;
+}
+
+function parenWraps(code, open, index) {
+  let depth = 0;
+  for (let i = open; i < code.length; i += 1) {
+    if (code[i] === "(") depth += 1;
+    else if (code[i] === ")") {
+      depth -= 1;
+      if (depth === 0) return i > index;
+    }
+  }
+  return false;
 }
 
 function insideCall(code, name, index) {
@@ -380,23 +414,100 @@ function insideCall(code, name, index) {
 }
 
 export function undocumentedHostCalls(feature, docText) {
-  const docs = String(docText || "").toLowerCase();
+  const docs = decodeDoc(docText);
+  const returns = methodReturns(docs);
   const bodies = (feature || []).map((item) => item.body);
   const missing = [];
   for (const item of feature || []) {
     if (isTestPath(item.rel)) continue;
     const skipReceivers = importedReceivers(item.body);
     const code = codeSurface(item.body);
-    const re = /(?:^|[^.\w$])([A-Za-z_$][\w$]*)\s*\.\s*([A-Za-z_$][\w$]*)\s*\(/g;
-    for (const match of code.matchAll(re)) {
-      const receiver = match[1];
-      const name = match[2];
-      if (RECEIVER_SKIP.has(receiver) || skipReceivers.has(receiver) || CALL_SKIP.has(name)) continue;
-      if (locallyDefined(bodies, name)) continue;
-      if (!docs.includes(name.toLowerCase())) missing.push(`${receiver}.${name}()`);
+    for (const call of extractHostCalls(code)) {
+      const root = call.receiver.split(".")[0];
+      if (RECEIVER_SKIP.has(root) || skipReceivers.has(root) || CALL_SKIP.has(call.method)) continue;
+      if (locallyDefined(bodies, call.method)) continue;
+      const label = `${call.receiver || "()"}.${call.method}()`;
+      if (!docs.toLowerCase().includes(call.method.toLowerCase())) {
+        missing.push(label);
+        continue;
+      }
+      if (call.receiverCall) {
+        const type = returns.get(call.receiverCall);
+        if (type && !methodNearType(docs, call.method, type)) missing.push(`${label} is not a ${type} method in the fetched docs`);
+      }
     }
   }
   return [...new Set(missing)];
+}
+
+function decodeDoc(text) {
+  return String(text || "")
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, num) => String.fromCodePoint(Number(num)))
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&amp;/gi, "&");
+}
+
+function methodReturns(docs) {
+  const map = new Map();
+  for (const match of docs.matchAll(/Returns:\s*(?:Promise\s*<\s*([A-Za-z_][\w]*)|([A-Za-z_][\w]*))/g)) {
+    const type = match[1] || match[2];
+    const before = docs.slice(Math.max(0, match.index - 240), match.index);
+    const names = [...before.matchAll(/\b([a-z][A-Za-z0-9]*)\b/g)];
+    const method = names.at(-1)?.[1];
+    if (method && type && type !== "Promise") map.set(method, type);
+  }
+  return map;
+}
+
+function methodNearType(docs, method, type) {
+  const lower = docs.toLowerCase();
+  const name = method.toLowerCase();
+  let from = 0;
+  while (from < lower.length) {
+    const at = lower.indexOf(name, from);
+    if (at < 0) return false;
+    const window = docs.slice(Math.max(0, at - 1200), at);
+    if (window.includes(type)) return true;
+    from = at + name.length;
+  }
+  return false;
+}
+
+export function extractHostCalls(code) {
+  const calls = [];
+  const re = /\.\s*([A-Za-z_$][\w$]*)\s*\(/g;
+  for (const match of String(code || "").matchAll(re)) {
+    let index = match.index - 1;
+    while (index >= 0 && /\s/.test(code[index])) index -= 1;
+    let receiver = "";
+    let receiverCall = "";
+    if (code[index] === ")") {
+      receiver = "()";
+      const open = matchingOpen(code, index);
+      const inner = open >= 0 ? code.slice(0, open).match(/\.([A-Za-z_$][\w$]*)\s*$/) : null;
+      if (inner) receiverCall = inner[1];
+    } else {
+      const head = code.slice(0, index + 1).match(/([A-Za-z_$][\w$]*(?:\s*\.\s*[A-Za-z_$][\w$]*)*)$/);
+      receiver = head ? head[1].replace(/\s/g, "") : "";
+    }
+    calls.push({ method: match[1], receiver, receiverCall });
+  }
+  return calls;
+}
+
+function matchingOpen(code, close) {
+  let depth = 0;
+  for (let i = close; i >= 0; i -= 1) {
+    if (code[i] === ")") depth += 1;
+    else if (code[i] === "(") {
+      depth -= 1;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
 }
 
 function importedReceivers(source) {
@@ -495,7 +606,9 @@ function assertionScore(source) {
     const sameLiteral = args.length >= 2 && args[0] === args[1] && literal.test(args[0]);
     const okTrue = /assert\s*\.\s*ok\s*\(\s*(?:true|1)\s*\)/.test(raw);
     const expectLiteral = /expect\s*\(\s*(?:true|false|1|0)\s*\)\s*\.\s*to(?:Be|Equal)\s*\(\s*(?:true|false|1|0)\s*\)/.test(raw);
-    if (sameLiteral || okTrue || expectLiteral) tautology += 1;
+    const existence = /typeof\s+[A-Za-z_$][\w$]*\s*===?\s*["']function["']/.test(raw)
+      || /typeof\s+[A-Za-z_$][\w$]*\s*,\s*["']function["']/.test(raw);
+    if (sameLiteral || okTrue || expectLiteral || existence) tautology += 1;
     else real += 1;
   }
   return { real, tautology };
@@ -533,7 +646,7 @@ export function testsCoverFeature(project, changed, usedSymbols, introducedFiles
     const score = assertionScore(text);
     if (usedBinding && score.real > 0) return { ok: true, file: rel };
   }
-  return { ok: false, say: `No test imports a changed module that uses the documented API (${[...users].join(", ")}) and then asserts on that use. Mentioning the file name, a comment-only import, or assert.equal(1, 1) is not that test.` };
+  return { ok: false, say: `No test imports a changed module that uses the documented API (${[...users].join(", ")}) and then asserts on that use. Mentioning the file name, a comment-only import, assert.equal(1, 1), or a typeof function check is not that test.` };
 }
 
 function scopeHash(scope) {

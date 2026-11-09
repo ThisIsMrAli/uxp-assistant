@@ -16,7 +16,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { loopbackJson } from "./lib/loopback.mjs";
 import { nextAction, reminder } from "./lib/next.mjs";
-import { resolveOut, sessionBin } from "./lib/paths.mjs";
+import { dashboardBin, resolveOut, sessionBin } from "./lib/paths.mjs";
 import {
   answerFromChat, finish, noteDelivered, parseProgress, publishAsk, readMerged, readServer, readSession, setMode, setStep
 } from "./lib/session.mjs";
@@ -85,7 +85,7 @@ function ask(out, args) {
     channel,
     fallback: fallback ? "server-down" : undefined,
     next: fallback
-      ? "The dashboard is not running. This is the chat fallback. Ask this with AskQuestion, then record it with the answer command."
+      ? `The dashboard is not running. Run \`${dashboardBin()} start --out ${out}\` once, then ask this question again. AskQuestion is the fallback only after that start fails.`
       : `Call AskQuestion with this question, then record the click: ${sessionBin()} answer --id ${args.id} --value <option id>`
   };
 }
@@ -96,7 +96,7 @@ async function wait(out, args) {
   const session = readSession(out);
   const info = readServer(out);
   if (session.mode === "dashboard") {
-    if (!info) return { status: "server-down", id: args.id, next: "The dashboard is down. Ask this in chat with AskQuestion, then record it with the answer command." };
+    if (!info) return { status: "server-down", id: args.id, next: `The dashboard is down. Run \`${dashboardBin()} start --out ${out}\` once, then run the same wait command again.` };
     try {
       const res = await loopbackJson(`http://127.0.0.1:${info.port}/api/wait?id=${encodeURIComponent(args.id)}&timeout=${seconds}`, {
         headers: { authorization: `Bearer ${info.token}` },
@@ -107,7 +107,7 @@ async function wait(out, args) {
       if (body.status === "answered") noteDelivered(out, args.id, body.label, body.via);
       return body;
     } catch {
-      return { status: "server-down", id: args.id, next: "The dashboard is down. Ask this in chat with AskQuestion, then record it with the answer command." };
+      return { status: "server-down", id: args.id, next: `The dashboard is down. Run \`${dashboardBin()} start --out ${out}\` once, then run the same wait command again.` };
     }
   }
   const end = Date.now() + seconds * 1000;

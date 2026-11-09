@@ -90,7 +90,8 @@ function writeFeature(project) {
   fs.mkdirSync(path.join(project, "src"), { recursive: true });
   fs.mkdirSync(path.join(project, "test"), { recursive: true });
   fs.writeFileSync(path.join(project, "src", "Selection.tsx"), `export function SelectionPanel() {
-  return <main><h1>Selected layer ids</h1><p className="status">Idle</p><button type="button" disabled>Read selection</button><p className="error">No document is open.</p></main>;
+  const [phase, setPhase] = useState("idle");
+  return <main><h1>Selected layer ids</h1><p className="status">{phase}</p><button type="button" disabled={!phase} onClick={() => setPhase("read")}>Read selection</button><p className="error">{phase === "missing" ? "No document is open." : ""}</p></main>;
 }
 `);
   fs.writeFileSync(path.join(project, "src", "selection-read.mjs"), `export async function readSelection(app) {

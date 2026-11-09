@@ -36,7 +36,7 @@ function runSuite() {
     process.exit(1);
   }
   console.error(`test files: ${files.join(" ")}`);
-  run(process.execPath, ["--test", ...files]);
+  run(process.execPath, ["--import", "./test/preload.mjs", "--test", ...files]);
   console.error("UXP_BOILERPLATE_TESTS");
   run(npmBin(), ["test", "--prefix", "skill-boilerplate"]);
 }

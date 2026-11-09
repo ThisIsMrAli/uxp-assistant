@@ -10,7 +10,9 @@ export const assetsDir = path.join(skillRoot, "assets", "dashboard");
 
 function homeBase() {
   if (!process.env.SKILL_TEST_HOME && process.env.NODE_TEST_CONTEXT) {
-    process.env.SKILL_TEST_HOME = fs.mkdtempSync(path.join(os.tmpdir(), "skill-home-"));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "skill-home-"));
+    process.env.SKILL_TEST_HOME = dir;
+    process.on("exit", () => fs.rmSync(dir, { recursive: true, force: true }));
   }
   if (process.env.SKILL_TEST_HOME) return process.env.SKILL_TEST_HOME;
   return process.env.HOME || os.homedir();

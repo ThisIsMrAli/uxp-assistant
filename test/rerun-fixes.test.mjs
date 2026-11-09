@@ -36,6 +36,7 @@ test("B10 refresh asks for the Premiere sequence, track, clip, project, and tick
   for (const id of ["premiere.sequence", "premiere.videotrack", "premiere.videocliptrackitem", "premiere.project", "premiere.ticktime"]) {
     assert.ok(pages.some((page) => page.id === id && page.url.includes("ppro-reference/classes/")), id);
   }
+  assert.ok(pages.some((page) => page.id === "premiere.constants" && page.url.includes("ppro-reference/constants")));
 });
 
 test("N7 a WebView goal recommends WebView", () => {
@@ -49,6 +50,7 @@ test("N7 a WebView goal recommends WebView", () => {
   });
   assert.equal(offer.choices[0].id, "webview");
   assert.match(runtimeAsk(offer).options[0].label, /Recommended/);
+  assert.equal(offer.choices[0].detail.includes("extractDocFacts"), false);
 });
 
 test("N11 an offline runtime question has a Recommended option and is never empty", () => {
@@ -60,10 +62,12 @@ test("N11 an offline runtime question has a Recommended option and is never empt
   assert.match(pause.options[0].label, /\(Recommended\)/);
 });
 
-test("N13 a visible waiting state passes and a bare status identifier does not", () => {
-  assert.equal(showsHonestUiState("export function Panel(){ return <p>Waiting for Photoshop</p>; }"), true);
+test("N13 a wired waiting state passes and static text does not", () => {
+  const wired = "export function Panel(){ const [phase, setPhase] = useState('waiting'); return <button onClick={() => setPhase('ready')}>{phase}</button>; }";
+  assert.equal(showsHonestUiState(wired), true);
+  assert.equal(showsHonestUiState("export function Panel(){ return <p>Waiting for Photoshop</p>; }"), false);
+  assert.equal(showsHonestUiState("export function Panel(){ return <sp-body>Error codes are listed in the docs.</sp-body>; }"), false);
   assert.equal(showsHonestUiState("export const status = 1;\nexport function Panel(){ return <p>{status}</p>; }"), false);
-  assert.equal(showsHonestUiState("const error = false;\nexport function Panel(){ return <button>Go</button>; }"), false);
 });
 
 test("N4 a rename outside executeAsModal fails, and one inside it does not fail for that reason", () => {
@@ -141,7 +145,24 @@ test("N9 a handoff evidence quote is one short sentence", () => {
     pages: [{ id: "photoshop.document", freshness: "fresh", url: "https://example.test/document", text: noise }]
   });
   assert.ok(resolved.evidence.length > 0);
-  for (const item of resolved.evidence) assert.ok(item.quote.length <= 160, item.quote);
+  for (const item of resolved.evidence) {
+    assert.ok(item.quote.length <= 160, item.quote);
+    assert.equal(/&#|const |\/\//.test(item.quote), false, item.quote);
+  }
+  const noisy = resolveCapability({
+    goal: "Show the document title",
+    pages: [{
+      id: "photoshop.document",
+      freshness: "fresh",
+      url: "https://example.test/document",
+      text: "op'); // The currently active document is open. const currentDocument = app. &#x3C;!-- Prerelease still. The document title is the name of the open document."
+    }]
+  });
+  assert.ok(noisy.evidence.length > 0);
+  for (const item of noisy.evidence) {
+    assert.equal(/&#|const |\/\//.test(item.quote), false, item.quote);
+    assert.match(item.quote, /document title|The page documents/i);
+  }
 });
 
 test("B6 and N2 document one record command and one file format", () => {

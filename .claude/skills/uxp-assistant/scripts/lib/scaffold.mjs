@@ -24,11 +24,33 @@ function walkFor(start, relative) {
 }
 
 export function installerEntry(start = repoRoot) {
-  return walkFor(start, "node_modules/create-bolt-uxp/dist/index.js");
+  return walkFor(start, "node_modules/create-bolt-uxp/dist/index.js")
+    || walkFor(start, path.join(".uxp-tooling", "node_modules", "create-bolt-uxp", "dist", "index.js"));
+}
+
+/** Install create-bolt-uxp beside the skill when the advertised copy has no node_modules. */
+export function ensureInstaller(start = repoRoot) {
+  const found = installerEntry(start);
+  if (found && fs.existsSync(found)) return found;
+  const prefix = path.join(path.resolve(start || repoRoot), ".uxp-tooling");
+  fs.mkdirSync(prefix, { recursive: true });
+  if (!fs.existsSync(path.join(prefix, "package.json"))) {
+    fs.writeFileSync(path.join(prefix, "package.json"), "{\"private\":true}\n");
+  }
+  const installed = spawnSync("npm", ["install", "--prefix", prefix, "create-bolt-uxp@1.3.27", "--no-audit", "--no-fund"], {
+    encoding: "utf8",
+    timeout: 180000
+  });
+  const entry = path.join(prefix, "node_modules", "create-bolt-uxp", "dist", "index.js");
+  if (installed.status !== 0 || !fs.existsSync(entry)) {
+    throw new Error(`create-bolt-uxp was not found and npm install create-bolt-uxp@1.3.27 failed. ${(installed.stderr || installed.stdout || "").slice(-400)}`);
+  }
+  return entry;
 }
 
 export function starterIconsDir(start = repoRoot) {
-  const icons = walkFor(start, "node_modules/bolt-uxp/public/icons");
+  const icons = walkFor(start, "node_modules/bolt-uxp/public/icons")
+    || walkFor(start, path.join(".uxp-tooling", "node_modules", "bolt-uxp", "public", "icons"));
   return icons || path.join(repoRoot, "node_modules/bolt-uxp/public/icons");
 }
 
@@ -95,10 +117,7 @@ export function copyStarterIcons(project, root = repoRoot) {
  */
 export async function scaffoldWithInstaller(parent, options) {
   process.env.BOLT_MODULEONLY = "true";
-  const entryPath = installerEntry(options.repoRoot);
-  if (!fs.existsSync(entryPath)) {
-    throw new Error(`create-bolt-uxp was not found at ${entryPath}. The lookup uses the skill repository, not the process cwd (${process.cwd()}).`);
-  }
+  const entryPath = ensureInstaller(options.repoRoot || repoRoot);
   const loaded = await import(pathToFileURL(entryPath).href);
   const create = loaded.createBoltUXP || loaded.default?.createBoltUXP;
   if (typeof create !== "function") {

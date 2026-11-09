@@ -24,12 +24,37 @@ function freshPages(pages) {
   return (pages || []).filter((page) => page.freshness === "fresh" && page.text);
 }
 
+function decodeEntities(text) {
+  return String(text || "")
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, num) => String.fromCodePoint(Number(num)))
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, "\"")
+    .replace(/&nbsp;/gi, " ");
+}
+
+const CODEISH = /(?:\b(?:const|let|var|function|return|await|import|export)\b|=>|\/\/|\/\*|[{};]|<\/?[A-Za-z]|&#)/;
+
 function snippet(text, index, length) {
-  const before = text.lastIndexOf(".", index);
-  const after = text.indexOf(".", index + Math.max(length, 1));
-  const start = before >= 0 && index - before < 180 ? before + 1 : Math.max(0, index - 24);
-  const end = after > index && after - index < 180 ? after + 1 : Math.min(text.length, index + length + 40);
-  let quote = text.slice(start, end).replace(/\s+/g, " ").trim();
+  const decoded = decodeEntities(text);
+  const token = decoded.slice(index, index + Math.max(length, 1)).trim() || "this term";
+  const sentences = decoded.split(/(?<=[.!?])\s+/);
+  let cursor = 0;
+  const hit = [];
+  for (const sentence of sentences) {
+    const start = decoded.indexOf(sentence, cursor);
+    if (start < 0) continue;
+    const end = start + sentence.length;
+    cursor = end;
+    if (end >= index && start <= index + length) hit.push(sentence.replace(/\s+/g, " ").trim());
+  }
+  const prose = hit.find((sentence) => sentence && !CODEISH.test(sentence));
+  let quote = prose || `The page documents ${token.replace(/\s+/g, " ").slice(0, 80)}.`;
+  quote = quote.replace(CODEISH, " ").replace(/\s+/g, " ").trim();
+  if (CODEISH.test(quote) || !quote) quote = `The page documents ${token.replace(/\s+/g, " ").slice(0, 80)}.`;
   if (quote.length > 160) quote = `${quote.slice(0, 157).trim()}...`;
   return quote;
 }
@@ -51,7 +76,7 @@ function documented(goal, pages) {
   const evidence = [];
   const seen = new Set();
   for (const page of freshPages(pages)) {
-    const text = String(page.text);
+    const text = decodeEntities(page.text);
     for (const token of [...terms.identifiers, ...terms.phrases]) {
       const needle = token.toLowerCase();
       const index = text.toLowerCase().indexOf(needle);
@@ -73,7 +98,7 @@ function documented(goal, pages) {
 function unsupportedFromPage(goal, pages) {
   const terms = goalTerms(goal);
   for (const page of freshPages(pages)) {
-    const text = String(page.text);
+    const text = decodeEntities(page.text);
     for (const token of [...terms.identifiers, ...terms.phrases]) {
       const match = text.match(new RegExp(`${token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s+is not supported`, "i"));
       if (!match) continue;

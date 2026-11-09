@@ -16,6 +16,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 test("vue and svelte empty folders package, and the webview document is a separate build", { timeout: 600_000 }, async () => {
   const parent = fs.mkdtempSync(path.join(os.tmpdir(), "uxp-stacks-"));
+  try {
   const report = {
     hostExecuted: false,
     acceptanceSlice: "react+photoshop only. Vue and Svelte package results are not that slice.",
@@ -51,6 +52,9 @@ test("vue and svelte empty folders package, and the webview document is a separa
   fs.mkdirSync(evidence, { recursive: true });
   fs.writeFileSync(path.join(evidence, "stacks.json"), `${JSON.stringify(report, null, 2)}\n`);
   if (web.documentFile) fs.copyFileSync(web.documentFile, path.join(evidence, "webview-document.html"));
+  } finally {
+    fs.rmSync(parent, { recursive: true, force: true });
+  }
 });
 
 async function packageFramework(parent, framework) {

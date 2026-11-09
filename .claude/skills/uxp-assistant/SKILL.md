@@ -53,7 +53,7 @@ node scripts/skill.mjs start --empty /absolute/path/to/parent --out /absolute/pa
 npx skills add <owner>/uxp-assistant --skill uxp-assistant -a cursor
 ```
 
-   That copy includes the boilerplate inside the skill, so `start` can load it. `create-bolt-uxp` is still installed with `npm install` in the new project. From this repo, `node scripts/skill.mjs install --into <folder>` copies the same skill and links `node_modules`. Then run `node scripts/skill.mjs` from the copied skill.
+   That copy includes the boilerplate inside the skill, so `start` can load it. If `create-bolt-uxp` is not already installed, `domain` installs `create-bolt-uxp@1.3.27` beside the skill before it scaffolds. The new project still needs its own `npm install`. From this repo, `node scripts/skill.mjs install --into <folder>` copies the same skill and links `node_modules`. Then run `node scripts/skill.mjs` from the copied skill.
 
 2. **Ask where to follow.** On the user's computer, call AskQuestion with `mode`. Pass `prompt` and each option's `id` and `label` through unchanged.
 

@@ -109,12 +109,13 @@ function writeShow(project) {
   const reader = "src/selection-read.mjs";
   const spec = "test/selection.test.mjs";
   fs.writeFileSync(path.join(project, panel), `export function SelectionPanel() {
+  const [phase, setPhase] = useState("idle");
   return (
     <main>
       <h1>Selected layer ids</h1>
-      <p className="status">Idle</p>
-      <button type="button" disabled={false}>Read selection</button>
-      <p className="error">No document is open.</p>
+      <p className="status">{phase}</p>
+      <button type="button" disabled={!phase} onClick={() => setPhase("read")}>Read selection</button>
+      <p className="error">{phase === "missing" ? "No document is open." : ""}</p>
     </main>
   );
 }
@@ -449,7 +450,8 @@ test("a documented document title and Premiere importFiles are handoffs, not a d
 }
 `);
   fs.writeFileSync(path.join(title.project, "src", "DocumentTitle.tsx"), `export function DocumentTitlePanel() {
-  return <section><h1>Document title</h1><p className="status">Idle</p><button type="button" disabled={false}>Read title</button></section>;
+  const [phase, setPhase] = useState("waiting");
+  return <section><h1>Document title</h1><p className="status">{phase}</p><button type="button" disabled={!phase} onClick={() => setPhase("read")}>Read title</button></section>;
 }
 `);
   fs.writeFileSync(path.join(title.project, "test", "document-title.test.mjs"), `import assert from "node:assert/strict";
@@ -578,7 +580,7 @@ test("static text, comment-only API, a noop assertion, and starter tokens do not
   const stub = recordImplementation(out, { goal: phrase, files: ["src/TitleStub.tsx"] });
   assert.equal(stub.success, false);
   assert.notEqual(stub.state, "commands-finished");
-  assert.match(stub.say, /documented API|static panel|not commands-finished/);
+  assert.match(stub.say, /documented API|static panel|not commands-finished|state variable/);
   const shown = spawnSync(process.execPath, [".claude/skills/uxp-assistant/scripts/session.mjs", "show", "--out", out], { encoding: "utf8" });
   assert.notEqual(shown.status, 0);
   const done = spawnSync(process.execPath, [".claude/skills/uxp-assistant/scripts/session.mjs", "done", "--out", out], { encoding: "utf8" });
@@ -592,14 +594,14 @@ test("static text, comment-only API, a noop assertion, and starter tokens do not
   fs.writeFileSync(path.join(commentReady.project, "test", "title-stub.test.mjs"), "/* import { readTitle } from \"../src/title-read.mjs\"; */\nimport { test } from \"node:test\"; import assert from \"node:assert/strict\"; test(\"noop\", () => { assert.equal(1, 1); });\n");
   const comments = recordImplementation(commented, { goal: phrase, files: ["src/TitleStub.tsx", "src/title-read.mjs"] });
   assert.equal(comments.success, false);
-  assert.match(comments.say, /comment|static panel|documented API|import/);
+  assert.match(comments.say, /comment|static panel|documented API|import|state variable/);
 
   const named = temp();
   const namedReady = await runWorkflow({ out: named, kind: "empty", answers: answers(phrase), fetchImpl: fetchImpl(), scaffoldImpl: scaffold });
   fs.mkdirSync(path.join(namedReady.project, "src"), { recursive: true });
   fs.mkdirSync(path.join(namedReady.project, "test"), { recursive: true });
   fs.writeFileSync(path.join(namedReady.project, "src", "title-read.mjs"), "export function readTitle(app){ if (!app || !app.activeDocument) return { ok: false, status: \"No document.\" }; return { ok: true, status: \"Read\", title: app.activeDocument.title }; }\n");
-  fs.writeFileSync(path.join(namedReady.project, "src", "TitleStub.tsx"), "export function TitleStub(){ return <p>Idle</p><button type=\"button\" disabled>Read</button>; }\n");
+  fs.writeFileSync(path.join(namedReady.project, "src", "TitleStub.tsx"), "export function TitleStub(){ const [phase, setPhase] = useState(\"idle\"); return <p>{phase}</p><button type=\"button\" disabled={!phase} onClick={() => setPhase(\"read\")}>Read</button>; }\n");
   fs.writeFileSync(path.join(namedReady.project, "test", "title-stub.test.mjs"), "import { test } from \"node:test\"; import assert from \"node:assert/strict\"; test(\"mentions TitleStub and skips the call\", () => { assert.equal(1, 1); });\n");
   const mention = recordImplementation(named, { goal: phrase, files: ["src/title-read.mjs", "src/TitleStub.tsx"] });
   assert.equal(mention.success, false);
@@ -615,7 +617,7 @@ test("a documented layer opacity feature finishes without being the document-tit
   assert.doesNotMatch(ready.contract.goal, /document title/i);
   fs.mkdirSync(path.join(ready.project, "test"), { recursive: true });
   fs.writeFileSync(path.join(ready.project, "src", "opacity.mjs"), "export function readOpacity(layer){ if (!layer) return { ok: false, status: \"No layer.\" }; return { ok: true, status: \"Read\", opacity: layer.opacity }; }\n");
-  fs.writeFileSync(path.join(ready.project, "src", "Opacity.tsx"), "export function OpacityPanel(){ return <section><h1>Layer opacity</h1><p className=\"status\">Idle</p><button type=\"button\" disabled={false}>Read opacity</button></section>; }\n");
+  fs.writeFileSync(path.join(ready.project, "src", "Opacity.tsx"), "export function OpacityPanel(){ const [phase, setPhase] = useState(\"idle\"); return <section><h1>Layer opacity</h1><p className=\"status\">{phase}</p><button type=\"button\" disabled={!phase} onClick={() => setPhase(\"read\")}>Read opacity</button></section>; }\n");
   fs.writeFileSync(path.join(ready.project, "test", "opacity.test.mjs"), "import assert from \"node:assert/strict\"; import { test } from \"node:test\"; import { readOpacity } from \"../src/opacity.mjs\"; test(\"readOpacity returns the documented property\", () => { assert.equal(readOpacity({ opacity: 40 }).opacity, 40); assert.equal(readOpacity(null).ok, false); });\n");
   const recorded = recordImplementation(out, { goal, files: ["src/opacity.mjs", "src/Opacity.tsx"] });
   assert.equal(recorded.success, true, recorded.say);

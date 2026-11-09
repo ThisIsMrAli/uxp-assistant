@@ -1,6 +1,6 @@
 {
   "algorithm": "sha256 of sorted lines `type<TAB>relative-path<TAB>sha256`, UTF-8, with a trailing newline. Paths use `/` and sort by raw UTF-8 bytes. A file hashes its bytes. A symlink hashes its target string and is not followed. Entries named .git, node_modules, or .env are omitted. Root directories named by install-agents.mjs projectAgents are omitted; those are agent install links and are not vendored. A relative symlink target may contain '..' when the resolved path stays inside the checkout. An absolute target, or a target that resolves outside the checkout, is refused.",
-  "contentHash": "3b7d2eb26e920fd78a9cc67f528b6c4b79da99823ba4e9524779d56e9297a8ab",
+  "contentHash": "4ea2dd8d0ee9d4f77dfedb80e4bd0ff95e96cd847399795b2102144296910c11",
   "sourceCommit": "964abc73fa76fc13b25029b757f49391f5e573f6",
   "sourceRepo": "ThisIsMrAli/skill-boilerplate"
 }
