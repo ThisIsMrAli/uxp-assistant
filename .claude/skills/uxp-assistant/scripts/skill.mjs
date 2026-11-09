@@ -10,6 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { findBoilerplateApi, loadBoilerplate } from "./boilerplate-boundary.mjs";
+import { docsRetryAsk } from "./lib/ask.mjs";
 
 const here = path.dirname(pathToFileURL(process.argv[1] || "").pathname || "");
 const extensionPath = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../extension.mjs");
@@ -61,7 +62,11 @@ export async function run(argv) {
     fs.writeFileSync(path.join(out, "launch.json"), `${JSON.stringify({ kind, project, input })}\n`);
     return result;
   }
-  if (command === "session") return specialize(await api.session(rest, common), out);
+  if (command === "session") {
+    if (rest[0] === "ask" && args.id === "docs-retry" && out) ensureQuestion(out, docsRetryAsk());
+    if (rest[0] === "answer" && out) rejectClosedAnswer(out, args.id, String(args.value || ""));
+    return specialize(await api.session(rest, common), out);
+  }
   if (command === "dashboard") {
     const result = api.dashboard(rest, common);
     return result.json || { ok: false, status: result.status, error: result.stderr || result.stdout };
@@ -155,9 +160,26 @@ function specialize(result, out) {
   const main = readJson(path.join(out, "session.json"));
   const answers = answersFromSafe(out);
   const docsFailed = main?.docs && main.docs.ok === false;
-  if (answers["docs-retry"] === "pause" || answers.feasibility === "pause" || outcome === "paused") {
-    const next = `Paused before any edit. Nothing was written. The session is not finished. Run node scripts/skill.mjs session next --out ${out} when the user is ready to answer. The host was NOT TESTED.`;
-    return { ...result, action: "pause", step: "decide", command: `node scripts/skill.mjs session next --out ${out}`, next, say: next, neverStop: undefined };
+  if (answers["docs-retry"] === "pause" || answers.feasibility === "pause") {
+    const which = answers["docs-retry"] === "pause" ? "docs-retry" : "feasibility";
+    const ask = (main?.asks || []).find((item) => item.id === which);
+    const nonce = ask?.nonce || "";
+    const resume = `node scripts/skill.mjs session ask --id ${which} --out ${out}`;
+    const markerPath = path.join(out, "pause-state.json");
+    let marker = {};
+    try {
+      marker = JSON.parse(fs.readFileSync(markerPath, "utf8"));
+    } catch {
+      marker = {};
+    }
+    if (marker.nonce !== nonce) {
+      fs.mkdirSync(out, { recursive: true });
+      fs.writeFileSync(markerPath, `${JSON.stringify({ id: which, nonce })}\n`);
+      const next = `Paused. Nothing was written. The session is not finished. Resume by running ${resume} and answering that question. Do not run session next again until it is answered. The host was NOT TESTED.`;
+      return { ...result, action: "pause", step: "decide", command: resume, next, say: next, neverStop: undefined };
+    }
+    const next = `Pause is waiting for an answer. The session is not finished. Resume by running ${resume}. session next does not continue a pause. The host was NOT TESTED.`;
+    return { ...result, action: "resume", step: "decide", command: resume, next, say: next, neverStop: undefined };
   }
   if (answers["docs-retry"] === "stop" || answers.feasibility === "stop" || outcome === "stopped") {
     const next = "Stopped before any edit. The session ends here. The host was NOT TESTED.";
@@ -169,9 +191,16 @@ function specialize(result, out) {
     const nonce = ask?.nonce || "";
     const failed = (main.docs.failed || []).join(", ") || "none";
     const stale = (main.docs.stale || []).join(", ") || "none";
+    if (answers["docs-retry"] === "refresh" && nonce && retry.appliedNonce !== nonce) {
+      const refresh = `node scripts/skill.mjs refresh --out ${out}`;
+      const next = `The docs are not fresh. Failed: ${failed}. Stale: ${stale}. The docs step is not done. Run ${refresh}. Do not scaffold, and do not ask design questions, until a fetch is fresh.`;
+      return { ...result, action: "refresh", step: "docs", command: refresh, next, say: next };
+    }
     if (retry.attempts >= 3) {
-      const next = `Docs are still offline after ${retry.attempts} fetches. Failed: ${failed}. Stale: ${stale}. The docs step is not done. Do not run refresh again. Pause or stop. The host was NOT TESTED.`;
-      return { ...result, action: "offline", step: "docs", command: "", next, say: next, neverStop: undefined };
+      const askCommand = `node scripts/skill.mjs session ask --id docs-retry --out ${out}`;
+      const refreshCommand = `node scripts/skill.mjs refresh --out ${out}`;
+      const next = `Docs are still offline after ${retry.attempts} fetches. Failed: ${failed}. Stale: ${stale}. The docs step is not done. Pause: ${askCommand} and answer pause. Stop: ${askCommand} and answer stop. A manual refresh is allowed after that new answer is refresh: ${refreshCommand}. The host was NOT TESTED.`;
+      return { ...result, action: "offline", step: "docs", command: askCommand, next, say: next, neverStop: undefined };
     }
     if (answers["docs-retry"] === "refresh" && nonce && retry.appliedNonce === nonce) {
       const command = `node scripts/skill.mjs session ask --id docs-retry --out ${out}`;
@@ -210,6 +239,37 @@ function specialize(result, out) {
     return { ...result, action: "domain", command, next, say: next };
   }
   return hideBrowser(result?.next || result?.say ? { ...result, next: result.next || result.say } : result);
+}
+
+function rejectClosedAnswer(out, id, value) {
+  if (!id) return;
+  const session = readJson(path.join(out, "session.json"));
+  const ask = (session?.asks || []).find((item) => item.id === id);
+  if (!ask?.nonce) return;
+  let lines = [];
+  try {
+    lines = fs.readFileSync(path.join(out, "answers.jsonl"), "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line));
+  } catch {
+    lines = [];
+  }
+  const previous = lines.find((line) => line.type === "answer" && line.askId === id && line.nonce === ask.nonce);
+  if (!previous || previous.value === value) return;
+  throw new Error(`The ${id} question was already answered ${previous.value}. That answer is closed. A new question is required before another choice. This answer was not recorded.`);
+}
+
+function ensureQuestion(out, ask) {
+  const file = path.join(out, "questions.json");
+  let questions = [];
+  try {
+    questions = JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    questions = [];
+  }
+  if (!Array.isArray(questions)) questions = [];
+  if (!questions.some((item) => item.id === ask.id)) {
+    questions.push(ask);
+    fs.writeFileSync(file, `${JSON.stringify(questions, null, 2)}\n`);
+  }
 }
 
 function docsRetryState(out) {

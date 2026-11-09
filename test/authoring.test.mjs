@@ -245,6 +245,7 @@ test("the rename fixture is applied only for the rename goal and still needs a r
   assert.equal(result.success, false);
   assert.equal(fs.existsSync(path.join(result.project, "src", "layer-rename", "Panel.tsx")), false);
   const written = implementLayerRename(result.project);
+  fs.writeFileSync(path.join(result.project, "src", "globals.ts"), "export const uxp = require(\"uxp\") as typeof import(\"uxp\");\nexport const photoshop = (require(\"photoshop\")) as typeof import(\"photoshop\");\nexport const premierepro = (require(\"premierepro\")) as typeof import(\"premierepro\");\n");
   fs.mkdirSync(path.join(result.project, "test"), { recursive: true });
   fs.writeFileSync(path.join(result.project, "test", "rename.test.mjs"), `import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -255,7 +256,7 @@ test("previewRename keeps the current name", () => {
 });
 `);
   const recorded = recordImplementation(out, { goal: RENAME, files: written.files });
-  assert.equal(recorded.state, "commands-finished");
+  assert.equal(recorded.state, "commands-finished", recorded.say);
   assert.equal(recorded.hostExecuted, false);
   assert.match(fs.readFileSync(path.join(result.project, "src", "layer-rename", "Panel.tsx"), "utf8"), /Rename selected layers/);
   assert.match(fs.readFileSync(path.join(result.project, "src", "layer-rename", "host.ts"), "utf8"), /executeAsModal/);
