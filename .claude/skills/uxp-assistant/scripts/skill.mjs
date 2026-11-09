@@ -88,7 +88,7 @@ export async function run(argv) {
   }
   if (command === "record") {
     try {
-      return await recordResult(out, api);
+      return await recordResult(out, api, { reask: Boolean(args.reask) });
     } catch (error) {
       return {
         ok: false,
@@ -99,6 +99,21 @@ export async function run(argv) {
   }
   if (command === "install") return installInto(args.into);
   throw new Error("Use start, session, dashboard, refresh, domain, record, or install.");
+}
+
+/**
+ * NU14: long domain work such as the one-time create-bolt-uxp install shows on the dashboard as the
+ * running step's detail and doing line. The boilerplate's step command writes the session file
+ * synchronously, so the line is there before a blocking install starts.
+ */
+export function dashboardActivity(out, api, text) {
+  if (!api || !out || !text) return;
+  try {
+    const pending = api.session(["step", "--id", "decide", "--status", "running", "--detail", text, "--doing", text, "--out", out]);
+    if (pending && typeof pending.catch === "function") pending.catch(() => {});
+  } catch {
+    // the dashboard line is best effort; the install result is still recorded
+  }
 }
 
 async function domain(out, api) {
@@ -129,6 +144,7 @@ async function domain(out, api) {
     workDir: launch.kind === "empty" ? path.resolve(launch.input) : undefined,
     remember: false,
     dashboardOut: out,
+    onActivity: (text) => dashboardActivity(out, api, text),
     answers,
     ...(fixture ? { fetchImpl: async (url) => ({ ok: true, status: 200, text: async () => `${fixture}\n${url}` }) } : {})
   });
@@ -147,7 +163,7 @@ function readJson(file) {
   }
 }
 
-function specialize(result, out) {
+export function specialize(result, out) {
   if (!result || typeof result !== "object" || !out) return result;
   const domainSession = readJson(path.join(out, "domain", "session.json"));
   const recorded = readJson(path.join(out, "domain", "record-result.json"));
@@ -213,10 +229,15 @@ function specialize(result, out) {
       return { ...result, action: "refresh", step: "docs", command: refresh, next, say: next };
     }
   }
+  if (!docsFailed && outcome === "docs-incomplete") return domainDocsNext(out, result, main);
   const domainError = readJson(path.join(out, "domain-error.json"));
   if (domainError?.error && outcome !== "awaiting-agent-implementation" && outcome !== "commands-finished") {
     const next = `${domainError.error} Fix it, then run node scripts/skill.mjs domain --out ${out} again.`;
     return { ...result, action: "domain", command: `node scripts/skill.mjs domain --out ${out}`, next, say: next };
+  }
+  if (recorded?.state === "script-change-stopped") {
+    const next = `${recorded.say} To ask again, run ${command} --reask.`;
+    return { ...result, action: "record", step: "decide", command, next, say: next, hostExecuted: false };
   }
   if (recorded?.state === "script-change" || outcome === "script-change") {
     const pending = scriptChangePending(out);
@@ -270,6 +291,53 @@ function ensureQuestion(out, ask) {
     questions.push(ask);
     fs.writeFileSync(file, `${JSON.stringify(questions, null, 2)}\n`);
   }
+}
+
+function newestMtime(dir) {
+  let newest = 0;
+  try {
+    for (const name of fs.readdirSync(dir)) {
+      const stat = fs.statSync(path.join(dir, name));
+      if (stat.isFile()) newest = Math.max(newest, stat.mtimeMs);
+    }
+  } catch {
+    return 0;
+  }
+  return newest;
+}
+
+/**
+ * NU12: the main docs were fresh, but the domain step could not fetch them (for example the
+ * network dropped after the docs step). session next must not keep returning domain. It sends
+ * the agent to refresh, returns to domain only once after each newer refresh, and after three
+ * rounds offers pause or stop like a failed docs step.
+ */
+export function domainDocsNext(out, result, main = readJson(path.join(out, "session.json"))) {
+  const statePath = path.join(out, "domain-docs-state.json");
+  const state = readJson(statePath) || { rounds: 0, lastDocs: 0 };
+  const domainAt = (() => {
+    try {
+      return fs.statSync(path.join(out, "domain", "session.json")).mtimeMs;
+    } catch {
+      return 0;
+    }
+  })();
+  const docsAt = newestMtime(path.join(out, "docs"));
+  const failed = (main?.docs?.failed || []).join(", ") || "none";
+  const askCommand = `node scripts/skill.mjs session ask --id docs-retry --out ${out}`;
+  const refresh = `node scripts/skill.mjs refresh --out ${out}`;
+  if (state.rounds >= 3) {
+    const next = `The domain step still cannot fetch the docs after ${state.rounds} refresh rounds. The docs step is not done for the domain. Pause: ${askCommand} and answer pause. Stop: ${askCommand} and answer stop. The host was NOT TESTED.`;
+    return { ...result, action: "offline", step: "docs", command: askCommand, next, say: next, neverStop: undefined };
+  }
+  if (docsAt > domainAt && docsAt > (state.lastDocs || 0)) {
+    fs.writeFileSync(statePath, `${JSON.stringify({ rounds: (state.rounds || 0) + 1, lastDocs: docsAt }, null, 2)}\n`);
+    const command = `node scripts/skill.mjs domain --out ${out}`;
+    const next = `The docs were refreshed after the domain step failed to fetch them. Run ${command} once more. The host was NOT TESTED.`;
+    return { ...result, action: "domain", step: "docs", command, next, say: next };
+  }
+  const next = `The domain step could not fetch the docs (docs-incomplete). Failed in the main docs: ${failed}. Run ${refresh}, then session next. Do not run domain again until a refresh is newer. Do not scaffold until a fetch is fresh. The host was NOT TESTED.`;
+  return { ...result, action: "refresh", step: "docs", command: refresh, next, say: next };
 }
 
 function docsRetryState(out) {
@@ -369,7 +437,7 @@ function mirrorScriptAnswer(mainOut, domainOut) {
   fs.appendFileSync(answers, `${JSON.stringify(line)}\n`);
 }
 
-async function recordResult(out, api) {
+async function recordResult(out, api, options = {}) {
   if (!out) throw new Error("Pass --out.");
   const file = path.join(out, "agent-result.json");
   if (!fs.existsSync(file)) throw new Error("Write agent-result.json first. It is { goal, files: [{ path, sha256 }] }.");
@@ -395,7 +463,7 @@ async function recordResult(out, api) {
   const domainOut = path.join(out, "domain");
   mirrorScriptAnswer(out, domainOut);
   const { recordImplementation } = await import("./lib/workflow.mjs");
-  const result = recordImplementation(domainOut, { goal: body.goal, files: body.files.map((item) => item.path) });
+  const result = recordImplementation(domainOut, { goal: body.goal, files: body.files.map((item) => item.path), reask: Boolean(options.reask) });
   fs.writeFileSync(path.join(domainOut, "record-result.json"), `${JSON.stringify({
     state: result.state,
     say: result.say || "",
