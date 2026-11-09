@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { skillRoot } from "./paths.mjs";
+import { ensureInstaller } from "./scaffold.mjs";
 
 let parserModule;
 
@@ -11,31 +12,57 @@ let parserModule;
  */
 export function parserCandidates(root = skillRoot) {
   const resolved = path.resolve(root);
-  const list = [path.join(resolved, "..", ".uxp-tooling", "node_modules", "@babel", "parser")];
+  const modules = [path.join(resolved, "..", ".uxp-tooling", "node_modules")];
   const repo = path.resolve(resolved, "../../..");
   try {
     const pkg = JSON.parse(fs.readFileSync(path.join(repo, "package.json"), "utf8"));
-    if (pkg.name === "uxp-assistant") list.push(path.join(repo, "node_modules", "@babel", "parser"));
+    if (pkg.name === "uxp-assistant") modules.push(path.join(repo, "node_modules"));
   } catch {
     // not the source repo
+  }
+  const list = [];
+  for (const dir of modules) {
+    list.push(path.join(dir, "@babel", "parser"));
+    list.push(path.join(dir, "create-bolt-uxp", "node_modules", "@babel", "parser"));
+    list.push(path.join(dir, "bolt-uxp", "node_modules", "@babel", "parser"));
+    list.push(path.join(dir, "@vue", "compiler-sfc", "node_modules", "@babel", "parser"));
   }
   return list;
 }
 
-function loadParser() {
-  if (parserModule) return parserModule;
+function tryLoad() {
   const require = createRequire(import.meta.url);
   for (const candidate of parserCandidates()) {
     try {
       const pkg = JSON.parse(fs.readFileSync(path.join(candidate, "package.json"), "utf8"));
-      if (pkg.name !== "@babel/parser") continue;
-      parserModule = require(path.join(candidate, pkg.main || "lib/index.js"));
-      return parserModule;
+      if (pkg.name !== "@babel/parser" || !/^7\./.test(String(pkg.version || ""))) continue;
+      return require(path.join(candidate, pkg.main || "lib/index.js"));
     } catch {
       // the next pinned place
     }
   }
-  throw new Error("The host checker needs @babel/parser from the pinned create-bolt-uxp tooling beside the skill. It was not found there, and a parent node_modules is not used.");
+  return null;
+}
+
+/**
+ * @babel/parser comes with the pinned create-bolt-uxp tooling. An existing-project session may not
+ * have installed that tooling yet, so the checker installs the pinned tooling beside the skill once
+ * rather than loading a parser from a parent folder.
+ */
+function loadParser() {
+  if (parserModule) return parserModule;
+  parserModule = tryLoad();
+  if (parserModule) return parserModule;
+  if (!process.env.UXP_ASSISTANT_NO_TOOLING_INSTALL) {
+    try {
+      ensureInstaller();
+    } catch {
+      // reported below
+    }
+    parserModule = tryLoad();
+    if (parserModule) return parserModule;
+  }
+  throw new Error("The host checker needs @babel/parser from the pinned create-bolt-uxp@1.3.27 tooling beside the skill. It was not found there and could not be installed, and a parent node_modules is not used.");
 }
 
 function parseOnce(parser, text, plugins) {

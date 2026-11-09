@@ -1,31 +1,29 @@
 import { spawnSync } from "node:child_process";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { DECLARED_MANIFEST } from "./floors.mjs";
 import { skillRoot } from "./paths.mjs";
 
-/** The installer is resolved by walking parents, not from process.cwd() alone. */
 export const repoRoot = path.resolve(skillRoot, "../../..");
 
-function walkFor(start, relative) {
-  const seeds = [start, repoRoot, process.cwd()].filter(Boolean);
-  for (const seed of seeds) {
-    let dir = path.resolve(seed);
-    for (let i = 0; i < 8; i += 1) {
-      const candidate = path.join(dir, relative);
-      if (fs.existsSync(candidate)) return candidate;
-      const parent = path.dirname(dir);
-      if (parent === dir) break;
-      dir = parent;
-    }
+export const INSTALLER_VERSION = "1.3.27";
+/** sha256 of create-bolt-uxp@1.3.27 dist/index.js as published on npm. Published versions are immutable. */
+export const INSTALLER_SHA256 = "11a89a9092af122af104a696852c5442c766ed69e6eb571592244b411090ee47";
+
+function readJson(file) {
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    return null;
   }
-  return "";
 }
 
-export function installerEntry(start = repoRoot) {
-  return walkFor(start, "node_modules/create-bolt-uxp/dist/index.js")
-    || walkFor(start, path.join(".uxp-tooling", "node_modules", "create-bolt-uxp", "dist", "index.js"));
+/** The skill's own source repo, where npm ci installs the pinned tooling for development. */
+function sourceRepo(skillDirectory = skillRoot) {
+  const repo = path.resolve(skillDirectory, "../../..");
+  return readJson(path.join(repo, "package.json"))?.name === "uxp-assistant" ? repo : "";
 }
 
 /** The documented install is the directory next to the skill, not the project root. */
@@ -33,37 +31,92 @@ export function toolingPrefix(skillDirectory = skillRoot) {
   return path.join(path.resolve(skillDirectory), "..", ".uxp-tooling");
 }
 
-export function pinnedInstallArgs(prefix) {
-  return ["install", "--prefix", prefix, "--save-exact", "create-bolt-uxp@1.3.27", "--no-audit", "--no-fund"];
+/**
+ * The only places the installer is loaded from, as absolute paths computed from the skill's own folder:
+ * the pinned tooling beside the skill, then the skill's source repo. Parent folders and process.cwd()
+ * are never searched, so a planted node_modules/create-bolt-uxp in an ancestor does not run, and the
+ * lookup is the same from any working directory.
+ */
+export function installerRoots(skillDirectory = skillRoot) {
+  const roots = [path.join(toolingPrefix(skillDirectory), "node_modules")];
+  const repo = sourceRepo(skillDirectory);
+  if (repo) roots.push(path.join(repo, "node_modules"));
+  return roots;
 }
 
-/** Install create-bolt-uxp beside the skill when the advertised copy has no node_modules. */
-export function ensureInstaller(start = repoRoot) {
-  const found = installerEntry(start);
-  if (found && fs.existsSync(found)) return found;
-  const prefix = toolingPrefix(skillRoot);
+/** create-bolt-uxp must be exactly 1.3.27 with the published bytes, and its dependencies must sit in the same pinned node_modules. */
+export function verifyInstaller(modulesDir) {
+  const dir = path.join(modulesDir, "create-bolt-uxp");
+  const pkg = readJson(path.join(dir, "package.json"));
+  if (!pkg) return { ok: false, reason: `${dir} has no create-bolt-uxp package.json` };
+  if (pkg.name !== "create-bolt-uxp" || pkg.version !== INSTALLER_VERSION) {
+    return { ok: false, reason: `${dir} is ${pkg.name || "?"}@${pkg.version || "?"}, not create-bolt-uxp@${INSTALLER_VERSION}` };
+  }
+  const entry = path.join(dir, "dist", "index.js");
+  let digest = "";
+  try {
+    digest = crypto.createHash("sha256").update(fs.readFileSync(entry)).digest("hex");
+  } catch {
+    return { ok: false, reason: `${entry} is missing` };
+  }
+  if (digest !== INSTALLER_SHA256) return { ok: false, reason: `${entry} sha256 ${digest} is not the published create-bolt-uxp@${INSTALLER_VERSION}` };
+  for (const name of Object.keys(pkg.dependencies || {})) {
+    const nested = path.join(dir, "node_modules", name, "package.json");
+    const hoisted = path.join(modulesDir, name, "package.json");
+    if (!fs.existsSync(nested) && !fs.existsSync(hoisted)) return { ok: false, reason: `${name} is not installed beside create-bolt-uxp in ${modulesDir}` };
+  }
+  return { ok: true, entry };
+}
+
+export function installerEntry(skillDirectory = skillRoot) {
+  for (const root of installerRoots(skillDirectory)) {
+    const checked = verifyInstaller(root);
+    if (checked.ok) return checked.entry;
+  }
+  return "";
+}
+
+export function pinnedInstallArgs(prefix) {
+  return ["install", "--prefix", prefix, "--save-exact", `create-bolt-uxp@${INSTALLER_VERSION}`, "--no-audit", "--no-fund"];
+}
+
+/**
+ * Install create-bolt-uxp beside the skill when no verified copy is there.
+ * notify(text) is called before and after the install so the dashboard shows it.
+ */
+export function ensureInstaller(options = {}) {
+  const skillDirectory = options.skillDirectory || skillRoot;
+  const notify = typeof options.notify === "function" ? options.notify : () => {};
+  const found = installerEntry(skillDirectory);
+  if (found) return found;
+  const prefix = toolingPrefix(skillDirectory);
+  notify(`Installing create-bolt-uxp@${INSTALLER_VERSION} into ${prefix}. This needs the network once and takes about 15 seconds.`);
   fs.mkdirSync(prefix, { recursive: true });
   if (!fs.existsSync(path.join(prefix, "package.json"))) {
     fs.writeFileSync(path.join(prefix, "package.json"), "{\"private\":true}\n");
   }
   if (!fs.existsSync(path.join(prefix, ".gitignore"))) fs.writeFileSync(path.join(prefix, ".gitignore"), "*\n");
-  const installed = spawnSync("npm", pinnedInstallArgs(prefix), {
+  const installed = spawnSync(options.npm || "npm", pinnedInstallArgs(prefix), {
+    cwd: prefix,
     encoding: "utf8",
     timeout: 180000
   });
-  const entry = path.join(prefix, "node_modules", "create-bolt-uxp", "dist", "index.js");
-  if (installed.status !== 0 || !fs.existsSync(entry)) {
-    throw new Error(`create-bolt-uxp was not found and npm install create-bolt-uxp@1.3.27 failed. ${(installed.stderr || installed.stdout || "").slice(-400)}`);
+  const checked = verifyInstaller(path.join(prefix, "node_modules"));
+  if (installed.status !== 0 || !checked.ok) {
+    notify(`create-bolt-uxp@${INSTALLER_VERSION} install into ${prefix} failed.`);
+    throw new Error(`create-bolt-uxp@${INSTALLER_VERSION} was not found beside the skill and npm install failed or did not give the published package. ${checked.ok ? "" : checked.reason} ${(installed.stderr || installed.stdout || "").slice(-400)}`.trim());
   }
-  return entry;
+  notify(`Installed create-bolt-uxp@${INSTALLER_VERSION} into ${prefix}.`);
+  return checked.entry;
 }
 
-export function starterIconsDir(start = repoRoot) {
-  const beside = path.join(toolingPrefix(), "node_modules", "bolt-uxp", "public", "icons");
-  const icons = walkFor(start, "node_modules/bolt-uxp/public/icons")
-    || walkFor(start, path.join(".uxp-tooling", "node_modules", "bolt-uxp", "public", "icons"))
-    || (fs.existsSync(beside) ? beside : "");
-  return icons || beside || path.join(repoRoot, "node_modules/bolt-uxp/public/icons");
+export function starterIconsDir(skillDirectory = skillRoot) {
+  for (const root of installerRoots(typeof skillDirectory === "string" && fs.existsSync(path.join(skillDirectory, "SKILL.md")) ? skillDirectory : skillRoot)) {
+    for (const dir of [path.join(root, "bolt-uxp", "public", "icons"), path.join(root, "create-bolt-uxp", "node_modules", "bolt-uxp", "public", "icons")]) {
+      if (fs.existsSync(dir)) return dir;
+    }
+  }
+  return path.join(toolingPrefix(), "node_modules", "bolt-uxp", "public", "icons");
 }
 
 /**
@@ -129,7 +182,7 @@ export function copyStarterIcons(project, root = repoRoot) {
  */
 export async function scaffoldWithInstaller(parent, options) {
   process.env.BOLT_MODULEONLY = "true";
-  const entryPath = ensureInstaller(options.repoRoot || repoRoot);
+  const entryPath = ensureInstaller({ notify: options.onActivity });
   const loaded = await import(pathToFileURL(entryPath).href);
   const create = loaded.createBoltUXP || loaded.default?.createBoltUXP;
   if (typeof create !== "function") {
@@ -163,7 +216,7 @@ export async function scaffoldWithInstaller(parent, options) {
     const auditFix = options.installDeps ? applyNonBreakingAuditFix(folder) : { applied: false, reason: "Dependencies were not installed." };
     return {
       folder,
-      installer: "create-bolt-uxp@1.3.27",
+      installer: `create-bolt-uxp@${INSTALLER_VERSION}`,
       webview: options.webview,
       hybrid: options.hybrid,
       repair,

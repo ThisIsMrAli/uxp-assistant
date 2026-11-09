@@ -245,7 +245,11 @@ export async function runWorkflow(options) {
         app: intake.host,
         installDeps: Boolean(options.installDeps),
         webview: intake.webview,
-        hybrid: intake.hybrid
+        hybrid: intake.hybrid,
+        onActivity: (text) => {
+          setStep(out, "scaffold", "running", text);
+          if (typeof options.onActivity === "function") options.onActivity(text);
+        }
       });
     project = scaffold.folder;
     const manifestFloor = readStarterMin(project, app?.manifestApp);
@@ -380,8 +384,12 @@ export function recordImplementation(out, claimed, { runner } = {}) {
   if (!provenance.ok) {
     if (provenance.scope) {
       const current = readMerged(out).asks.find((item) => item.id === "script-change");
-      const pendingSame = current && current.status !== "answered" && JSON.stringify(current.scope) === JSON.stringify(provenance.scope);
-      if (!pendingSame) publishAsk(out, scriptChangeAsk(provenance));
+      const decision = scriptChangeDecision(current, provenance.scope, { reask: Boolean(claimed?.reask) });
+      if (decision === "stopped") {
+        const say = "You chose stop for this exact script change. The build and package commands were not run, and the question is not asked again. Revert the script or config change, or run record with --reask to ask once more. The host was NOT TESTED.";
+        return { ok: false, success: false, state: "script-change-stopped", blocked: "script-change", hostExecuted: false, say };
+      }
+      if (decision === "ask") publishAsk(out, scriptChangeAsk(provenance));
       return { ok: false, success: false, state: "script-change", blocked: "script-change", hostExecuted: false, say: provenance.say };
     }
     setStep(out, "package", "failed", provenance.say);
@@ -486,6 +494,19 @@ function publishOutcome(out, state, success, archives = "") {
   if (archives) report.archives = archives;
   fs.writeFileSync(file, `${JSON.stringify(report, null, 2)}\n`);
   fs.writeFileSync(path.join(out, "report.md"), `# Status\n\nCommand success: ${success ? "recorded" : "not recorded"}\n\nFeature correctness: not decided\n\nSource and behavior review: pending\n\nState: ${state}\n\nGoal: ${report.goal || ""}\n\nHost executed: no\n\n${archives ? `New archives: ${archives}\n\n` : ""}${success ? REVIEW_LIMIT : "A failed or paused state is not a finished feature."}\n`);
+}
+
+/**
+ * NU13: what record does with a script change that still needs approval.
+ * "pending": the same question is open, so it is not published again.
+ * "stopped": the user answered stop for this exact scope, so it is not asked again unless reask is set.
+ * "ask": publish the question (new scope, a changed scope, or an explicit reask).
+ */
+export function scriptChangeDecision(current, scope, { reask = false } = {}) {
+  const same = Boolean(current) && JSON.stringify(current.scope) === JSON.stringify(scope);
+  if (same && current.status !== "answered") return "pending";
+  if (same && current.status === "answered" && current.answer === "stop" && !reask) return "stopped";
+  return "ask";
 }
 
 export function readScriptGrant(out) {
