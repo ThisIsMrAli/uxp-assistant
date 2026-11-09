@@ -110,5 +110,9 @@ export function runtimeOffer({ pages = [], behaviors = [], goal = "", cepHybrid 
   } else {
     gaps.push("Hybrid was not offered. No native bridge was assessed, and these fresh pages do not establish a hybrid API.");
   }
+  if (/webview|postmessage/i.test(goal)) {
+    const index = choices.findIndex((item) => item.id === "webview");
+    if (index > 0) choices.unshift(choices.splice(index, 1)[0]);
+  }
   return { choices, gaps, limits: retrievedLimits(pages) };
 }

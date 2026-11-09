@@ -12,17 +12,24 @@ const here = path.dirname(fileURLToPath(import.meta.url));
  * file imports api.mjs and nothing under the boilerplate skill tree.
  */
 export function findBoilerplateApi(start = here) {
-  let dir = start;
+  const found = [];
+  let dir = path.resolve(start);
   for (let i = 0; i < 8; i += 1) {
-    const beside = path.join(dir, "skill-boilerplate", "api.mjs");
-    if (fs.existsSync(beside)) return beside;
-    const sibling = path.join(path.dirname(dir), "skill-boilerplate", "api.mjs");
-    if (fs.existsSync(sibling)) return sibling;
+    for (const candidate of [
+      path.join(dir, "skill-boilerplate", "api.mjs"),
+      path.join(path.dirname(dir), "skill-boilerplate", "api.mjs")
+    ]) {
+      const resolved = path.resolve(candidate);
+      if (fs.existsSync(resolved) && !found.includes(resolved)) found.push(resolved);
+    }
     const parent = path.dirname(dir);
     if (parent === dir) break;
     dir = parent;
   }
-  return "";
+  const skillRoot = path.resolve(here, "..");
+  const nested = path.join(skillRoot, "skill-boilerplate", "api.mjs");
+  const outside = found.find((item) => item !== path.resolve(nested));
+  return outside || found[0] || "";
 }
 
 export const BOILERPLATE_API = findBoilerplateApi();

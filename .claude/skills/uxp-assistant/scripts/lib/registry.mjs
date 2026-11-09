@@ -33,7 +33,12 @@ export const HOST_PAGES = {
   "photoshop.executeAsModal": "https://developer.adobe.com/photoshop/uxp/2022/ps-reference/media/executeasmodal",
   "photoshop.changelog": "https://developer.adobe.com/photoshop/uxp/2022/ps-reference/changelog/",
   "premiere.reference": "https://developer.adobe.com/premiere-pro/uxp/ppro_reference/",
-  "premiere.introduction": "https://developer.adobe.com/premiere-pro/uxp/introduction/"
+  "premiere.introduction": "https://developer.adobe.com/premiere-pro/uxp/introduction/",
+  "premiere.sequence": "https://developer.adobe.com/premiere-pro/uxp/ppro-reference/classes/sequence",
+  "premiere.videotrack": "https://developer.adobe.com/premiere-pro/uxp/ppro-reference/classes/videotrack",
+  "premiere.videocliptrackitem": "https://developer.adobe.com/premiere-pro/uxp/ppro-reference/classes/videocliptrackitem",
+  "premiere.project": "https://developer.adobe.com/premiere-pro/uxp/ppro-reference/classes/project",
+  "premiere.ticktime": "https://developer.adobe.com/premiere-pro/uxp/ppro-reference/classes/ticktime"
 };
 
 export function pagesForRequest({ host, goal = "", behaviors = [] } = {}) {
@@ -47,8 +52,17 @@ export function pagesForRequest({ host, goal = "", behaviors = [] } = {}) {
     }
   }
   if (premiere) {
-    pages.push({ id: "premiere.introduction", url: HOST_PAGES["premiere.introduction"], scope: "host" });
-    pages.push({ id: "premiere.reference", url: HOST_PAGES["premiere.reference"], scope: "host" });
+    for (const id of [
+      "premiere.introduction",
+      "premiere.reference",
+      "premiere.project",
+      "premiere.sequence",
+      "premiere.videotrack",
+      "premiere.videocliptrackitem",
+      "premiere.ticktime"
+    ]) {
+      pages.push({ id, url: HOST_PAGES[id], scope: "host" });
+    }
   }
   return pages;
 }

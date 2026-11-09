@@ -8,7 +8,7 @@
   },
   "installed": {
     "shell-quote": "1.12.0",
-    "vite": "6.4.5",
+    "vite": "6.4.6",
     "ws": "8.22.2"
   },
   "vulnerabilities": {

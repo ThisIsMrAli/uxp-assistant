@@ -33,7 +33,7 @@ export function nextAction(out, { dashboardUp = false } = {}) {
       success: false,
       state: session.outcome,
       hostExecuted: false,
-      say: `Implement the requested goal in the project, then \`node scripts/assist.mjs record --result agent-result.json\`. Goal: ${session.contract?.goal || ""}`
+      say: `Implement the requested goal in the project. Add a test script and run npm install, including webview-ui when the runtime is WebView. Write agent-result.json as {"goal":"<the same goal>","files":[{"path":"<relative>","sha256":"<hex>"}]} and run node scripts/skill.mjs record. Goal: ${session.contract?.goal || ""}`
     };
   }
   if (session.outcome === "unknown") {

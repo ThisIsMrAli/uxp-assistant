@@ -14,6 +14,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { loopbackJson } from "./lib/loopback.mjs";
 import { nextAction, reminder } from "./lib/next.mjs";
 import { resolveOut, sessionBin } from "./lib/paths.mjs";
 import {
@@ -97,11 +98,11 @@ async function wait(out, args) {
   if (session.mode === "dashboard") {
     if (!info) return { status: "server-down", id: args.id, next: "The dashboard is down. Ask this in chat with AskQuestion, then record it with the answer command." };
     try {
-      const res = await fetch(`http://127.0.0.1:${info.port}/api/wait?id=${encodeURIComponent(args.id)}&timeout=${seconds}`, {
+      const res = await loopbackJson(`http://127.0.0.1:${info.port}/api/wait?id=${encodeURIComponent(args.id)}&timeout=${seconds}`, {
         headers: { authorization: `Bearer ${info.token}` },
-        signal: AbortSignal.timeout((seconds + 8) * 1000)
+        timeoutMs: (seconds + 8) * 1000
       });
-      const body = await res.json();
+      const body = res.body;
       if (body.status === "pending") body.next = "Not answered yet. Run the same wait command again right now. Do not write to the user.";
       if (body.status === "answered") noteDelivered(out, args.id, body.label, body.via);
       return body;

@@ -23,7 +23,8 @@ function emptySnapshot() {
     scripts: { test: "", build: "", ccx: "" },
     commandFiles: {},
     packaging: {},
-    surface: ""
+    surface: "",
+    fileSurfaces: {}
   };
 }
 
@@ -46,7 +47,11 @@ export function snapshotProject(project) {
       } else if (/\.(jsx?|tsx?|mjs|cjs|css|html|json|md)$/.test(entry.name)) {
         const text = fs.readFileSync(full, "utf8");
         snap.files[rel] = sha(text);
-        if (/\.(jsx?|tsx?|mjs|cjs)$/.test(entry.name)) surfaces.push(codeSurface(text));
+        if (/\.(jsx?|tsx?|mjs|cjs)$/.test(entry.name)) {
+          const surface = codeSurface(text);
+          surfaces.push(surface);
+          snap.fileSurfaces[rel] = surface;
+        }
         if (PACKAGING.has(rel)) snap.packaging[rel] = sha(text);
       }
     }
@@ -236,11 +241,13 @@ export function evidenceTokens(contract) {
 /** Symbols a fresh page actually names, not every word in the goal sentence. */
 export function apiSymbols(contract) {
   const symbols = new Set();
-  for (const item of contract?.evidence || []) {
-    const chunks = [item.token, item.quote].filter(Boolean).join("\n");
-    for (const id of identifiers(chunks)) symbols.add(id);
-    for (const match of chunks.matchAll(new RegExp(`\\b([A-Za-z_][A-Za-z0-9_]*)\\b\\s+(?:${TYPE_WORD})\\b`, "gi"))) symbols.add(match[1]);
-    for (const match of chunks.matchAll(/\b([A-Za-z_][A-Za-z0-9_]*)\b\s+is\s+a\s+(?:read\/write\s+|read-write\s+)?(?:string|number|boolean)\b/gi)) symbols.add(match[1]);
+  const chunks = [];
+  for (const item of contract?.evidence || []) chunks.push([item.token, item.quote].filter(Boolean).join("\n"));
+  if (contract?.docText) chunks.push(String(contract.docText));
+  for (const chunk of chunks) {
+    for (const id of identifiers(chunk)) symbols.add(id);
+    for (const match of chunk.matchAll(new RegExp(`\\b([A-Za-z_][A-Za-z0-9_]*)\\b\\s+(?:${TYPE_WORD})\\b`, "gi"))) symbols.add(match[1]);
+    for (const match of chunk.matchAll(/\b([A-Za-z_][A-Za-z0-9_]*)\b\s+is\s+a\s+(?:read\/write\s+|read-write\s+)?(?:string|number|boolean)\b/gi)) symbols.add(match[1]);
   }
   return [...symbols].filter((symbol) => {
     if (STOP.has(symbol.toLowerCase())) return false;
@@ -290,25 +297,120 @@ export function reviewClaim({ contract, files, bodies }) {
     return { ok: false, say: "No feature source changed. Editing package.json or adding a test script is not the feature." };
   }
   const featureText = feature.map((item) => item.body).join("\n");
-  const surface = feature.map((item) => codeSurface(item.body)).join("\n");
   const symbols = apiSymbols(contract);
-  const usedSymbols = usedApiSymbols(surface, symbols, contract?.baseline?.surface || "");
+  const surfaces = contract?.baseline?.fileSurfaces || null;
+  const previousFor = (rel) => {
+    if (surfaces && Object.prototype.hasOwnProperty.call(surfaces, rel)) return surfaces[rel];
+    return contract?.baseline?.surface || "";
+  };
+  const introduced = [];
+  for (const item of feature) {
+    const added = usedApiSymbols(codeSurface(item.body), symbols, previousFor(item.rel));
+    if (added.length) introduced.push({ rel: item.rel, symbols: added });
+  }
+  const usedSymbols = [...new Set(introduced.flatMap((item) => item.symbols))];
   if (!usedSymbols.length) {
     return {
       ok: false,
-      say: "The changed code does not use a documented API symbol outside comments, strings, and static panel text. A phrase copied into the panel is not the call, and a starter token such as useState is not the feature. Source and behavior review is still pending. This is not commands-finished.",
+      say: "The changed code does not use a documented API symbol outside comments, strings, and static panel text. A phrase copied into the panel is not the call, and a starter token such as useState is not the feature. An unchanged file, including a starter file that already used the symbol, does not count. Source and behavior review is still pending. This is not commands-finished.",
       symbols
     };
   }
   if (goalWasReplaced(contract, featureText)) {
     return { ok: false, say: "The changed files replace the requested goal with the rename fixture." };
   }
-  const ui = feature.filter((item) => /\.(tsx|jsx|vue|svelte|html)$/.test(item.rel));
-  const uiText = (ui.length ? ui : feature).map((item) => item.body).join("\n");
-  if (!/disabled|error|Loading|status/i.test(uiText)) {
-    return { ok: false, say: "The changed files do not show an error, disabled, or loading state." };
+  const outside = renameOutsideModal(contract, feature);
+  if (outside) return { ok: false, say: outside };
+  const missing = undocumentedHostCalls(feature, contract?.docText || "");
+  if (missing.length) {
+    return {
+      ok: false,
+      say: `These host calls are not in the fetched API docs: ${missing.join(", ")}. A test that repeats the same call does not document it.`
+    };
   }
-  return { ok: true, changed, feature, hit: usedSymbols, usedSymbols, limits: REVIEW_LIMIT };
+  const ui = feature.filter((item) => /\.(tsx|jsx|vue|svelte|html)$/.test(item.rel));
+  if (ui.length && !ui.some((item) => showsHonestUiState(item.body))) {
+    return { ok: false, say: "The changed panel does not show a visible waiting, loading, or error state, or a disabled control. A variable named status is not that state." };
+  }
+  return { ok: true, changed, feature, hit: usedSymbols, usedSymbols, introducedFiles: introduced.map((item) => item.rel), limits: REVIEW_LIMIT };
+}
+
+const CALL_SKIP = new Set(["map", "filter", "forEach", "reduce", "find", "findIndex", "some", "every", "flat", "flatMap", "push", "pop", "shift", "unshift", "slice", "splice", "join", "split", "trim", "replace", "replaceAll", "match", "matchAll", "test", "exec", "then", "catch", "finally", "resolve", "reject", "all", "race", "any", "allSettled", "keys", "values", "entries", "assign", "create", "freeze", "log", "warn", "error", "info", "debug", "stringify", "parse", "now", "bind", "call", "apply", "toString", "valueOf", "includes", "indexOf", "startsWith", "endsWith", "padStart", "padEnd", "toLowerCase", "toUpperCase", "toFixed", "substring", "charAt", "repeat", "at", "sort", "reverse", "concat", "from", "of", "get", "set", "has", "add", "delete", "clear", "querySelector", "querySelectorAll", "addEventListener", "removeEventListener", "preventDefault", "stopPropagation", "focus", "blur", "click", "setAttribute", "getAttribute", "appendChild", "removeChild", "closest", "contains"]);
+const RECEIVER_SKIP = new Set(["console", "JSON", "Math", "Object", "Promise", "Array", "Date", "Number", "String", "document", "window", "globalThis", "process", "Buffer", "fs", "path", "crypto", "assert", "React"]);
+
+export function showsHonestUiState(source) {
+  const text = String(source || "").replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^\\])\/\/.*$/gm, "$1");
+  if (/\b(?:disabled|aria-disabled|aria-busy)\b/.test(text)) return true;
+  const visible = [];
+  for (const match of text.matchAll(/>([^<{]+)</g)) visible.push(match[1]);
+  for (const match of text.matchAll(/\{\s*["'`]([^"'`]{2,})["'`]\s*\}/g)) visible.push(match[1]);
+  return /\b(waiting|loading|error|failed|unavailable|empty|nothing to show)\b/i.test(visible.join("\n"));
+}
+
+export function renameOutsideModal(contract, feature) {
+  const goal = String(contract?.goal || "");
+  if (!/rename/i.test(goal)) return "";
+  for (const item of feature || []) {
+    if (isTestPath(item.rel)) continue;
+    const code = codeSurface(item.body);
+    const re = /(?:layer|item)\.name\s*=/g;
+    for (const match of code.matchAll(re)) {
+      if (!insideCall(code, "executeAsModal", match.index)) {
+        return "A layer rename assigns .name outside executeAsModal. The fetched modal page requires that wrapper.";
+      }
+    }
+  }
+  return "";
+}
+
+function insideCall(code, name, index) {
+  const start = code.lastIndexOf(name, index);
+  if (start < 0) return false;
+  const open = code.indexOf("(", start);
+  if (open < 0 || open > index) return false;
+  let depth = 0;
+  for (let i = open; i < code.length; i += 1) {
+    if (code[i] === "(") depth += 1;
+    else if (code[i] === ")") {
+      depth -= 1;
+      if (depth === 0) return i > index;
+    }
+  }
+  return false;
+}
+
+export function undocumentedHostCalls(feature, docText) {
+  const docs = String(docText || "").toLowerCase();
+  const bodies = (feature || []).map((item) => item.body);
+  const missing = [];
+  for (const item of feature || []) {
+    if (isTestPath(item.rel)) continue;
+    const skipReceivers = importedReceivers(item.body);
+    const code = codeSurface(item.body);
+    const re = /(?:^|[^.\w$])([A-Za-z_$][\w$]*)\s*\.\s*([A-Za-z_$][\w$]*)\s*\(/g;
+    for (const match of code.matchAll(re)) {
+      const receiver = match[1];
+      const name = match[2];
+      if (RECEIVER_SKIP.has(receiver) || skipReceivers.has(receiver) || CALL_SKIP.has(name)) continue;
+      if (locallyDefined(bodies, name)) continue;
+      if (!docs.includes(name.toLowerCase())) missing.push(`${receiver}.${name}()`);
+    }
+  }
+  return [...new Set(missing)];
+}
+
+function importedReceivers(source) {
+  const skip = new Set();
+  for (const statement of importStatements(source)) {
+    if (/^(photoshop|premierepro|uxp)(\/|$)/.test(statement.spec)) continue;
+    for (const name of bindingsFrom(statement.text)) skip.add(name);
+  }
+  return skip;
+}
+
+function locallyDefined(bodies, name) {
+  const pattern = new RegExp(`(?:function\\s+${name}\\b|(?:const|let|var)\\s+${name}\\s*=)`);
+  return bodies.some((body) => pattern.test(commentStripped(body)));
 }
 
 function commentStripped(source) {
@@ -399,12 +501,12 @@ function assertionScore(source) {
   return { real, tautology };
 }
 
-export function testsCoverFeature(project, changed, usedSymbols) {
+export function testsCoverFeature(project, changed, usedSymbols, introducedFiles) {
   const scripts = readScripts(project);
   if (!scripts) return { ok: false, say: "No package.json. Tests were not run." };
   if (!scripts.test) return { ok: false, say: "The project has no test script. The Bolt starter does not ship one, and a missing script is not a passing test." };
   if (isNoopTestScript(scripts.test)) return { ok: false, say: "The test script is a no-op. process.exit(0) does not exercise the feature and is not marked done." };
-  const users = new Set((changed || [])
+  const users = new Set(Array.isArray(introducedFiles) ? introducedFiles : (changed || [])
     .filter((item) => item.rel !== "package.json" && !isTestPath(item.rel))
     .filter((item) => usedApiSymbols(codeSurface(item.body), usedSymbols || [], "").length)
     .map((item) => item.rel));

@@ -24,7 +24,7 @@ const byUrl = new Map(catalog.map((page) => [page.url, page.id]));
 const TEXT = {
   "photoshop.layer": "name string R W 22.5 Name of the layer.\nid number R 22.5 The identifier of the layer.\nopacity number R W 23.0 The layer opacity.\n",
   "photoshop.document": "activeLayers\n\nLayers\n\nR W\n\n22.5\n\nThe selected layers in the document. (26.9)\n\ntitle\n\nstring\n\nR\n\n22.5\n\nDocument title\n",
-  "photoshop.executeAsModal": "commandName string required 23.0 This description is shown above the progress bar.\nsuspendHistory 23.0\n",
+  "photoshop.executeAsModal": "executeAsModal\ncommandName string required 23.0 This description is shown above the progress bar.\nsuspendHistory\nresumeHistory\n23.0\n",
   "photoshop.changelog": "set Document activeLayers by providing an array of Layer objects.\n",
   manifest: "Current UXP hosts use manifest version 5.\nminVersion is a required string.\n",
   "premiere.reference": "importFiles\n\nfunction\n\nImport files into the active project.\n",
@@ -599,7 +599,7 @@ test("static text, comment-only API, a noop assertion, and starter tokens do not
   fs.mkdirSync(path.join(namedReady.project, "src"), { recursive: true });
   fs.mkdirSync(path.join(namedReady.project, "test"), { recursive: true });
   fs.writeFileSync(path.join(namedReady.project, "src", "title-read.mjs"), "export function readTitle(app){ if (!app || !app.activeDocument) return { ok: false, status: \"No document.\" }; return { ok: true, status: \"Read\", title: app.activeDocument.title }; }\n");
-  fs.writeFileSync(path.join(namedReady.project, "src", "TitleStub.tsx"), "export function TitleStub(){ return <p className=\"status\">Idle</p>; }\n");
+  fs.writeFileSync(path.join(namedReady.project, "src", "TitleStub.tsx"), "export function TitleStub(){ return <p>Idle</p><button type=\"button\" disabled>Read</button>; }\n");
   fs.writeFileSync(path.join(namedReady.project, "test", "title-stub.test.mjs"), "import { test } from \"node:test\"; import assert from \"node:assert/strict\"; test(\"mentions TitleStub and skips the call\", () => { assert.equal(1, 1); });\n");
   const mention = recordImplementation(named, { goal: phrase, files: ["src/title-read.mjs", "src/TitleStub.tsx"] });
   assert.equal(mention.success, false);

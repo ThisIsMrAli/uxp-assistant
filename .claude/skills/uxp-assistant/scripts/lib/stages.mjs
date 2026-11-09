@@ -32,6 +32,8 @@ export function stageDecision({ choice, capability, pages, behaviors, goal, cont
   const offer = runtimeOffer({ pages, behaviors, goal, cepHybrid });
   const runtime = choice("runtime");
   if (!runtime) return { action: "ask", ask: runtimeAsk(offer) };
+  if (runtime === "refresh") return { action: "refresh-docs", say: "The docs are not fresh enough to choose a runtime. Refresh them before any edit." };
+  if (runtime === "stop") return { action: "stop", say: "Stopped before any edit." };
   if (!offer.choices.some((item) => item.id === runtime)) {
     return { action: "reject-runtime", say: `${runtime} was not offered. ${offer.gaps.join(" ")} No files were written.`, offer };
   }

@@ -74,7 +74,7 @@
     "native": "evidence/preview/cloud-native-simulation.png",
     "webview": "evidence/preview/cloud-webview-browser.png",
     "log": "evidence/preview/preview-log.json",
-    "capturedOn": "this cloud environment",
+    "capturedOn": "this machine",
     "boxBrowser": false,
     "hostExecuted": false,
     "note": "The session page is a source-text preview plus mocks. It is not a UXP UI preview. The built-bundle screenshots load the acceptance package script behind a labelled shim. Poster is mock data. Adobe host NOT TESTED.",
@@ -105,6 +105,6 @@
     "Passing this suite does not declare the product ready.",
     "The command checker hashes static local code imports from the supported scripts and from vite.config.ts and uxp.config.ts. JSON, including package.json, package modules, and node builtins are outside that set. Process and eval in a hashed file are refused. This is not a sandbox and not a complete executable closure.",
     "npm audit reports 7 moderate advisories through pinned create-bolt-uxp@1.3.27. The suggested fix is create-bolt-uxp@0.2.5, an older major, and was not applied. See evidence/audit.json.",
-    "The built-bundle page is this cloud environment. It is not the box browser and not Photoshop. The generated plugin install reported its own advisories during acceptance and is a separate tree from the skill audit."
+    "The built-bundle page is this machine. It is not the box browser and not Photoshop. The generated plugin install reported its own advisories during acceptance and is a separate tree from the skill audit."
   ]
 }

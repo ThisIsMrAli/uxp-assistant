@@ -37,7 +37,8 @@ export async function startSkill({ extensionPath, out, input = "", kind = "empty
     docsSha: "",
     fetchedAt: "",
     steps: ext.steps,
-    askSteps: ext.askSteps || {}
+    askSteps: ext.askSteps || {},
+    extensionPath: extensionPath ? path.resolve(extensionPath) : ""
   };
   fs.writeFileSync(path.join(out, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
   fs.writeFileSync(path.join(out, "questions.json"), `${JSON.stringify(questions, null, 2)}\n`);

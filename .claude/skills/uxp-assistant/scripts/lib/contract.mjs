@@ -53,7 +53,7 @@ export function buildContract({ intake, capability, projectPath, docs, kept, bas
       "Do not write classified origins into requiredPermissions. Recording an origin does not grant network access."
     ],
     handoff: capability.state === "awaiting-agent-implementation"
-      ? "The invoking assistant writes this goal in the project using design-constraints.md and the chosen runtime, then records agent-result.json with the files that changed. A stock file or a no-op test is not the feature. A browser preview is not the host. The skill keeps the real command exits and does not treat them as semantic proof."
+      ? "The invoking assistant writes this goal in the project using design-constraints.md and the chosen runtime. Add a test script. The Bolt starter does not ship one. Run npm install in the project before test, build, or package. A WebView project also needs npm install inside webview-ui. A WebView npm run build that exits 0 and writes no output is a failure. Then record agent-result.json as { goal, files: [{ path, sha256 }] } and run node scripts/skill.mjs record. That one command checks the hashes and records the test, build, and package exits. A stock file or a no-op test is not the feature. A browser preview is not the host. The skill does not treat those exits as semantic proof."
       : capability.state === "unknown"
         ? "Pause. Name the host API or refresh the page that should document it, then continue. Do not invent the call, do not swap in the rename fixture, and do not mark the feature done."
         : capability.state === "docs-incomplete"

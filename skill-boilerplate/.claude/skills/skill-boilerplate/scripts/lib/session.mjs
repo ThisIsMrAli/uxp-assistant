@@ -158,6 +158,7 @@ export function startSession(out, report, { keep = false } = {}) {
       fetchedAt: report.fetchedAt || ""
     };
     draft.askSteps = report.askSteps || {};
+    if (report.extensionPath) draft.extensionPath = report.extensionPath;
     draft.needsCredential = false;
     if (!previous || !sameAddon(previous, report) || !draft.baseline.length) {
       draft.baseline = (report.findings || []).map(baselineEntry);
@@ -328,6 +329,21 @@ export function publishAsk(out, ask) {
   return { session, ask: normalized };
 }
 
+/** Show a question that another session already published, keeping its nonce. */
+export function adoptAsk(out, ask) {
+  if (!ask?.id || !ask?.nonce) throw new Error("An adopted question needs an id and a nonce.");
+  if (!Array.isArray(ask.options) || ask.options.length < 1) throw new Error("An adopted question needs at least one option.");
+  return mutate(out, (draft) => {
+    draft.askSteps = draft.askSteps || {};
+    if (!draft.askSteps[ask.id]) draft.askSteps[ask.id] = "decide";
+    draft.asks = draft.asks.filter((item) => item.id !== ask.id);
+    draft.asks.push(ask);
+    const step = stepForAsk(ask.id, draft);
+    if (step) setStepIn(draft, step, "waiting", ask.title || "Waiting for your answer");
+    log(draft, step, `Needs a decision: ${ask.title || ask.id}.`);
+  });
+}
+
 /** Record an answer given in chat, so the session shows what was decided and how. */
 export function answerFields(ask, value, via, extra = {}) {
   return {
@@ -359,6 +375,7 @@ export function answerFromChat(out, id, value) {
     const step = stepForAsk(id, draft);
     if (step) setStepIn(draft, step, "running", `You chose: ${plainLabel(option.label)}`);
     log(draft, step, `You chose: ${plainLabel(option.label)}.`);
+    settleStep(out, draft, step);
   });
   return option;
 }
@@ -377,7 +394,19 @@ export function noteDelivered(out, id, label, via) {
     // The step said "Waiting for your answer". Replace it, or it keeps saying so while the agent works.
     setStepIn(draft, step, "running", `You chose: ${plainLabel(label)}`);
     log(draft, step, `You chose: ${plainLabel(label)}${via === "dashboard" ? " on the dashboard" : ""}.`);
+    settleStep(out, draft, step);
   });
+}
+
+function settleStep(out, draft, stepId) {
+  if (!stepId) return;
+  const published = (draft.asks || []).filter((ask) => stepForAsk(ask.id, draft) === stepId);
+  if (!published.length) return;
+  const lines = readAnswers(out);
+  const open = published.some((ask) => !lines.some((line) => line.type === "answer" && line.askId === ask.id && line.nonce === ask.nonce));
+  if (open) return;
+  const detail = draft.steps.find((step) => step.id === stepId)?.detail || "";
+  setStepIn(draft, stepId, "done", detail);
 }
 
 const plainLabel = (label) => String(label || "").replace(/\s*\(recommended\)\s*$/i, "");
@@ -388,6 +417,11 @@ export function matchOption(ask, value) {
 }
 
 export function finish(out, summary) {
+  const current = readSession(out);
+  const docs = current?.steps?.find((step) => step.id === "docs");
+  if (docs && docs.status !== "done") {
+    throw new Error("Docs were never fetched. Run refresh before done.");
+  }
   return mutate(out, (draft) => {
     draft.summary = summary || null;
     for (const step of draft.steps) {

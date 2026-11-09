@@ -24,10 +24,10 @@ if (ranDirectly) {
   try {
     const result = await run(process.argv.slice(2));
     process.stdout.write(`${JSON.stringify(result)}\n`);
-    if (result && result.ok === false) process.exitCode = 2;
+    process.exit(result && result.ok === false ? 2 : 0);
   } catch (error) {
     process.stdout.write(`${JSON.stringify({ ok: false, error: error.message })}\n`);
-    process.exitCode = 1;
+    process.exit(1);
   }
 }
 
@@ -58,13 +58,13 @@ export async function run(argv) {
     return result.json || { ok: false, status: result.status, error: result.stderr || result.stdout };
   }
   if (command === "refresh") return api.refresh(common);
-  if (command === "domain") return domain(out);
-  if (command === "record") return recordResult(out);
+  if (command === "domain") return domain(out, api);
+  if (command === "record") return recordResult(out, api);
   if (command === "install") return installInto(args.into);
   throw new Error("Use start, session, dashboard, refresh, domain, record, or install.");
 }
 
-async function domain(out) {
+async function domain(out, api) {
   if (!out) throw new Error("Pass --out.");
   const answers = answersFrom(out);
   if (typeof answers.permissions === "string") {
@@ -85,7 +85,7 @@ async function domain(out) {
   }
   const { runWorkflow } = await import("./lib/workflow.mjs");
   const fixture = process.env.SKILL_DOC_FIXTURE;
-  return runWorkflow({
+  const handed = await runWorkflow({
     out: path.join(out, "domain"),
     kind: launch.kind,
     projectPath: launch.kind === "existing" && launch.project ? path.resolve(launch.project) : "",
@@ -95,21 +95,48 @@ async function domain(out) {
     answers,
     ...(fixture ? { fetchImpl: async (url) => ({ ok: true, status: 200, text: async () => `${fixture}\n${url}` }) } : {})
   });
+  if (handed?.state === "awaiting-agent-implementation" && api) {
+    await api.session(["step", "--id", "intake", "--status", "done", "--detail", "Intake answered.", "--out", out]);
+    await api.session(["step", "--id", "decide", "--status", "running", "--doing", "Writing the feature", "--out", out]);
+  }
+  return handed;
+}
+
+function readJson(file) {
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    return null;
+  }
 }
 
 function specialize(result, out) {
   if (!result || typeof result !== "object" || !out) return result;
-  let handed = false;
-  try {
-    const domainSession = JSON.parse(fs.readFileSync(path.join(out, "domain", "session.json"), "utf8"));
-    handed = domainSession.outcome === "awaiting-agent-implementation" || domainSession.outcome === "commands-finished";
-  } catch {
-    handed = false;
+  const domainSession = readJson(path.join(out, "domain", "session.json"));
+  const recorded = readJson(path.join(out, "domain", "record-result.json"));
+  const outcome = domainSession?.outcome || "";
+  const command = `node scripts/skill.mjs record --out ${out}`;
+  if (outcome === "commands-finished" || recorded?.state === "commands-finished") {
+    const next = "Commands finished. The Adobe host was NOT TESTED. The session is finished. Run node scripts/skill.mjs dashboard stop if the dashboard is still up.";
+    return { ...result, action: "finished", step: "done", command: "", next, say: next, hostExecuted: false };
   }
+  if (recorded?.state === "script-change" || outcome === "script-change") {
+    const pending = scriptChangePending(out);
+    if (pending) {
+      const next = `The script-change approval is on the dashboard. Run node scripts/skill.mjs session wait --id script-change --out ${out}. Do not run the changed scripts before it is approved.`;
+      return { ...result, action: "wait", ask: "script-change", step: "decide", command: `node scripts/skill.mjs session wait --id script-change --out ${out}`, next, say: next };
+    }
+    const next = `The script-change answer is recorded. Run ${command} again for that exact set. The host was NOT TESTED.`;
+    return { ...result, action: "record", step: "decide", command, next, say: next };
+  }
+  if (recorded?.state && recorded.state !== "commands-finished") {
+    const next = `${recorded.say || "The record did not finish."} Fix the project, update agent-result.json, and run ${command} again. The host was NOT TESTED.`;
+    return { ...result, action: "record", step: "decide", command, next, say: next, hostExecuted: false };
+  }
+  const handed = outcome === "awaiting-agent-implementation";
   if (handed && (result.action === "finish" || result.action === "apply" || result.action === "domain")) {
-    const command = `node scripts/skill.mjs record --out ${out}`;
-    const next = `Write agent-result.json as {"goal":"<the same goal>","files":[{"path":"<relative>","sha256":"<hex>"}]}. Then run ${command}. Do not mark tests, package, or the host done unless those commands ran. The host was NOT TESTED.`;
-    return { ...result, action: "record", command, next, say: next };
+    const next = `Add a "test" script and run npm install in the project. A WebView project also needs npm install inside webview-ui. Write agent-result.json as {"goal":"<the same goal>","files":[{"path":"<relative>","sha256":"<hex>"}]}. Then run ${command}. That command runs the validator and records the test, build, and package exits. The host was NOT TESTED.`;
+    return { ...result, action: "record", step: "decide", command, next, say: next };
   }
   if (result.action === "finish" || result.action === "apply") {
     const command = `node scripts/skill.mjs domain --out ${out}`;
@@ -119,7 +146,38 @@ function specialize(result, out) {
   return { ...result, next: result.next || result.say };
 }
 
-function recordResult(out) {
+function scriptChangePending(out) {
+  const session = readJson(path.join(out, "session.json"));
+  const ask = (session?.asks || []).find((item) => item.id === "script-change");
+  if (!ask) return false;
+  let lines = [];
+  try {
+    lines = fs.readFileSync(path.join(out, "answers.jsonl"), "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line));
+  } catch {
+    lines = [];
+  }
+  return !lines.some((line) => line.type === "answer" && line.askId === "script-change" && line.nonce === ask.nonce);
+}
+
+function mirrorScriptAnswer(mainOut, domainOut) {
+  const domain = readJson(path.join(domainOut, "session.json"));
+  const ask = (domain?.asks || []).find((item) => item.id === "script-change");
+  if (!ask) return;
+  let mainLines = [];
+  try {
+    mainLines = fs.readFileSync(path.join(mainOut, "answers.jsonl"), "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line));
+  } catch {
+    mainLines = [];
+  }
+  const line = mainLines.find((item) => item.type === "answer" && item.askId === "script-change" && item.nonce === ask.nonce);
+  if (!line) return;
+  const answers = path.join(domainOut, "answers.jsonl");
+  const existing = fs.existsSync(answers) ? fs.readFileSync(answers, "utf8") : "";
+  if (existing.includes(`"nonce":${JSON.stringify(ask.nonce)}`) && existing.includes('"askId":"script-change"')) return;
+  fs.appendFileSync(answers, `${JSON.stringify(line)}\n`);
+}
+
+async function recordResult(out, api) {
   if (!out) throw new Error("Pass --out.");
   const file = path.join(out, "agent-result.json");
   if (!fs.existsSync(file)) throw new Error("Write agent-result.json first. It is { goal, files: [{ path, sha256 }] }.");
@@ -142,12 +200,54 @@ function recordResult(out) {
     const hash = crypto.createHash("sha256").update(fs.readFileSync(full)).digest("hex");
     if (hash !== item.sha256) throw new Error(`${item.path} hash does not match the file on disk.`);
   }
-  fs.writeFileSync(path.join(out, "domain", "recorded.json"), `${JSON.stringify({ goal: body.goal, files: body.files, hostExecuted: false }, null, 2)}\n`);
+  const domainOut = path.join(out, "domain");
+  mirrorScriptAnswer(out, domainOut);
+  const { recordImplementation } = await import("./lib/workflow.mjs");
+  const result = recordImplementation(domainOut, { goal: body.goal, files: body.files.map((item) => item.path) });
+  fs.writeFileSync(path.join(domainOut, "record-result.json"), `${JSON.stringify({
+    state: result.state,
+    say: result.say || "",
+    blocked: result.blocked || "",
+    hostExecuted: false
+  }, null, 2)}\n`);
+  fs.writeFileSync(path.join(domainOut, "recorded.json"), `${JSON.stringify({ goal: body.goal, files: body.files, hostExecuted: false, state: result.state }, null, 2)}\n`);
+  if (result.state === "script-change") {
+    const ask = (readJson(path.join(domainOut, "session.json"))?.asks || []).find((item) => item.id === "script-change");
+    if (ask && api?.adoptAsk) api.adoptAsk(out, ask);
+    return {
+      ok: false,
+      state: "script-change",
+      hostExecuted: false,
+      say: result.say,
+      next: `The script-change approval is on the dashboard. Run node scripts/skill.mjs session wait --id script-change --out ${out}. Do not run the changed scripts before it is approved.`
+    };
+  }
+  if (result.state === "commands-finished") {
+    try {
+      await api.session(["done", "--summary", "Commands finished. The Adobe host was NOT TESTED.", "--out", out]);
+    } catch (error) {
+      return {
+        ok: true,
+        state: "commands-finished",
+        hostExecuted: false,
+        say: error.message,
+        next: `Commands finished. The Adobe host was NOT TESTED. ${error.message}`
+      };
+    }
+    return {
+      ok: true,
+      state: "commands-finished",
+      files: body.files.length,
+      hostExecuted: false,
+      next: `Commands finished. The Adobe host was NOT TESTED. Run node scripts/skill.mjs session next --out ${out}. It should say the session is finished.`
+    };
+  }
   return {
-    ok: true,
-    files: body.files.length,
+    ok: false,
+    state: result.state,
     hostExecuted: false,
-    next: "The record matches the files on disk. Run the project's test, build, and package scripts yourself and record their exits. Do not mark them done from this line. Photoshop and Premiere were NOT TESTED."
+    say: result.say,
+    next: `${result.say || "The record did not finish."} Fix the project, update agent-result.json, and run node scripts/skill.mjs record --out ${out} again. The host was NOT TESTED.`
   };
 }
 

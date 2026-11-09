@@ -193,14 +193,17 @@ test("B16 preview output stays beside the package and does not claim a cloud cap
 });
 
 test("B17 the dashboard drops the Express leftovers", () => {
-  const page = fs.readFileSync(path.join(root, "skill-boilerplate/.claude/skills/skill-boilerplate/assets/dashboard/app.js"), "utf8");
+  const page = [
+    fs.readFileSync(path.join(root, "skill-boilerplate/.claude/skills/skill-boilerplate/assets/dashboard/app.js"), "utf8"),
+    fs.readFileSync(path.join(root, ".claude/skills/uxp-assistant/assets/dashboard/app.js"), "utf8")
+  ].join("\n");
   const server = fs.readFileSync(path.join(root, "skill-boilerplate/.claude/skills/skill-boilerplate/scripts/lib/server.mjs"), "utf8");
   assert.equal(page.includes("listing-review"), false);
   assert.equal(page.includes("listingBlock"), false);
   assert.equal(page.includes('step.id === "access"'), false);
   assert.equal(server.includes("Review dashboard"), false);
   assert.match(server, /Session dashboard/);
-  assert.match(page, /status === "running" \? h\("span", \{ class: "tag", "data-k": "running", text: "Now" \}/);
+  assert.match(page, /=== "running" \? h\("span", \{ class: "tag", "data-k": "running", text: "Now" \}/);
 });
 
 test("UX questions skip the empty-folder set for an existing project and recommend one choice", () => {

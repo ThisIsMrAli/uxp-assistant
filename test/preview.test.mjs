@@ -34,7 +34,7 @@ test("the browser preview blocks native mutation and a missing host bridge", asy
   const webPage = await servePreview(web);
   const page = await launch({ width: 900, height: 700, chrome });
   const log = {
-    capturedOn: "this cloud environment",
+    capturedOn: "this machine",
     boxBrowser: false,
     hostExecuted: false,
     supplied: "source text from the supplied UI, not a host render",

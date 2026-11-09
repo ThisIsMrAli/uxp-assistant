@@ -36,7 +36,8 @@ export default {
     design: "decide",
     validation: "decide",
     "narrow-permissions": "decide",
-    consequential: "decide"
+    consequential: "decide",
+    "script-change": "decide"
   },
   docs: { everyInvocation: true, parallel: true, pageTimeoutMs: 8000, budgetMs: 25000 },
   prepare({ input, kind }) {

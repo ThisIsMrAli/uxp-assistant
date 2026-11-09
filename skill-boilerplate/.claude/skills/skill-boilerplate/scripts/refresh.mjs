@@ -8,9 +8,9 @@ import { readMerged, recordDocs, setStep } from "./lib/session.mjs";
 
 export async function refreshSkill({ extensionPath, out, fetchImpl }) {
   const folder = resolveOut(out);
-  const ext = await loadExtension(extensionPath);
   const session = readMerged(folder);
   if (!session) throw new Error("No session. Run start.mjs first.");
+  const ext = await loadExtension(extensionPath || session.extensionPath || process.env.SKILL_EXTENSION);
   if (!session.mode) throw new Error("Set mode before fetching docs.");
   const pages = ext.sources ? await ext.sources(session) : [];
   const policy = ext.docs || {};
@@ -89,9 +89,9 @@ if (ranDirectly) {
     out: outFlag >= 0 ? process.argv[outFlag + 1] : process.env.SKILL_OUT
   }).then((result) => {
     process.stdout.write(`${JSON.stringify(result)}\n`);
-    if (!result.ok) process.exitCode = 2;
+    process.exit(result && result.ok === false ? 2 : 0);
   }).catch((error) => {
     process.stdout.write(`${JSON.stringify({ ok: false, error: error.message })}\n`);
-    process.exitCode = 1;
+    process.exit(1);
   });
 }

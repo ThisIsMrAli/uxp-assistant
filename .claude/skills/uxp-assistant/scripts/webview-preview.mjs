@@ -27,7 +27,7 @@ const served = await new Promise((resolve) => {
   server.listen(0, "127.0.0.1", () => resolve(`http://127.0.0.1:${server.address().port}/`));
 });
 const page = await launch({ width: 420, height: 520, chrome });
-const log = { capturedOn: "this cloud environment", boxBrowser: false, hostExecuted: false, surface: "webview-document", html: path.relative(root, htmlPath) };
+const log = { capturedOn: "this machine", boxBrowser: false, hostExecuted: false, surface: "webview-document", html: path.relative(root, htmlPath) };
 try {
   await page.goto(served);
   await page.send("Emulation.setDeviceMetricsOverride", { width: 420, height: 320, deviceScaleFactor: 2, mobile: false });

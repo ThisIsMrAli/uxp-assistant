@@ -95,7 +95,8 @@ function assertProject(session, folder, handed, { id, title, bridge, premiere, h
   assert.equal(handed.state, "awaiting-agent-implementation", JSON.stringify(handed));
   assert.equal(handed.hostExecuted, false);
   assert.ok(handed.next, JSON.stringify(handed));
-  assert.match(handed.next, /agent-result\.json/);
+    assert.match(handed.next, /agent-result\.json/);
+    assert.match(handed.next, /npm install/);
   assert.equal(/status done/.test(handed.next), false);
   const project = path.resolve(handed.project);
   assert.equal(project.startsWith(`${path.resolve(folder)}${path.sep}`), true, project);
@@ -143,10 +144,12 @@ async function scenario(answers, { chat = false, bridge = "", premiere = false, 
       files: [{ path: "package.json", sha256 }]
     })}\n`);
     const recorded = run(skill, ["record", "--out", session], env);
-    assert.equal(recorded.ok, true, JSON.stringify(recorded));
     assert.equal(recorded.hostExecuted, false);
-    assert.match(recorded.next, /NOT TESTED/);
-    assert.equal(/status done/.test(recorded.next), false);
+    assert.notEqual(recorded.state, "commands-finished");
+    assert.match(`${recorded.say || ""} ${recorded.next || ""}`, /NOT TESTED|feature|documented/);
+    const again = run(skill, ["session", "next", "--out", session], env);
+    assert.notEqual(again.step, "intake");
+    assert.notEqual(again.action, "finished");
   } finally {
     if (!chat) run(skill, ["dashboard", "stop", "--out", session], env);
   }
