@@ -11,6 +11,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { refreshSkill } from "./.claude/skills/skill-boilerplate/scripts/refresh.mjs";
 import { sessionCommand } from "./.claude/skills/skill-boilerplate/scripts/session.mjs";
+import { adoptAsk as adoptAskImpl } from "./.claude/skills/skill-boilerplate/scripts/lib/session.mjs";
 import { startSkill } from "./.claude/skills/skill-boilerplate/scripts/start.mjs";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -27,6 +28,10 @@ export async function start(options) {
 export async function session(argv, options = {}) {
   applyEnv(options);
   return sessionCommand(argv, options.out);
+}
+
+export function adoptAsk(out, ask) {
+  return adoptAskImpl(out, ask);
 }
 
 export async function refresh(options) {

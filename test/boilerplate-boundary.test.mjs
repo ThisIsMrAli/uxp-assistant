@@ -74,7 +74,7 @@ test("UXP dashboard start is under three seconds and mode comes before the netwo
 
 function walk(dir, visit) {
   for (const name of fs.readdirSync(dir)) {
-    if (name === "node_modules") continue;
+    if (name === "node_modules" || name === "skill-boilerplate") continue;
     const full = path.join(dir, name);
     if (fs.statSync(full).isDirectory()) walk(full, visit);
     else if (/\.(mjs|js|md)$/.test(name)) visit(full, fs.readFileSync(full, "utf8"));

@@ -309,6 +309,11 @@ function cycleTheme() {
   paintTop();
 }
 
+function docsBroken(s = session()) {
+  const docs = s?.docs;
+  return Boolean(docs && Array.isArray(docs.fresh) && Array.isArray(docs.failed) && docs.fresh.length === 0 && docs.failed.length > 0);
+}
+
 function docsLabel(s, r) {
   const docs = s?.docs;
   const counted = docs && Array.isArray(docs.fresh) && Array.isArray(docs.stale) && Array.isArray(docs.failed);
@@ -324,12 +329,12 @@ function paintTop() {
   const docs = docsLabel(s, r);
   region(el.who, JSON.stringify([s?.addon?.name, r.addon, s?.addon?.path]), () => [
     h("h1", { text: s?.addon?.name || r.addon || "Session" }),
-    h("p", { class: "path", text: s?.addon?.path || "Waiting for a session to start" })
+    h("p", { class: "path", text: s ? (s.addon?.path || s.addon?.name || "Session") : "Waiting for a session to start" })
   ]);
   const conn = { live: ["ok", "Live", true], retry: ["warn", "Reconnecting"], down: ["bad", "Dashboard stopped"] }[ui.conn];
   region(el.facts, JSON.stringify([ui.conn, ui.theme, s?.mode, docs]), () => [
     h("span", { class: "pill", text: s?.mode === "chat" ? "Decisions in chat" : "Decisions here" }),
-    h("span", { class: "pill", text: docs }),
+    h("span", { class: "pill", text: docs, "data-tone": docsBroken(s) ? "bad" : "" }),
     h("a", { class: "pill", href: fileUrl("report.md"), target: "_blank", rel: "noopener" }, icon("doc", 2), "Full report"),
     h("span", { class: "pill", role: "status", "data-tone": conn[0], "data-live": conn[2] ? "true" : "false" }, h("i", { class: "dot" }), conn[1]),
     h("button", { class: "pill iconbtn", type: "button", "aria-label": `Theme: ${ui.theme}. Press to change.`, title: `Theme: ${ui.theme}`, onclick: cycleTheme }, icon(ui.theme === "dark" ? "moon" : ui.theme === "light" ? "sun" : "auto", 2))
@@ -350,13 +355,15 @@ function paintRail() {
   const key = JSON.stringify(list.map((step) => [step.id, step.status, step.detail, step.progress, step.startedAt, step.endedAt]));
   region(el.steps, key, () => list.map((step) => {
     const took = step.status === "done" && step.startedAt && step.endedAt ? Date.parse(step.endedAt) - Date.parse(step.startedAt) : 0;
-    const showDetail = step.detail && ["done", "running", "waiting", "skipped"].includes(step.status);
-    const live = step.status === "running";
-    return h("li", { class: "step", "data-status": step.status, "aria-current": live ? "step" : null },
-      h("span", { class: "mark-step" }, step.status === "done" ? icon("check", 3.4) : step.status === "skipped" ? icon("dash", 3) : step.status === "waiting" ? icon("hand", 2.2) : live ? h("span", { class: "spin" }) : null),
+    const display = step.id === "docs" && step.status === "done" && docsBroken() ? "failed" : step.status;
+    const showDetail = step.detail && ["done", "running", "waiting", "skipped", "failed"].includes(display);
+    const live = display === "running";
+    return h("li", { class: "step", "data-status": display, "aria-current": live ? "step" : null },
+      h("span", { class: "mark-step" }, display === "done" ? icon("check", 3.4) : display === "failed" ? icon("x", 3) : display === "skipped" ? icon("dash", 3) : display === "waiting" ? icon("hand", 2.2) : live ? h("span", { class: "spin" }) : null),
       h("div", null,
         h("div", { class: "name" }, step.label,
-          step.status === "running" ? h("span", { class: "tag", "data-k": "running", text: "Now" }) : null,
+          display === "running" ? h("span", { class: "tag", "data-k": "running", text: "Now" }) : null,
+          display === "failed" ? h("span", { class: "tag", "data-k": "bad", text: "Failed" }) : null,
           step.status === "waiting" ? h("span", { class: "tag", "data-k": "waiting", text: "Your turn" }) : null,
           step.optional ? h("span", { class: "tag", text: "Optional" }) : null,
           h("span", { class: "sr", text: `. ${statusWord(step.status)}` })),
@@ -424,7 +431,7 @@ function paintHero() {
   const waiting = steps().find((step) => step.status === "waiting");
   const next = steps().find((step) => step.status === "pending" && step.id !== "done");
   const feed = [...(s?.log || [])].slice(-4).reverse();
-  const tone = !s ? "idle" : finished() ? "ok" : pending ? "wait" : running ? "work" : "idle";
+  const tone = !s ? "idle" : finished() ? "ok" : pending ? "wait" : docsBroken(s) ? "warn" : running ? "work" : "idle";
   const current = pending ? waiting : running || next;
   const index = current ? list.findIndex((step) => step.id === current.id) + 1 : 0;
   const key = JSON.stringify([tone, current && [current.id, current.status, current.doing, current.detail, current.progress, current.startedAt], pending && pending.id, feed.map((entry) => entry.at + entry.text), s?.summary, agent && [agent.tone, agent.label.replace(/\(.*\)|, last update.*/, "")], d.bugsOpen.length, d.errors.length]);
@@ -441,7 +448,7 @@ function paintHero() {
     if (finished()) {
       return [
         h("div", { class: "hero-top" }, h("div", { class: "hero-step" }, icon("check", 3), h("p", { class: "eyebrow", text: "Finished" }))),
-        h("h2", { id: "hero-title", text: "Session finished" }),
+        h("h2", { id: "hero-title", text: /NOT TESTED/i.test(s.summary || "") ? "Commands finished" : "Session finished" }),
         h("p", { class: "summary", text: s.summary || "Everything you chose is done." }),
         d.total || d.bugsFixed.length ? h("p", { class: "lede" }, [d.total ? `${d.fixed.length} of ${d.total} findings fixed` : "", d.total && d.bugsFixed.length ? ", " : "", d.bugsFixed.length ? `${d.bugsFixed.length} ${plural(d.bugsFixed.length, "note")} confirmed fixed` : ""].join("") + ".") : null
       ];
@@ -454,6 +461,14 @@ function paintHero() {
         h("h2", { id: "hero-title", text: `Paused until you answer: ${pending.title || pending.id}` }),
         h("p", { class: "lede", text: "Nothing is running while the agent waits. Your choice goes to it the moment you confirm, and it carries on by itself." }),
         h("div", { class: "meter" }, progressBar({ done: 1, total: 1 }, { tone: "paused" }))
+      ];
+    }
+    if (tone === "warn") {
+      const doing = current?.doing || current?.detail || current?.label || "Docs";
+      return [
+        h("div", { class: "hero-top" }, h("div", { class: "hero-step" }, icon("alert", 2.4), h("p", { class: "eyebrow", text: eyebrow }))),
+        h("h2", { id: "hero-title", text: doing }),
+        h("p", { class: "lede", text: "The docs fetch failed. This page is not a success, and it is not a finished session." })
       ];
     }
     if (tone === "work") {
@@ -633,10 +648,19 @@ function chatTurn(ask) {
 
 function settled(ask) {
   const delivered = Boolean(ask.deliveredAt) || ask.via === "chat";
-  return h("div", { class: "settled", role: "status", "data-state": delivered ? "ok" : "sending" },
-    delivered ? icon("check", 3) : h("span", { class: "spin" }),
+  const broken = docsBroken();
+  const state = !delivered ? "sending" : broken ? "warn" : "ok";
+  const note = ask.via === "chat"
+    ? "Answered in chat."
+    : !delivered
+      ? "Sent. Waiting for the agent to pick it up."
+      : broken
+        ? "The docs did not come back fresh. This is not a finished step."
+        : "The agent has the answer.";
+  return h("div", { class: "settled", role: "status", "data-state": state },
+    state === "ok" ? icon("check", 3) : state === "warn" ? icon("alert", 3) : h("span", { class: "spin" }),
     h("strong", { text: `You chose: ${clean(ask.answerLabel)}` }),
-    h("span", { text: `${ask.title || ask.id}. ${ask.via === "chat" ? "Answered in chat." : delivered ? "The agent has it and is carrying on." : "Sent. Waiting for the agent to pick it up."}` }));
+    h("span", { text: `${ask.title || ask.id}. ${note}` }));
 }
 
 function suppliedCopy(listing) {

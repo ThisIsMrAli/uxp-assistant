@@ -25,7 +25,13 @@ function freshPages(pages) {
 }
 
 function snippet(text, index, length) {
-  return text.slice(Math.max(0, index - 80), Math.min(text.length, index + length + 120)).replace(/\s+/g, " ").trim();
+  const before = text.lastIndexOf(".", index);
+  const after = text.indexOf(".", index + Math.max(length, 1));
+  const start = before >= 0 && index - before < 180 ? before + 1 : Math.max(0, index - 24);
+  const end = after > index && after - index < 180 ? after + 1 : Math.min(text.length, index + length + 40);
+  let quote = text.slice(start, end).replace(/\s+/g, " ").trim();
+  if (quote.length > 160) quote = `${quote.slice(0, 157).trim()}...`;
+  return quote;
 }
 
 export function goalTerms(goal) {

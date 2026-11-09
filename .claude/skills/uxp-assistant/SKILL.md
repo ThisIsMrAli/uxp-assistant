@@ -5,7 +5,7 @@ description: >-
   The session, dashboard, and questions are the skill boilerplate. This skill
   adds the UXP links, the permission rules, and the implementation handoff.
 license: MIT
-compatibility: Requires Node.js 18 or newer. The dashboard needs a browser on the same computer and falls back to chat when it cannot start.
+compatibility: Requires Node.js 20 or newer. The dashboard needs a browser on the same computer and falls back to chat when it cannot start.
 ---
 
 # UXP Assistant
@@ -47,7 +47,13 @@ node scripts/skill.mjs start --empty /absolute/path/to/parent --out /absolute/pa
 
    An existing project uses `--project /absolute/path/to/plugin` instead of `--empty`. The empty-folder scaffold is created inside the `--empty` folder. It is not created under the session.
 
-   An `npx skills add` layout does not include the boilerplate or create-bolt-uxp. From this repo, `node scripts/skill.mjs install --into <folder>` copies this skill and the boilerplate beside it and links `node_modules`. Then run `node scripts/skill.mjs` from the copied skill.
+   Install with the line in `skill.json`, exactly:
+
+```bash
+npx skills add <owner>/uxp-assistant --skill uxp-assistant -a cursor
+```
+
+   That copy includes the boilerplate inside the skill, so `start` can load it. `create-bolt-uxp` is still installed with `npm install` in the new project. From this repo, `node scripts/skill.mjs install --into <folder>` copies the same skill and links `node_modules`. Then run `node scripts/skill.mjs` from the copied skill.
 
 2. **Ask where to follow.** On the user's computer, call AskQuestion with `mode`. Pass `prompt` and each option's `id` and `label` through unchanged.
 
@@ -66,13 +72,13 @@ node scripts/skill.mjs start --empty /absolute/path/to/parent --out /absolute/pa
 
    Write the feature yourself. Use the documented API in code. Add a test that imports that module and asserts on the call. Do not record a stock file. Leave the handoff `build` and `ccx` commands unchanged. A changed command or a changed script body is not run until `script-change` is answered for those exact commands and file hashes. The command checker refuses `eval(`, `new Function(`, `vm.run`, and the named `child_process` helpers in a hashed file. `globalThis["eval"]` is not one of those shapes. That list is not a sandbox.
 
-6. **Record.** After the domain next line, write `<session>/agent-result.json`:
+6. **Record.** Add a `"test"` script. The Bolt starter does not ship one. Run `npm install` in the project before test, build, or package. A WebView project also needs `npm install` inside `webview-ui`. A WebView `npm run build` that exits 0 and writes no output is a failure. Then write `<session>/agent-result.json` in this one format:
 
 ```json
 { "goal": "the same goal text", "files": [{ "path": "src/main.tsx", "sha256": "<64 hex characters>" }] }
 ```
 
-   `path` is relative to the project. `sha256` is the file's bytes. Then run `node scripts/skill.mjs record --out <session>`. It checks the goal and the hashes. It does not mark tests, package, or the host done. Run those project scripts yourself and record their exits before anyone marks those steps done. The done line, after those commands have actually run, is: Commands finished. The Adobe host was NOT TESTED. That line is command evidence. It is not feature correctness, and source and behavior review is still pending.
+   `path` is relative to the project. `sha256` is the file's bytes. Then run `node scripts/skill.mjs record --out <session>`. That is the only record command. It checks the goal and the hashes, then runs the validator: the test, the build, and the package. Their exits are recorded by that command. If it prints `script-change`, the approval is on the dashboard. Answer it there, then run the same record command again. When the commands finish, the next line is: Commands finished. The Adobe host was NOT TESTED. That line is command evidence. It is not feature correctness, and source and behavior review is still pending. Do not run `assist.mjs record`.
 
 Every command prints a `next` line. Do that line next. Do not mark tests, package, or the host done because a next line mentioned them.
 

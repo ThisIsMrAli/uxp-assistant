@@ -168,6 +168,17 @@ export async function runWorkflow(options) {
       say: staged.say || capability.detail
     };
   }
+  if (staged.action === "refresh-docs") {
+    return {
+      ok: false,
+      success: false,
+      state: "docs-incomplete",
+      out,
+      hostExecuted: false,
+      say: staged.say,
+      next: `Run node scripts/skill.mjs refresh --out ${options.dashboardOut || out}. Do not choose a runtime from an empty list.`
+    };
+  }
   if (staged.action === "stop" || staged.action === "reject-runtime" || staged.action === "reject-design") {
     recordFacts(out, { outcome: "stopped", verification: { hostExecuted: false, status: "NOT TESTED" } });
     return { ok: false, success: false, state: "stopped", out, hostExecuted: false, say: staged.say };
@@ -308,7 +319,7 @@ export async function runWorkflow(options) {
 
 function handoffNext(options) {
   const folder = options.dashboardOut || options.out;
-  return `Write ${folder}/agent-result.json as {"goal":"<the same goal>","files":[{"path":"<relative>","sha256":"<hex>"}]}. Then run node scripts/skill.mjs record --out ${folder}. Do not mark tests, package, or the host done unless those commands ran. The host was NOT TESTED.`;
+  return `Add a "test" script to package.json. The Bolt starter does not ship one. Run npm install in the project before test, build, or package. A WebView project also needs npm install inside webview-ui. A WebView npm run build that exits 0 and writes no output is a failure. Write ${folder}/agent-result.json as {"goal":"<the same goal>","files":[{"path":"<relative>","sha256":"<hex>"}]}. Then run node scripts/skill.mjs record --out ${folder}. That command checks the hashes and runs the validator, which records the test, build, and package exits. Do not mark the host done. The host was NOT TESTED.`;
 }
 
 export function recordImplementation(out, claimed, { runner } = {}) {
@@ -322,8 +333,8 @@ export function recordImplementation(out, claimed, { runner } = {}) {
   if (claimed?.goal !== contract.goal) {
     return incomplete(out, "not-yet-implemented", "The recorded goal does not match the requested goal.");
   }
-  const files = claimed.files || [];
-  if (!files.length) return incomplete(out, "not-yet-implemented", "The assistant recorded no files.");
+  const files = (claimed.files || []).map((item) => (typeof item === "string" ? item : item?.path || ""));
+  if (!files.length || files.some((item) => !item)) return incomplete(out, "not-yet-implemented", "The assistant recorded no files.");
   const bodies = [];
   for (const relative of files) {
     const full = path.resolve(project, relative);
@@ -341,7 +352,7 @@ export function recordImplementation(out, claimed, { runner } = {}) {
       supplied
     }));
   }
-  const claim = reviewClaim({ contract, files, bodies });
+  const claim = reviewClaim({ contract: { ...contract, docText: freshDocText(out) }, files, bodies });
   if (!claim.ok) return incomplete(out, "not-yet-implemented", claim.say);
   setStep(out, "implementation", "done", `Changed code uses ${claim.usedSymbols.join(", ")}. ${REVIEW_LIMIT}`, { verified: true });
   setStep(out, "ui", "done", "A changed file shows an error, disabled, or loading state. That marker is not the feature by itself.", { verified: true });
@@ -365,7 +376,7 @@ export function recordImplementation(out, claimed, { runner } = {}) {
     publishOutcome(out, "failed", false);
     return { ok: false, success: false, state: "failed", hostExecuted: false, say: provenance.say };
   }
-  const covered = testsCoverFeature(project, claim.changed, claim.usedSymbols);
+  const covered = testsCoverFeature(project, claim.changed, claim.usedSymbols, claim.introducedFiles);
   if (!covered.ok) {
     setStep(out, "tests", "failed", covered.say);
     recordFacts(out, { outcome: "failed", verification: { hostExecuted: false, status: "NOT TESTED" } });
@@ -424,6 +435,17 @@ export function recordImplementation(out, claimed, { runner } = {}) {
   recordFacts(out, { outcome: "commands-finished" });
   publishOutcome(out, "commands-finished", true, listed);
   return { ok: true, success: true, state: "commands-finished", hostExecuted: false, limits: REVIEW_LIMIT, sourceReview: "pending", featureCorrectness: "not-decided", package: packed };
+}
+
+function freshDocText(out) {
+  const dir = path.join(out, "docs");
+  if (!fs.existsSync(dir)) return "";
+  const parts = [];
+  for (const name of fs.readdirSync(dir)) {
+    if (!name.endsWith(".txt")) continue;
+    parts.push(fs.readFileSync(path.join(dir, name), "utf8"));
+  }
+  return parts.join("\n");
 }
 
 function publishOutcome(out, state, success, archives = "") {

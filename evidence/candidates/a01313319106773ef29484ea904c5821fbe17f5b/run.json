@@ -67,7 +67,7 @@
     "native": "evidence/preview/cloud-native-simulation.png",
     "webview": "evidence/preview/cloud-webview-browser.png",
     "log": "evidence/preview/preview-log.json",
-    "capturedOn": "this cloud environment",
+    "capturedOn": "this machine",
     "boxBrowser": false,
     "hostExecuted": false,
     "note": "The native page is a simulation with mocked reads and a blocked rename. The WebView page renders in the browser and reports window.uxpHost unavailable. Neither is Photoshop or Premiere, and neither is the box browser."

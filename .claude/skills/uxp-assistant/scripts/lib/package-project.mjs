@@ -27,9 +27,24 @@ export function runPackage(project, { npm = "npm", runner = spawnSync, install =
   const runs = [];
   for (const args of commands) {
     const result = runner(npm, args, { cwd: project, encoding: "utf8", timeout: 15 * 60 * 1000 });
+    const output = `${result.stdout || ""}\n${result.stderr || ""}`;
     runs.push({ args, status: result.status, error: result.error ? String(result.error.message || result.error) : "" });
     if (result.status !== 0) {
       return { status: "failed", runs, artifacts: [], hostExecuted: false, reason: `${args.join(" ")} exited ${result.status}.` };
+    }
+    if (args[0] === "run" && args[1] === "build" && fs.existsSync(path.join(project, "webview-ui", "package.json"))) {
+      const wrote = fs.existsSync(path.join(project, "webview-ui", "dist")) || fs.existsSync(path.join(project, "dist"));
+      if (/WEBVIEW MODULES NOT INSTALLED/i.test(output) || (!output.trim() && !wrote)) {
+        return {
+          status: "failed",
+          runs,
+          artifacts: [],
+          hostExecuted: false,
+          reason: /WEBVIEW MODULES NOT INSTALLED/i.test(output)
+            ? "npm run build exited 0 and reported WEBVIEW MODULES NOT INSTALLED. Run npm install inside webview-ui, then build again."
+            : "npm run build exited 0 and wrote no webview output."
+        };
+      }
     }
   }
   const artifacts = findArtifacts(project);

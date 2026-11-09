@@ -13,6 +13,7 @@ import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { loopbackJson } from "./lib/loopback.mjs";
 import { assetsDir, resolveOut, sessionBin } from "./lib/paths.mjs";
 import { createDashboardServer } from "./lib/server.mjs";
 import { files, readServer } from "./lib/session.mjs";
@@ -117,9 +118,9 @@ async function running(out) {
 
 async function ping(info) {
   try {
-    const res = await fetch(`http://127.0.0.1:${info.port}/api/ping`, {
+    const res = await loopbackJson(`http://127.0.0.1:${info.port}/api/ping`, {
       headers: { authorization: `Bearer ${info.token}` },
-      signal: AbortSignal.timeout(1500)
+      timeoutMs: 1500
     });
     return res.ok;
   } catch {

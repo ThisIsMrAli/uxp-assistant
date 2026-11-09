@@ -8,7 +8,7 @@ const NS = "http://www.w3.org/2000/svg";
 const ui = { tab: "", tabPinned: false, filter: "all", shotTheme: "all", pickedShot: null, choice: {}, secret: {}, error: {}, sending: {}, conn: "live", skew: 0, copied: "", theme: "auto" };
 const fromHash = location.hash.slice(1);
 if (["findings", "panel", "listing", "activity"].includes(fromHash)) { ui.tab = fromHash; ui.tabPinned = true; }
-try { ui.theme = localStorage.getItem("review-theme") || "auto"; } catch { /* storage off */ }
+try { ui.theme = localStorage.getItem("uxp-assistant-theme") || localStorage.getItem("review-theme") || "auto"; } catch { /* storage off */ }
 let state = null;
 let downTimer = null;
 let loading = false;
@@ -129,6 +129,10 @@ const report = () => state?.report || { findings: [], views: [] };
 const steps = () => session()?.steps || [];
 const pendingAsk = () => session()?.asks?.find((ask) => ask.status === "pending") || null;
 const finished = () => steps().find((step) => step.id === "done")?.status === "done";
+function docsBroken(s = session()) {
+  const docs = s?.docs;
+  return Boolean(docs && Array.isArray(docs.fresh) && Array.isArray(docs.failed) && docs.fresh.length === 0 && docs.failed.length > 0);
+}
 
 function derived() {
   const findings = report().findings;
@@ -265,14 +269,14 @@ function paint() {
 function chooseTab() {
   if (ui.tabPinned) return;
   const running = steps().find((step) => step.status === "running" || step.status === "waiting");
-  ui.tab = running?.id === "panel" || running?.id === "access" ? "panel" : running?.id === "listing" ? "listing" : ui.tab || "findings";
+  ui.tab = running?.id === "panel" ? "panel" : ui.tab || "findings";
 }
 
 // ---- top bar ------------------------------------------------------------------------------
 
 function cycleTheme() {
   ui.theme = ui.theme === "auto" ? "light" : ui.theme === "light" ? "dark" : "auto";
-  try { localStorage.setItem("review-theme", ui.theme); } catch { /* storage off */ }
+  try { localStorage.setItem("uxp-assistant-theme", ui.theme); } catch { /* storage off */ }
   if (ui.theme === "auto") delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = ui.theme;
   painted.delete(el.facts);
@@ -305,7 +309,7 @@ function paintTop() {
 
 function visibleSteps() {
   const s = session();
-  return steps().filter((step) => step.status !== "skipped" || (step.id === "access" && s?.needsCredential));
+  return steps().filter((step) => step.status !== "skipped");
 }
 
 function paintRail() {
@@ -316,14 +320,15 @@ function paintRail() {
   const key = JSON.stringify(list.map((step) => [step.id, step.status, step.detail, step.progress, step.startedAt, step.endedAt]));
   region(el.steps, key, () => list.map((step) => {
     const took = step.status === "done" && step.startedAt && step.endedAt ? Date.parse(step.endedAt) - Date.parse(step.startedAt) : 0;
-    const showDetail = step.detail && ["done", "running", "waiting", "skipped", "failed"].includes(step.status);
-    const live = step.status === "running";
-    return h("li", { class: "step", "data-status": step.status, "aria-current": live ? "step" : null },
-      h("span", { class: "mark-step" }, step.status === "done" ? icon("check", 3.4) : step.status === "failed" ? icon("x", 3) : step.status === "skipped" ? icon("dash", 3) : step.status === "waiting" ? icon("hand", 2.2) : live ? h("span", { class: "spin" }) : null),
+    const display = step.id === "docs" && step.status === "done" && docsBroken() ? "failed" : step.status;
+    const showDetail = step.detail && ["done", "running", "waiting", "skipped", "failed"].includes(display);
+    const live = display === "running";
+    return h("li", { class: "step", "data-status": display, "aria-current": live ? "step" : null },
+      h("span", { class: "mark-step" }, display === "done" ? icon("check", 3.4) : display === "failed" ? icon("x", 3) : display === "skipped" ? icon("dash", 3) : display === "waiting" ? icon("hand", 2.2) : live ? h("span", { class: "spin" }) : null),
       h("div", null,
         h("div", { class: "name" }, step.label,
-          step.status === "running" ? h("span", { class: "tag", "data-k": "running", text: "Now" }) : null,
-          step.status === "failed" ? h("span", { class: "tag", "data-k": "bad", text: "Failed" }) : null,
+          display === "running" ? h("span", { class: "tag", "data-k": "running", text: "Now" }) : null,
+          display === "failed" ? h("span", { class: "tag", "data-k": "bad", text: "Failed" }) : null,
           step.status === "waiting" ? h("span", { class: "tag", "data-k": "waiting", text: "Your turn" }) : null,
           step.optional ? h("span", { class: "tag", text: "Optional" }) : null,
           h("span", { class: "sr", text: `. ${statusWord(step.status)}` })),
@@ -391,7 +396,7 @@ function paintHero() {
   const waiting = steps().find((step) => step.status === "waiting");
   const next = steps().find((step) => step.status === "pending" && step.id !== "done");
   const feed = [...(s?.log || [])].slice(-4).reverse();
-  const tone = !s ? "idle" : finished() ? "ok" : pending ? "wait" : (waiting || running) ? "work" : "idle";
+  const tone = !s ? "idle" : finished() ? "ok" : pending ? "wait" : docsBroken(s) ? "warn" : (waiting || running) ? "work" : "idle";
   const current = pending ? waiting : waiting || running || next;
   const index = current ? list.findIndex((step) => step.id === current.id) + 1 : 0;
   const key = JSON.stringify([tone, s?.outcome, s?.contract?.goal, current && [current.id, current.status, current.doing, current.detail, current.progress, current.startedAt], pending && pending.id, feed.map((entry) => entry.at + entry.text), s?.summary, agent && [agent.tone, agent.label.replace(/\(.*\)|, last update.*/, "")], d.bugsOpen.length, d.errors.length]);
@@ -423,6 +428,14 @@ function paintHero() {
         h("h2", { id: "hero-title", text: `Paused until you answer: ${pending.title || pending.id}` }),
         h("p", { class: "lede", text: "Nothing is running while the agent waits. Your choice goes to it the moment you confirm, and it carries on by itself." }),
         h("div", { class: "meter" }, progressBar({ done: 1, total: 1 }, { tone: "paused" }))
+      ];
+    }
+    if (tone === "warn") {
+      const doing = current?.doing || current?.detail || current?.label || "Docs";
+      return [
+        h("div", { class: "hero-top" }, h("div", { class: "hero-step" }, icon("alert", 2.4), h("p", { class: "eyebrow", text: eyebrow }))),
+        h("h2", { id: "hero-title", text: doing }),
+        h("p", { class: "lede", text: "The docs fetch failed. This page is not a success, and it is not a finished session." })
       ];
     }
     if (tone === "work") {
@@ -549,7 +562,7 @@ function turn(ask) {
     sync();
     await load();
   } }, list, secretBox,
-  h("div", { class: "actions" }, submit, h("span", { class: "hint", text: "The agent carries on the moment you confirm. You can also answer in chat." })), status);
+  h("div", { class: "actions" }, submit, h("span", { class: "hint", text: "The agent carries on the moment you confirm." })), status);
 
   const s = session();
   const shots = (ask.images || []).map((id) => s.shots.find((shot) => shot.id === id)).filter(Boolean);
@@ -557,7 +570,6 @@ function turn(ask) {
     h("header", null, h("span", { class: "badge" }, icon("hand", 2.6), "Your turn"), h("h2", { id: `turn-title-${k}`, text: ask.title || ask.id })),
     h("p", { class: "prompt", text: ask.prompt }),
     shots.length ? h("div", { class: "proofs" }, shots.map((shot) => h("figure", null, h("img", { src: fileUrl(shot.file), alt: shot.label, width: shot.width, height: shot.height }), h("figcaption", { text: `${shot.label}, ${shot.width} by ${shot.height}` })))) : null,
-    ask.id === "listing-review" && s.listing ? listingBlock(s.listing) : null,
     form,
     ask.affects?.length ? h("details", { class: "will" }, h("summary", { text: `What this touches (${ask.affects.length})` }),
       h("ul", null, ask.affects.map((item) => h("li", null, badge(item.severity), h("code", { text: `${item.file}${item.line ? `:${item.line}` : ""}` }), item.id)))) : null);
@@ -572,15 +584,19 @@ function chatTurn(ask) {
 
 function settled(ask) {
   const delivered = Boolean(ask.deliveredAt) || ask.via === "chat";
-  return h("div", { class: "settled", role: "status", "data-state": delivered ? "ok" : "sending" },
-    delivered ? icon("check", 3) : h("span", { class: "spin" }),
+  const broken = docsBroken();
+  const state = !delivered ? "sending" : broken ? "warn" : "ok";
+  const note = ask.via === "chat"
+    ? "Answered in chat."
+    : !delivered
+      ? "Sent. Waiting for the agent to pick it up."
+      : broken
+        ? "The docs did not come back fresh. This is not a finished step."
+        : "The agent has the answer.";
+  return h("div", { class: "settled", role: "status", "data-state": state },
+    state === "ok" ? icon("check", 3) : state === "warn" ? icon("alert", 3) : h("span", { class: "spin" }),
     h("strong", { text: `You chose: ${clean(ask.answerLabel)}` }),
-    h("span", { text: `${ask.title || ask.id}. ${ask.via === "chat" ? "Answered in chat." : delivered ? "The agent has it and is carrying on." : "Sent. Waiting for the agent to pick it up."}` }));
-}
-
-function listingBlock(listing) {
-  const rows = [["Name", listing.name], ["Summary", listing.summary], ["Description", listing.description], ["Keywords", Array.isArray(listing.keywords) ? listing.keywords.join(", ") : listing.keywords]].filter(([, value]) => value);
-  return h("dl", { class: "copy-block" }, rows.map(([term, value]) => h("div", null, h("dt", { text: `${term}, ${String(value).length} characters` }), h("dd", { text: value }))));
+    h("span", { text: `${ask.title || ask.id}. ${note}` }));
 }
 
 // ---- tabs and panes ---------------------------------------------------------------------------
@@ -686,7 +702,7 @@ function listingPane() {
   const s = session();
   const shots = (s?.shots || []).filter((shot) => shot.kind === "listing");
   if (!s?.listing && !shots.length) return h("p", { class: "empty", text: "No package artifact yet. A CCX hash shows here after the package step. This page is not the Adobe host." });
-  return h("div", null, s.listing ? listingBlock(s.listing) : null,
+  return h("div", null, s.listing?.name ? h("p", { text: s.listing.name }) : null,
     shots.length ? h("div", { class: "shots" }, shots.map((shot) => h("figure", null, h("img", { src: fileUrl(shot.file), alt: shot.label, width: shot.width, height: shot.height }), h("figcaption", { text: `${shot.label}, ${shot.width} by ${shot.height}` })))) : null);
 }
 

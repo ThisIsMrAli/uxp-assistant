@@ -4,21 +4,21 @@
   "hostExecuted": false,
   "evidence": [
     {
-      "id": "discovered.classes.project",
-      "url": "https://developer.adobe.com/premiere-pro/uxp/ppro-reference/classes/project/",
-      "quote": "| | targetBin | [*ProjectItem*](projectitem.md) | - | <HorizontalLine /> ### importFiles Import files in root/target bin of the project Since: **25.6** Returns: Promise\\<*boolean*\\> #### Parameters | Nam",
+      "id": "premiere.project",
+      "url": "https://developer.adobe.com/premiere-pro/uxp/ppro-reference/classes/project",
+      "quote": "6 Returns: Promise&#x3C; boolean > Parameters Name Type Description aepPath string - targetBin ProjectItem - importFiles Import files in root/target bin of t...",
       "token": "importFiles"
     },
     {
-      "id": "discovered.classes.project",
-      "url": "https://developer.adobe.com/premiere-pro/uxp/ppro-reference/classes/project/",
-      "quote": "n | [*ProjectItem*](projectitem.md) | - | <HorizontalLine /> ### importFiles Import files in root/target bin of the project Since: **25.6** Returns: Promise\\<*boolean*\\> #### Parameters | Name | Type | Des",
+      "id": "premiere.project",
+      "url": "https://developer.adobe.com/premiere-pro/uxp/ppro-reference/classes/project",
+      "quote": "6 Returns: Promise&#x3C; boolean > Parameters Name Type Description aepPath string - targetBin ProjectItem - importFiles Import files in root/target bin of t...",
       "token": "import files"
     },
     {
-      "id": "discovered.classes.project",
-      "url": "https://developer.adobe.com/premiere-pro/uxp/ppro-reference/classes/project/",
-      "quote": "/> ### isProject Returns true if the file at the given path is openable as a Premiere project Since: **26.2** Returns: *boolean* #### Parameters | Name | Type | Description | | :----| :--- | :---------- | | pr",
+      "id": "premiere.project",
+      "url": "https://developer.adobe.com/premiere-pro/uxp/ppro-reference/classes/project",
+      "quote": "6 Returns: Project Parameters Name Type Description projectGuid Guid - isProject Returns true if the file at the given path is openable as a Premiere project...",
       "token": "premiere project"
     }
   ]

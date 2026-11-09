@@ -85,7 +85,7 @@ export function feasibilityAsk(capability) {
       { id: "stop", label: "Stop before any edit", detail: "Writes nothing." }
     ]
     : [
-      { id: "pause", label: "Pause before any edit", detail: capability?.state === "unsupported-with-evidence"
+      { id: "pause", label: "Pause before any edit (Recommended)", detail: capability?.state === "unsupported-with-evidence"
         ? "A fresh page says this is unsupported. Do not implement it."
         : "No fresh page establishes this goal. Name the API or refresh the page. Do not invent the call." },
       { id: "stop", label: "Stop before any edit", detail: "Writes nothing." }
@@ -112,6 +112,17 @@ export function contextEvidenceAsk(check) {
 
 export function runtimeAsk(offer) {
   const choices = offer?.choices || [];
+  if (!choices.length) {
+    return {
+      id: "runtime",
+      title: "Native UXP, WebView, or a bridge",
+      prompt: "No runtime was offered because the docs that name one are not fresh. Refresh the docs, or stop. This question is not shown with an empty list.",
+      options: [
+        { id: "refresh", label: "Refresh the docs (Recommended)", detail: "Fetch the pages again. Do not invent a runtime, and do not treat a failed fetch as success." },
+        { id: "stop", label: "Stop before any edit", detail: "Writes nothing." }
+      ]
+    };
+  }
   return {
     id: "runtime",
     title: "Native UXP, WebView, or a bridge",
