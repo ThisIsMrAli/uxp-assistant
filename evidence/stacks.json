@@ -18,10 +18,10 @@
         "reason": "The lockfile was updated inside the declared ranges and reinstalled. npm audit fix was not passed --force. Remaining advisories were left in place."
       },
       "ccxStatus": 0,
-      "ccxTail": "\n> com.example.vue@0.0.1 ccx\n> cross-env MODE=package vite build\n\nvite v6.4.6 building for production...\ntransforming...\n✓ 20 modules transformed.\nrenderChunk assets/index-!~{001}~.js\nrendering chunks...\n\n⚡ Trigger hot reload (for 0 clients)\ncomputing gzip size...\ndist/index.html                  0.37 kB │ gzip:  0.25 kB\ndist/manifest.json               1.29 kB │ gzip:  0.47 kB\ndist/assets/index-BSJNzo6J.js  235.43 kB │ gzip: 48.98 kB\n✓ built in 764ms\nGenerating 1 CCX Archive(s) for UXP Panel\n> ccx/com.example.vue_PS.ccx ( 74742 bytes )\n\n",
+      "ccxTail": "\n> com.example.vue@0.0.1 ccx\n> cross-env MODE=package vite build\n\nvite v6.4.5 building for production...\ntransforming...\n✓ 20 modules transformed.\nrenderChunk assets/index-!~{001}~.js\nrendering chunks...\n\n⚡ Trigger hot reload (for 0 clients)\ncomputing gzip size...\ndist/index.html                  0.37 kB │ gzip:  0.26 kB\ndist/manifest.json               1.29 kB │ gzip:  0.47 kB\ndist/assets/index-CLX8QUrY.js  235.42 kB │ gzip: 48.98 kB\n✓ built in 802ms\nGenerating 1 CCX Archive(s) for UXP Panel\n> ccx/com.example.vue_PS.ccx ( 74752 bytes )\n\n",
       "ccxFile": "com.example.vue_PS.ccx",
-      "ccxBytes": 74742,
-      "ccxSha256": "3f9d57bdf09b4826a1e6548da507c69d672968fbc62a8dff663b9b17e2105e42",
+      "ccxBytes": 74752,
+      "ccxSha256": "5408899ebd869bc08ef1ee608690ad8c84c54294d7ca58f0ee06bcf3e4bffefa",
       "configHasBroadGrant": false,
       "packagedPermissions": {}
     },
@@ -41,10 +41,10 @@
         "reason": "The lockfile was updated inside the declared ranges and reinstalled. npm audit fix was not passed --force. Remaining advisories were left in place."
       },
       "ccxStatus": 0,
-      "ccxTail": "\n> com.example.svelte@0.0.1 ccx\n> cross-env MODE=package vite build\n\nvite v6.4.6 building for production...\ntransforming...\n✓ 119 modules transformed.\nrenderChunk assets/index-!~{001}~.js\nrendering chunks...\n\n⚡ Trigger hot reload (for 0 clients)\ncomputing gzip size...\ndist/index.html                  0.37 kB │ gzip:  0.25 kB\ndist/manifest.json               1.31 kB │ gzip:  0.47 kB\ndist/assets/index-Dc3Ha6tu.js  141.29 kB │ gzip: 27.39 kB\n✓ built in 544ms\nGenerating 1 CCX Archive(s) for UXP Panel\n> ccx/com.example.svelte_PS.ccx ( 53281 bytes )\n\n",
+      "ccxTail": "\n> com.example.svelte@0.0.1 ccx\n> cross-env MODE=package vite build\n\nvite v6.4.5 building for production...\ntransforming...\n✓ 119 modules transformed.\nrenderChunk assets/index-!~{001}~.js\nrendering chunks...\n\n⚡ Trigger hot reload (for 0 clients)\ncomputing gzip size...\ndist/index.html                  0.37 kB │ gzip:  0.26 kB\ndist/manifest.json               1.31 kB │ gzip:  0.47 kB\ndist/assets/index-Dierzyot.js  141.29 kB │ gzip: 27.39 kB\n✓ built in 593ms\nGenerating 1 CCX Archive(s) for UXP Panel\n> ccx/com.example.svelte_PS.ccx ( 53284 bytes )\n\n",
       "ccxFile": "com.example.svelte_PS.ccx",
-      "ccxBytes": 53281,
-      "ccxSha256": "31338c554a336f55c112a1ecce353df1e8e7b7aa88264b65efa7e23c29562bf3",
+      "ccxBytes": 53284,
+      "ccxSha256": "fbf615cbbcc87f25f3ff705df165a6c45c63373af928f869250caf550f3354e1",
       "configHasBroadGrant": false,
       "packagedPermissions": {}
     }
@@ -66,10 +66,10 @@
     "manifestWebview": true,
     "installStatus": 0,
     "documentStatus": 0,
-    "documentTail": "\n> build\n> vite build\n\nvite v6.4.1 building for production...\ntransforming...\n✓ 31 modules transformed.\nrendering chunks...\n[plugin vite:singlefile] \n\n[plugin vite:singlefile] Inlining: index-Bo24yEnl.js\n[plugin vite:singlefile] Inlining: style-DBzDOFPu.css\ncomputing gzip size...\n../public/webview-ui/index.html  190.18 kB │ gzip: 60.14 kB\n✓ built in 707ms\n\n\n(!) outDir /tmp/uxp-stacks-QeoveZ/webview/public/webview-ui is not inside project root and will not be emptied.\nUse --emptyOutDir to override.\n\n",
-    "documentFile": "/tmp/uxp-stacks-QeoveZ/webview/public/webview-ui/index.html",
+    "documentTail": "\n> build\n> vite build\n\nvite v6.4.1 building for production...\ntransforming...\n✓ 31 modules transformed.\nrendering chunks...\n[plugin vite:singlefile] \n\n[plugin vite:singlefile] Inlining: index-Bo24yEnl.js\n[plugin vite:singlefile] Inlining: style-DBzDOFPu.css\ncomputing gzip size...\n../public/webview-ui/index.html  190.18 kB │ gzip: 60.14 kB\n✓ built in 733ms\n\n\n(!) outDir /tmp/uxp-stacks-DzBv08/webview/public/webview-ui is not inside project root and will not be emptied.\nUse --emptyOutDir to override.\n\n",
+    "documentFile": "/tmp/uxp-stacks-DzBv08/webview/public/webview-ui/index.html",
     "panelStatus": 0,
-    "panelTail": "\n> com.example.webview@0.0.1 ccx\n> cross-env MODE=package vite build\n\nvite v6.4.6 building for production...\n🌐 Webview UI is enabled\ntransforming...\n✓ 38 modules transformed.\nrenderChunk assets/index-!~{001}~.js\nrendering chunks...\n\n⚡ Trigger hot reload (for 0 clients)\ncomputing gzip size...\ndist/index.html                  0.38 kB │ gzip:  0.26 kB\ndist/manifest.json               1.45 kB │ gzip:  0.54 kB\ndist/assets/index-BVxKKoJh.js  568.43 kB │ gzip: 99.03 kB\n✓ built in 1.91s\nGenerating 1 CCX Archive(s) for UXP Panel\n> ccx/com.example.webview_PS.ccx ( 244820 bytes )\n\n\n(!) outDir /tmp/uxp-stacks-QeoveZ/webview/public/webview-ui is not inside project root and will not be emptied.\nUse --emptyOutDir to override.\n\n",
+    "panelTail": "\n> com.example.webview@0.0.1 ccx\n> cross-env MODE=package vite build\n\nvite v6.4.5 building for production...\n🌐 Webview UI is enabled\ntransforming...\n✓ 38 modules transformed.\nrenderChunk assets/index-!~{001}~.js\nrendering chunks...\n\n⚡ Trigger hot reload (for 0 clients)\ncomputing gzip size...\ndist/index.html                  0.37 kB │ gzip:  0.26 kB\ndist/manifest.json               1.45 kB │ gzip:  0.54 kB\ndist/assets/index-C9ateMCy.js  568.43 kB │ gzip: 99.03 kB\n✓ built in 1.92s\nGenerating 1 CCX Archive(s) for UXP Panel\n> ccx/com.example.webview_PS.ccx ( 244815 bytes )\n\n\n(!) outDir /tmp/uxp-stacks-DzBv08/webview/public/webview-ui is not inside project root and will not be emptied.\nUse --emptyOutDir to override.\n\n",
     "panelHtmlHasWebviewTag": false,
     "scriptCreatesWebview": true,
     "configHasBroadGrant": false,
@@ -88,7 +88,7 @@
       "createsWebview": true
     },
     "panelMembers": [
-      "assets/index-BVxKKoJh.js",
+      "assets/index-C9ateMCy.js",
       "index.html",
       "webview-ui/",
       "webview-ui/index.html",

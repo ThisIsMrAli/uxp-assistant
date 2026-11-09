@@ -2,6 +2,6 @@
   "method": "Wall clock around dashboard start --no-open after the session exists. No browser is opened. The reference used the same command on express-addon-review 0.4.0.",
   "referenceMs": 180,
   "boilerplateMeasuredByItsOwnSuite": true,
-  "uxpAssistantMs": 184,
+  "uxpAssistantMs": 173,
   "uxpUrlShape": "http://127.0.0.1:<port>/?t=<token>"
 }
