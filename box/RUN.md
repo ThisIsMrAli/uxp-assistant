@@ -18,7 +18,7 @@ npm ci
 node box/run.mjs
 ```
 
-That runs the fixture checks, including the command-approval graph. It does not call a model, does not checkout git, and does not launch an Adobe app.
+That runs the fixture checks, including the command-approval graph, the skill-boilerplate parity suite, and a non-browser time-to-dashboard check. It does not call a model, does not checkout git, and does not launch an Adobe app. Photoshop and Premiere stay NOT TESTED.
 
 Real setup, build, and package, still without a browser:
 
