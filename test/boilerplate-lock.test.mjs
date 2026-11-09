@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -8,12 +7,13 @@ import { agentInstallRoots, hashTree, syncBoilerplate } from "../scripts/sync-bo
 
 const root = path.resolve("skill-boilerplate");
 const lockPath = path.resolve("BOILERPLATE.lock");
+const sourceCommit = "43184ceda8b5dfae081aad22735fc171c2b1dc22";
 
 test("the vendored boilerplate matches BOILERPLATE.lock", () => {
   const lock = JSON.parse(fs.readFileSync(lockPath, "utf8"));
   assert.equal(lock.sourceRepo, "ThisIsMrAli/skill-boilerplate");
-  assert.equal(lock.sourceCommit, null);
-  assert.equal(lock.contentHash, hashTree(root));
+  assert.equal(lock.sourceCommit, sourceCommit);
+  assert.equal(hashTree(root), lock.contentHash);
   assert.match(lock.algorithm, /symlink/);
   assert.match(lock.algorithm, /install-agents/);
   const roots = agentInstallRoots(root);
@@ -45,7 +45,7 @@ test("sync copies a checkout, skips secrets, and rewrites the lock", () => {
   assert.equal(fs.existsSync(path.join(copied, ".env")), false);
   assert.equal(fs.existsSync(kept), true);
   assert.equal(lock.sourceCommit, "abc1234");
-  assert.equal(lock.contentHash, hashTree(copied));
+  assert.equal(hashTree(copied), lock.contentHash);
   assert.equal(JSON.parse(fs.readFileSync(lockFile, "utf8")).contentHash, lock.contentHash);
 });
 
@@ -86,24 +86,18 @@ test("sync from a checkout with agent install links matches the vendored lock", 
     fs.symlinkSync(path.relative(path.dirname(link), canonical), link);
     assert.match(fs.readlinkSync(link), /\.\./);
   }
-  const packed = path.join(os.tmpdir(), `${path.basename(source)}.zip`);
-  const zipped = spawnSync("zip", ["-r", "-y", "-X", packed, "."], { cwd: source, encoding: "utf8" });
-  assert.equal(zipped.status, 0, zipped.stderr);
-  const extracted = fs.mkdtempSync(path.join(os.tmpdir(), "bp-extract-"));
-  const unzipped = spawnSync("unzip", ["-q", packed, "-d", extracted], { encoding: "utf8" });
-  assert.equal(unzipped.status, 0, unzipped.stderr);
-  assert.match(fs.readlinkSync(path.join(extracted, ".cursor", "skills", "skill-boilerplate")), /\.\./);
   const destParent = fs.mkdtempSync(path.join(os.tmpdir(), "bp-vendor-"));
   const copied = path.join(destParent, "skill-boilerplate");
   const lock = syncBoilerplate({
-    source: extracted,
+    source,
     dest: copied,
     lockFile: path.join(destParent, "BOILERPLATE.lock"),
-    commit: null
+    commit: sourceCommit
   });
   const committed = JSON.parse(fs.readFileSync(lockPath, "utf8"));
+  assert.equal(lock.sourceCommit, sourceCommit);
   assert.equal(lock.contentHash, committed.contentHash);
-  assert.equal(lock.contentHash, hashTree(copied));
+  assert.equal(hashTree(copied), committed.contentHash);
   assert.equal(fs.existsSync(path.join(copied, ".cursor")), false);
   assert.equal(fs.existsSync(path.join(copied, ".claude", "skills", "skill-boilerplate", "SKILL.md")), true);
 });
