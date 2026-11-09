@@ -12,7 +12,9 @@ Consumers vendor this folder so agent loaders see real files. They do not use an
 
 The consumer's `BOILERPLATE.lock` records `ThisIsMrAli/skill-boilerplate`, `sourceCommit`, and `contentHash`. `sourceCommit` stays null until a checkout sha is filled in. `contentHash` is SHA-256 over the sorted lines `type`, relative path, and SHA-256. File lines hash bytes. Symlink lines hash the target string and are not followed. `.git`, `node_modules`, and `.env` are omitted.
 
-The consumer replaces this folder with its sync script, which refuses `.git`, `node_modules`, `.env`, absolute symlinks, symlink targets that contain `..`, and symlinks that escape the checkout, then rewrites the lock. A drift test fails if the vendored bytes change any other way. The only import is `api.mjs`.
+`node install-agents.mjs` writes root agent-install links such as `.cursor/skills/skill-boilerplate -> ../../.claude/skills/skill-boilerplate`. Consumers do not vendor those root directories. A consuming project has its own installer. The hash covers the remaining files, including the canonical skill under `.claude/`.
+
+The consumer replaces this folder with its sync script. That script refuses `.git`, `node_modules`, `.env`, an absolute symlink, and a symlink that resolves outside the checkout. A relative target may contain `..` when the resolved path stays inside the checkout. It then rewrites the lock. A drift test fails if the vendored bytes change any other way. The only import is `api.mjs`.
 
 ## Public entry
 
