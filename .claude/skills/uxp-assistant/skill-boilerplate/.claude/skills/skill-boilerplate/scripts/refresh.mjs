@@ -44,12 +44,20 @@ export async function refreshSkill({ extensionPath, out, fetchImpl }) {
 }
 
 function documented(folder, result) {
-  const counts = `fresh ${(result.fresh || []).length}, stale ${(result.stale || []).length}, failed ${(result.failed || []).length}`;
-  return {
-    ...result,
-    out: folder,
-    next: `Docs recorded (${counts}). The docs step is done. Run ${sessionBin()} next --out ${folder}.`
-  };
+  const fresh = (result.fresh || []).length;
+  const stale = (result.stale || []).length;
+  const failed = (result.failed || []).length;
+  const counts = `fresh ${fresh}, stale ${stale}, failed ${failed}`;
+  const next = stale || failed || result.ok === false
+    ? `Docs are not done (${counts}). Failed: ${(result.failed || []).join(", ") || "none"}. Stale: ${(result.stale || []).join(", ") || "none"}. The docs step is not done. Run ${sessionBin()} next --out ${folder}.`
+    : `Docs recorded (${counts}). The docs step is done. Run ${sessionBin()} next --out ${folder}.`;
+  return { ...result, out: folder, next };
+}
+
+export function refreshExitCode(result) {
+  if (!result) return 1;
+  if (Array.isArray(result.failed) || Array.isArray(result.fresh)) return 0;
+  return result.ok === false ? 2 : 0;
 }
 
 function fixtureFetch() {
@@ -89,7 +97,7 @@ if (ranDirectly) {
     out: outFlag >= 0 ? process.argv[outFlag + 1] : process.env.SKILL_OUT
   }).then((result) => {
     process.stdout.write(`${JSON.stringify(result)}\n`);
-    process.exit(result && result.ok === false ? 2 : 0);
+    process.exit(refreshExitCode(result));
   }).catch((error) => {
     process.stdout.write(`${JSON.stringify({ ok: false, error: error.message })}\n`);
     process.exit(1);

@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { holdTemps, releaseTemps } from "./temps.mjs";
 
 export function readScripts(project) {
   try {
@@ -25,12 +26,19 @@ export function runPackage(project, { npm = "npm", runner = spawnSync, install =
   if (install) commands.push(["install", "--no-fund", "--no-audit"]);
   for (const name of names) commands.push(["run", name]);
   const runs = [];
+  holdTemps();
+  try {
   for (const args of commands) {
-    const result = runner(npm, args, { cwd: project, encoding: "utf8", timeout: 15 * 60 * 1000 });
+    const env = { ...process.env };
+    for (const key of Object.keys(env)) {
+      if (key === "NODE_CHANNEL_FD" || key === "NODE_TEST_CONTEXT" || key.startsWith("NODE_TEST_")) delete env[key];
+    }
+    const result = runner(npm, args, { cwd: project, encoding: "utf8", timeout: 15 * 60 * 1000, env });
     const output = `${result.stdout || ""}\n${result.stderr || ""}`;
-    runs.push({ args, status: result.status, error: result.error ? String(result.error.message || result.error) : "" });
+    const excerpt = output.trim().slice(-1200);
+    runs.push({ args, status: result.status, error: result.error ? String(result.error.message || result.error) : "", output: excerpt });
     if (result.status !== 0) {
-      return { status: "failed", runs, artifacts: [], hostExecuted: false, reason: `${args.join(" ")} exited ${result.status}.` };
+      return { status: "failed", runs, artifacts: [], hostExecuted: false, output: excerpt, reason: `${args.join(" ")} exited ${result.status}.\n${excerpt}` };
     }
     if (args[0] === "run" && args[1] === "build" && fs.existsSync(path.join(project, "webview-ui", "package.json"))) {
       const wrote = fs.existsSync(path.join(project, "webview-ui", "dist")) || fs.existsSync(path.join(project, "dist"));
@@ -58,6 +66,9 @@ export function runPackage(project, { npm = "npm", runner = spawnSync, install =
     hostExecuted: false,
     note: "Exit 0 is the command result. It is not evidence that Photoshop or Premiere ran the feature."
   };
+  } finally {
+    releaseTemps();
+  }
 }
 
 function findArtifacts(project) {

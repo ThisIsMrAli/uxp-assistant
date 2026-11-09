@@ -8,8 +8,11 @@ import { contextEvidence, runtimeOffer } from "./runtime.mjs";
  */
 export function stageDecision({ choice, capability, pages, behaviors, goal, context, skillRoots, skipDesign = [], cepHybrid = false }) {
   if (!choice("feasibility")) return { action: "ask", ask: feasibilityAsk(capability) };
-  if (choice("feasibility") === "pause" || choice("feasibility") === "stop") {
-    return { action: "stop", say: "Stopped before any edit." };
+  if (choice("feasibility") === "pause") {
+    return { action: "pause", say: "Paused before any edit. Nothing was written. The session is not finished." };
+  }
+  if (choice("feasibility") === "stop") {
+    return { action: "stop", say: "Stopped before any edit. The session ends here." };
   }
   if (capability.state !== "awaiting-agent-implementation") {
     if (choice("feasibility") === "continue") {

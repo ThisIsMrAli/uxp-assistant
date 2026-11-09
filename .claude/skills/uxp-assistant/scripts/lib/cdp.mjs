@@ -4,6 +4,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { findChrome, NO_CHROME } from "./chrome.mjs";
+import { holdTemps, releaseTemps } from "./temps.mjs";
 import { connect } from "./ws.mjs";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -20,6 +21,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 export async function launch({ width = 320, height = 800, scale = 2, chrome = findChrome() } = {}) {
   if (!chrome) throw new Error(NO_CHROME);
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), "uxp-assistant-cdp-"));
+  holdTemps();
   const args = [
     "--headless=new",
     // Software rendering, so a panel with a WebGL view (3D, charts) draws instead of failing.
@@ -51,7 +53,10 @@ export async function launch({ width = 320, height = 800, scale = 2, chrome = fi
   const cleanup = () => {
     process.removeListener("exit", killChrome);
     killChrome();
-    setTimeout(() => fs.rmSync(profile, { recursive: true, force: true }), 400).unref();
+    setTimeout(() => {
+      fs.rmSync(profile, { recursive: true, force: true });
+      releaseTemps();
+    }, 400).unref();
   };
 
   try {
