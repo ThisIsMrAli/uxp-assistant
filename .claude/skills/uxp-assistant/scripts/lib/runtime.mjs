@@ -91,10 +91,10 @@ export function runtimeOffer({ pages = [], behaviors = [], goal = "", cepHybrid 
     choices.push({
       id: "webview",
       label: "UXP WebView element",
-      detail: "extractDocFacts found HTMLWebViewElement, allowLocalRendering, or plugin:/ on the fresh WebView page. The embedded document is not the Photoshop or Premiere DOM. window.uxpHost is a bridge shim and does not add a missing host API."
+      detail: "The fresh WebView page names HTMLWebViewElement, allowLocalRendering, or plugin:/. The embedded document is not the Photoshop or Premiere DOM."
     });
   } else if (web) {
-    gaps.push("WebView was not offered. The page was fresh, and extractDocFacts did not find HTMLWebViewElement, allowLocalRendering, or plugin:/. The alternative is the native panel when that surface is fresh.");
+    gaps.push("WebView was not offered. The page was fresh, and it did not name HTMLWebViewElement, allowLocalRendering, or plugin:/. The alternative is the native panel when that surface is fresh.");
   } else {
     gaps.push("WebView was not offered because its page is not fresh. Refresh that page before choosing it. A native panel remains the alternative when the entrypoints or manifest page is fresh.");
   }

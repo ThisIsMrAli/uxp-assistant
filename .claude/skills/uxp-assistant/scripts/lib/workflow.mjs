@@ -141,7 +141,16 @@ export async function runWorkflow(options) {
       detail: `Docs are not fresh. Failed: ${summary.failed.join(", ") || "none"}. Stale: ${summary.stale.join(", ") || "none"}. Failed or stale pages are not evidence.`
     };
     const held = hold(out, intake, paused, options.projectPath || "", summary, plan, behaviors, [], { network });
-    return { ok: false, success: false, state: "docs-incomplete", out, hostExecuted: false, contract: held, say: paused.detail };
+    return {
+      ok: false,
+      success: false,
+      state: "docs-incomplete",
+      out,
+      hostExecuted: false,
+      contract: held,
+      say: paused.detail,
+      next: `Run node scripts/skill.mjs refresh --out ${options.dashboardOut || out}. Do not scaffold until a fetch is fresh.`
+    };
   }
 
   const staged = stageDecision({

@@ -31,6 +31,7 @@ export const HOST_PAGES = {
   "photoshop.document": "https://developer.adobe.com/photoshop/uxp/2022/ps-reference/classes/document",
   "photoshop.layer": "https://developer.adobe.com/photoshop/uxp/2022/ps-reference/classes/layer",
   "photoshop.executeAsModal": "https://developer.adobe.com/photoshop/uxp/2022/ps-reference/media/executeasmodal",
+  "photoshop.action": "https://developer.adobe.com/photoshop/uxp/2022/ps-reference/media/photoshopaction",
   "photoshop.changelog": "https://developer.adobe.com/photoshop/uxp/2022/ps-reference/changelog/",
   "premiere.reference": "https://developer.adobe.com/premiere-pro/uxp/ppro_reference/",
   "premiere.introduction": "https://developer.adobe.com/premiere-pro/uxp/introduction/",
@@ -38,7 +39,8 @@ export const HOST_PAGES = {
   "premiere.videotrack": "https://developer.adobe.com/premiere-pro/uxp/ppro-reference/classes/videotrack",
   "premiere.videocliptrackitem": "https://developer.adobe.com/premiere-pro/uxp/ppro-reference/classes/videocliptrackitem",
   "premiere.project": "https://developer.adobe.com/premiere-pro/uxp/ppro-reference/classes/project",
-  "premiere.ticktime": "https://developer.adobe.com/premiere-pro/uxp/ppro-reference/classes/ticktime"
+  "premiere.ticktime": "https://developer.adobe.com/premiere-pro/uxp/ppro-reference/classes/ticktime",
+  "premiere.constants": "https://developer.adobe.com/premiere-pro/uxp/ppro-reference/constants/"
 };
 
 export function pagesForRequest({ host, goal = "", behaviors = [] } = {}) {
@@ -47,7 +49,7 @@ export function pagesForRequest({ host, goal = "", behaviors = [] } = {}) {
   const photoshop = host === "phxs" || host === "PS" || /photoshop|\blayer\b|document title|document\.title|activeLayers|executeAsModal/.test(text);
   const premiere = host === "ppro" || host === "premierepro" || /premiere|importfiles/.test(text);
   if (photoshop) {
-    for (const id of ["photoshop.document", "photoshop.layer", "photoshop.executeAsModal", "photoshop.changelog"]) {
+    for (const id of ["photoshop.document", "photoshop.layer", "photoshop.executeAsModal", "photoshop.action", "photoshop.changelog"]) {
       pages.push({ id, url: HOST_PAGES[id], scope: "host" });
     }
   }
@@ -59,7 +61,8 @@ export function pagesForRequest({ host, goal = "", behaviors = [] } = {}) {
       "premiere.sequence",
       "premiere.videotrack",
       "premiere.videocliptrackitem",
-      "premiere.ticktime"
+      "premiere.ticktime",
+      "premiere.constants"
     ]) {
       pages.push({ id, url: HOST_PAGES[id], scope: "host" });
     }

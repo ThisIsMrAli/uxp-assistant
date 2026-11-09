@@ -12,7 +12,9 @@ export const templateDir = path.join(skillRoot, "templates");
 
 function homeBase() {
   if (!process.env.SKILL_TEST_HOME && process.env.NODE_TEST_CONTEXT) {
-    process.env.SKILL_TEST_HOME = fs.mkdtempSync(path.join(os.tmpdir(), "uxp-home-"));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "uxp-home-"));
+    process.env.SKILL_TEST_HOME = dir;
+    process.on("exit", () => fs.rmSync(dir, { recursive: true, force: true }));
   }
   if (process.env.SKILL_TEST_HOME) return process.env.SKILL_TEST_HOME;
   return process.env.HOME || os.homedir();

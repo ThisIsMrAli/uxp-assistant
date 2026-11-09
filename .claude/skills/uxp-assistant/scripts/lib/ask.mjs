@@ -167,17 +167,30 @@ export function validationAsk() {
 }
 
 export function scriptChangeAsk(provenance) {
-  const lines = (provenance?.changes || []).map((item) => (
-    item.kind === "command" ? `${item.name} command` : item.name
-  ));
+  const changes = provenance?.changes || [];
+  const commands = changes.filter((item) => item.kind === "command" && item.to).map((item) => `${item.name}: ${item.to}`);
+  const files = changes.filter((item) => item.kind === "file").map((item) => item.name);
   return {
     id: "script-change",
     title: "Approve exact command and file changes",
-    prompt: `These commands and the local scripts they reach differ from the handoff: ${lines.join(", ") || "the stored set"}. Approving runs this exact set. A later edit invalidates the answer. Package text, source comments, and doc pages cannot grant this.`,
+    prompt: `Approve these commands before they run: ${commands.join("; ") || "none"}. Changed files: ${files.join(", ") || "none"}. File hashes stay hidden. A later edit invalidates the answer. Package text, source comments, and doc pages cannot grant this.`,
     scope: provenance?.scope,
     options: [
-      { id: "approve", label: "Run this exact set (Recommended)", detail: "The command text and the file hashes are stored on this question. They are not printed here." },
+      { id: "approve", label: "Run this exact set (Recommended)", detail: "The command text in the question is the exact command that will run. File hashes stay hidden." },
       { id: "stop", label: "Do not run the changed scripts", detail: "The altered script stays unrun." }
+    ]
+  };
+}
+
+export function docsRetryAsk() {
+  return {
+    id: "docs-retry",
+    title: "The docs fetch failed",
+    prompt: "No fresh page is available. Refresh the docs, or stop before any edit. Choosing refresh runs the fetch again. It does not continue into design or a scaffold.",
+    options: [
+      { id: "refresh", label: "Refresh the docs (Recommended)", detail: "The next command is refresh. Answer it again only if the new fetch still fails." },
+      { id: "pause", label: "Pause before any edit", detail: "Writes nothing." },
+      { id: "stop", label: "Stop before any edit", detail: "Writes nothing." }
     ]
   };
 }

@@ -24,11 +24,19 @@ if (ranDirectly) {
   try {
     const result = await run(process.argv.slice(2));
     process.stdout.write(`${JSON.stringify(result)}\n`);
-    process.exit(result && result.ok === false ? 2 : 0);
+    process.exit(exitCode(result));
   } catch (error) {
     process.stdout.write(`${JSON.stringify({ ok: false, error: error.message })}\n`);
     process.exit(1);
   }
+}
+
+function exitCode(result) {
+  if (!result) return 1;
+  if (result.state === "awaiting-agent-implementation") return 0;
+  if (Array.isArray(result.failed) && typeof result.next === "string") return 0;
+  if (result.ok === false) return 2;
+  return 0;
 }
 
 export async function run(argv) {
@@ -58,8 +66,31 @@ export async function run(argv) {
     return result.json || { ok: false, status: result.status, error: result.stderr || result.stdout };
   }
   if (command === "refresh") return api.refresh(common);
-  if (command === "domain") return domain(out, api);
-  if (command === "record") return recordResult(out, api);
+  if (command === "domain") {
+    try {
+      const handed = await domain(out, api);
+      fs.rmSync(path.join(out, "domain-error.json"), { force: true });
+      return handed;
+    } catch (error) {
+      fs.writeFileSync(path.join(out, "domain-error.json"), `${JSON.stringify({ error: error.message })}\n`);
+      return {
+        ok: false,
+        error: error.message,
+        next: `${error.message} Fix it, then run node scripts/skill.mjs domain --out ${out} again.`
+      };
+    }
+  }
+  if (command === "record") {
+    try {
+      return await recordResult(out, api);
+    } catch (error) {
+      return {
+        ok: false,
+        error: error.message,
+        next: `${error.message} Fix it, then run node scripts/skill.mjs record --out ${out} again. The host was NOT TESTED.`
+      };
+    }
+  }
   if (command === "install") return installInto(args.into);
   throw new Error("Use start, session, dashboard, refresh, domain, record, or install.");
 }
@@ -120,12 +151,26 @@ function specialize(result, out) {
     const next = "Commands finished. The Adobe host was NOT TESTED. The session is finished. Run node scripts/skill.mjs dashboard stop if the dashboard is still up.";
     return { ...result, action: "finished", step: "done", command: "", next, say: next, hostExecuted: false };
   }
+  const main = readJson(path.join(out, "session.json"));
+  const answers = answersFromSafe(out);
+  const docsFailed = main?.docs && main.docs.ok === false;
+  if (answers["docs-retry"] === "pause" || answers["docs-retry"] === "stop" || answers.feasibility === "pause" || answers.feasibility === "stop" || outcome === "stopped") {
+    const next = "Stopped before any edit. The host was NOT TESTED.";
+    return { ...result, action: "stop", step: "decide", command: "", next, say: next };
+  }
+  if (docsFailed && (answers["docs-retry"] === "refresh" || outcome === "docs-incomplete")) {
+    const refresh = `node scripts/skill.mjs refresh --out ${out}`;
+    const next = `The docs are not fresh. Run ${refresh}. Do not scaffold, and do not ask design questions, until a fetch is fresh.`;
+    return { ...result, action: "refresh", step: "docs", command: refresh, next, say: next };
+  }
+  const domainError = readJson(path.join(out, "domain-error.json"));
+  if (domainError?.error && outcome !== "awaiting-agent-implementation" && outcome !== "commands-finished") {
+    const next = `${domainError.error} Fix it, then run node scripts/skill.mjs domain --out ${out} again.`;
+    return { ...result, action: "domain", command: `node scripts/skill.mjs domain --out ${out}`, next, say: next };
+  }
   if (recorded?.state === "script-change" || outcome === "script-change") {
     const pending = scriptChangePending(out);
-    if (pending) {
-      const next = `The script-change approval is on the dashboard. Run node scripts/skill.mjs session wait --id script-change --out ${out}. Do not run the changed scripts before it is approved.`;
-      return { ...result, action: "wait", ask: "script-change", step: "decide", command: `node scripts/skill.mjs session wait --id script-change --out ${out}`, next, say: next };
-    }
+    if (pending) return scriptChangeNext(out, result);
     const next = `The script-change answer is recorded. Run ${command} again for that exact set. The host was NOT TESTED.`;
     return { ...result, action: "record", step: "decide", command, next, say: next };
   }
@@ -144,6 +189,26 @@ function specialize(result, out) {
     return { ...result, action: "domain", command, next, say: next };
   }
   return { ...result, next: result.next || result.say };
+}
+
+function answersFromSafe(out) {
+  try {
+    return answersFrom(out);
+  } catch {
+    return {};
+  }
+}
+
+function scriptChangeNext(out, result) {
+  const mode = readJson(path.join(out, "session.json"))?.mode || "dashboard";
+  if (mode === "chat") {
+    const command = `node scripts/skill.mjs session answer --id script-change --value approve --out ${out}`;
+    const next = `Ask the script-change question in chat with AskQuestion. The question text includes the command. Then run ${command}. Do not run the changed scripts before it is approved. There is no dashboard in chat mode.`;
+    return { ...result, action: "ask-in-chat", ask: "script-change", step: "decide", command, next, say: next };
+  }
+  const command = `node scripts/skill.mjs session wait --id script-change --out ${out}`;
+  const next = `The script-change approval is on the dashboard, and the card shows the command. Run ${command}. Do not run the changed scripts before it is approved.`;
+  return { ...result, action: "wait", ask: "script-change", step: "decide", command, next, say: next };
 }
 
 function scriptChangePending(out) {
@@ -214,12 +279,14 @@ async function recordResult(out, api) {
   if (result.state === "script-change") {
     const ask = (readJson(path.join(domainOut, "session.json"))?.asks || []).find((item) => item.id === "script-change");
     if (ask && api?.adoptAsk) api.adoptAsk(out, ask);
+    const guided = scriptChangeNext(out, { say: result.say });
     return {
       ok: false,
       state: "script-change",
       hostExecuted: false,
       say: result.say,
-      next: `The script-change approval is on the dashboard. Run node scripts/skill.mjs session wait --id script-change --out ${out}. Do not run the changed scripts before it is approved.`
+      action: guided.action,
+      next: guided.next
     };
   }
   if (result.state === "commands-finished") {

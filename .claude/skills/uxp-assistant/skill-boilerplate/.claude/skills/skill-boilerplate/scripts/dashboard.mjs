@@ -42,10 +42,13 @@ async function start() {
   fs.rmSync(files.server(out), { force: true });
   const logFile = path.join(out, "server.log");
   const fd = fs.openSync(logFile, "a");
+  const childEnv = { ...process.env, NO_PROXY: "*", no_proxy: "*" };
+  for (const key of ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"]) delete childEnv[key];
   const child = spawn(process.execPath, [self, "serve", "--out", out, "--port", String(args.port || 0)], {
     detached: true,
     stdio: ["ignore", fd, fd],
-    windowsHide: true
+    windowsHide: true,
+    env: childEnv
   });
   child.unref();
 

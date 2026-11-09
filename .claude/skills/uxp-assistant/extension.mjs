@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { consequentialAsk, contextEvidenceAsk, designAsk, feasibilityAsk, frameworkAsk, hostAsk, narrowAsk, runtimeAsk, validationAsk } from "./scripts/lib/ask.mjs";
+import { consequentialAsk, contextEvidenceAsk, designAsk, docsRetryAsk, feasibilityAsk, frameworkAsk, hostAsk, narrowAsk, runtimeAsk, validationAsk } from "./scripts/lib/ask.mjs";
 import { resolveCapability } from "./scripts/lib/capability.mjs";
 import { discoverDesignSkills } from "./scripts/lib/design-skill.mjs";
 import { pagesForRequest } from "./scripts/lib/registry.mjs";
@@ -31,6 +31,7 @@ export default {
     id: "intake",
     permissions: "intake",
     feasibility: "decide",
+    "docs-retry": "decide",
     "context-evidence": "decide",
     runtime: "decide",
     design: "decide",
@@ -94,6 +95,7 @@ export default {
     const context = contextEvidence(pages, answers.context || "");
     const offer = runtimeOffer({ pages, behaviors: [], goal: answers.goal || "", cepHybrid: false });
     const discovery = discoverDesignSkills([path.resolve(skillRoot, "..")], { skip: [skillRoot] });
+    if (pages.some((page) => page.freshness !== "fresh")) return [docsRetryAsk()];
     const later = [feasibilityAsk(capability)];
     if (!context.confirmed) later.push(contextEvidenceAsk(context));
     later.push(runtimeAsk(offer), designAsk(discovery), validationAsk(), narrowAsk(), consequentialAsk());

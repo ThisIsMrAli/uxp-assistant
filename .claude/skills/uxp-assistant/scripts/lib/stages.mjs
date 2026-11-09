@@ -8,6 +8,9 @@ import { contextEvidence, runtimeOffer } from "./runtime.mjs";
  */
 export function stageDecision({ choice, capability, pages, behaviors, goal, context, skillRoots, skipDesign = [], cepHybrid = false }) {
   if (!choice("feasibility")) return { action: "ask", ask: feasibilityAsk(capability) };
+  if (choice("feasibility") === "pause" || choice("feasibility") === "stop") {
+    return { action: "stop", say: "Stopped before any edit." };
+  }
   if (capability.state !== "awaiting-agent-implementation") {
     if (choice("feasibility") === "continue") {
       return {
