@@ -14,6 +14,7 @@ import { pagesForRequest } from "../.claude/skills/uxp-assistant/scripts/lib/reg
 import { reviewClaim, showsHonestUiState, undocumentedHostCalls } from "../.claude/skills/uxp-assistant/scripts/lib/review.mjs";
 import { runtimeOffer } from "../.claude/skills/uxp-assistant/scripts/lib/runtime.mjs";
 import { hashTree } from "../scripts/sync-boilerplate.mjs";
+import { run } from "../.claude/skills/uxp-assistant/scripts/skill.mjs";
 import { nextAction } from "../skill-boilerplate/.claude/skills/skill-boilerplate/scripts/lib/next.mjs";
 import { adoptAsk, readMerged, setMode, startSession } from "../skill-boilerplate/.claude/skills/skill-boilerplate/scripts/lib/session.mjs";
 
@@ -157,6 +158,20 @@ test("B16 new preview logs do not claim a cloud capture", () => {
   const preview = fs.readFileSync(path.join(root, ".claude/skills/uxp-assistant/scripts/webview-preview.mjs"), "utf8");
   assert.equal(preview.includes("this cloud environment"), false);
   assert.match(preview, /this machine/);
+});
+
+test("N1 a finished record makes next finished instead of record", async () => {
+  const out = temp("uxp-n1-");
+  const started = await run(["start", "--empty", temp("uxp-n1-empty-"), "--out", out]);
+  assert.equal(started.ok, true, JSON.stringify(started));
+  const domain = path.join(out, "domain");
+  fs.mkdirSync(domain, { recursive: true });
+  fs.writeFileSync(path.join(domain, "record-result.json"), `${JSON.stringify({ state: "commands-finished", hostExecuted: false })}\n`);
+  fs.writeFileSync(path.join(domain, "session.json"), `${JSON.stringify({ outcome: "commands-finished" })}\n`);
+  const next = await run(["session", "next", "--out", out]);
+  assert.equal(next.action, "finished");
+  assert.equal(next.step, "done");
+  assert.match(next.say, /NOT TESTED/);
 });
 
 test("N3 an adopted script-change question is the dashboard's next step", () => {

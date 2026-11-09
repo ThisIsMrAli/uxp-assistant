@@ -85,7 +85,7 @@ if (ranDirectly) {
   const outFlag = process.argv.indexOf("--out");
   const extensionFlag = process.argv.indexOf("--extension");
   refreshSkill({
-    extensionPath: extensionFlag >= 0 ? process.argv[extensionFlag + 1] : process.env.SKILL_EXTENSION,
+    extensionPath: extensionFlag >= 0 ? process.argv[extensionFlag + 1] : "",
     out: outFlag >= 0 ? process.argv[outFlag + 1] : process.env.SKILL_OUT
   }).then((result) => {
     process.stdout.write(`${JSON.stringify(result)}\n`);
