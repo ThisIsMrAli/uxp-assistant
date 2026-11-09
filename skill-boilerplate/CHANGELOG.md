@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1
+
+- `questionsAfterDocs(session, out)` receives the session folder, so a skill can read `out/docs`.
+- The docs pill uses fresh, stale, and failed counts.
+- Findings, Notes, Details, and Captures render only when the session has them.
+- `docs.everyInvocation: false` reuses `docs/summary.json`. `true` fetches again.
+
 ## 0.1.0
 
 - First extraction of the session, dashboard, and question workflow from express-addon-review 0.4.0.

@@ -38,13 +38,17 @@ export async function run(argv) {
   const common = { extensionPath, out, homeDirName: ".uxp-assistant", ...bins };
   if (command === "start") {
     if (!out) throw new Error("Pass --out.");
+    const project = typeof args.project === "string" ? args.project : "";
+    const empty = typeof args.empty === "string" ? args.empty : "";
+    const input = project || empty || (typeof args.input === "string" ? args.input : "");
+    const kind = project ? "existing" : "empty";
     const result = await api.start({
       ...common,
-      input: args.project || args.input || "",
-      kind: args.project ? "existing" : "empty",
+      input,
+      kind,
       remote: Boolean(args.remote)
     });
-    fs.writeFileSync(path.join(out, "launch.json"), `${JSON.stringify({ kind: args.project ? "existing" : "empty", project: args.project || "" })}\n`);
+    fs.writeFileSync(path.join(out, "launch.json"), `${JSON.stringify({ kind, project, input })}\n`);
     return result;
   }
   if (command === "session") return api.session(rest, common);
@@ -84,6 +88,7 @@ function answersFrom(folder) {
     lines = [];
   }
   const answers = {};
+  if (session.mode) answers.mode = session.mode;
   for (const ask of session.asks || []) {
     const line = lines.find((item) => item.type === "answer" && item.askId === ask.id && item.nonce === ask.nonce);
     if (line) answers[ask.id] = line.value;

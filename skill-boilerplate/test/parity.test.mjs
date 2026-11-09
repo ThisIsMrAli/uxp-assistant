@@ -162,6 +162,60 @@ test("refresh labels fresh, stale, and failed without calling a stale page fresh
   assert.equal(sessionFile.steps.find((step) => step.id === "docs").status, "done");
 });
 
+test("questionsAfterDocs receives the session folder and everyInvocation false reuses the summary", async () => {
+  const dir = temp();
+  const ext = path.join(dir, "extension.mjs");
+  fs.writeFileSync(ext, `import fs from "node:fs";
+import path from "node:path";
+export default {
+  id: "cache",
+  title: "Cache",
+  steps: [{ id: "prepare", label: "Prepare" }, { id: "docs", label: "Docs" }, { id: "done", label: "Wrap up" }],
+  docs: { everyInvocation: false, pageTimeoutMs: 1000, budgetMs: 2000 },
+  prepare() { return { name: "Cache", path: "/tmp/cache-root" }; },
+  questions() { return []; },
+  sources() { return [{ id: "page", url: "https://example.test/page" }]; },
+  questionsAfterDocs(session, out) {
+    const text = fs.readFileSync(path.join(out, "docs", "page.txt"), "utf8");
+    return [{ id: "after", title: "After", prompt: text, options: [{ id: "yes", label: "Yes", detail: "Continues." }] }];
+  }
+};
+`);
+  const out = temp();
+  let fetches = 0;
+  const fetchImpl = async () => {
+    fetches += 1;
+    return { ok: true, async text() { return "<p>document name</p>"; } };
+  };
+  await start({ extensionPath: ext, out, input: "/tmp/cache-root", ...bins });
+  await session(["mode", "--set", "chat", "--out", out], { extensionPath: ext, out, ...bins });
+  const first = await refresh({ extensionPath: ext, out, fetchImpl });
+  assert.equal(first.network, true);
+  assert.equal(fetches, 1);
+  const questions = JSON.parse(fs.readFileSync(path.join(out, "questions.json"), "utf8"));
+  assert.equal(questions.find((item) => item.id === "after").prompt, "document name");
+  const second = await refresh({ extensionPath: ext, out, fetchImpl });
+  assert.equal(second.cached, true);
+  assert.equal(second.network, false);
+  assert.equal(fetches, 1);
+  const sessionFile = JSON.parse(fs.readFileSync(path.join(out, "session.json"), "utf8"));
+  assert.equal(sessionFile.addon.path, "/tmp/cache-root");
+  assert.deepEqual(sessionFile.docs.fresh, ["page"]);
+});
+
+test("the dashboard copy stays generic until a session supplies a surface", () => {
+  const page = fs.readFileSync(path.resolve(".claude/skills/skill-boilerplate/assets/dashboard/app.js"), "utf8");
+  const html = fs.readFileSync(path.resolve(".claude/skills/skill-boilerplate/assets/dashboard/index.html"), "utf8");
+  const joined = `${page}\n${html}`;
+  for (const phrase of ["Panel bugs", "From the scan", "Skip to the review", "review pattern", "Panel at 320", "Waiting for a review", "Measured at 320"]) {
+    assert.equal(joined.includes(phrase), false, phrase);
+  }
+  assert.match(html, /Skip to the session/);
+  assert.match(page, /function surfaceFlags/);
+  assert.match(page, /Docs fresh /);
+  assert.match(page, /docs\.fresh\.length/);
+});
+
 test("the boilerplate folder does not import the parent repo", () => {
   const root = path.resolve(".");
   const bad = [];

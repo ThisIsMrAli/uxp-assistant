@@ -4,4 +4,4 @@ The session files, the dashboard server, the wait contract, and the dashboard pa
 
 Copyright (c) 2026 express-addon-review contributors
 
-Express-only checks, the marketplace listing, the panel audit, and the brand files were not copied. This folder does not import any other project.
+Express-only checks, the marketplace listing, the panel audit, and the brand files were not copied. The dashboard shows findings, notes, details, and captures only when the session has them. This folder does not import any other project.

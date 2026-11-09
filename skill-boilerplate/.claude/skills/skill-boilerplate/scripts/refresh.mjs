@@ -2,7 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { loadExtension } from "./lib/extension.mjs";
-import { resolveOut } from "./lib/paths.mjs";
 import { refreshSources } from "./lib/refresh.mjs";
 import { readMerged, recordDocs, setStep } from "./lib/session.mjs";
 
@@ -14,6 +13,12 @@ export async function refreshSkill({ extensionPath, out, fetchImpl }) {
   const pages = ext.sources ? await ext.sources(session) : [];
   const policy = ext.docs || {};
   const target = path.join(out, "docs");
+  const cached = policy.everyInvocation === false ? readCachedSummary(target) : null;
+  if (cached) {
+    recordDocs(out, cached);
+    await appendQuestionsAfterDocs(ext, out);
+    return { ok: cached.ok, fresh: cached.fresh, stale: cached.stale, failed: cached.failed, network: false, cached: true };
+  }
   if (session.steps.some((step) => step.id === "docs")) {
     setStep(out, "docs", "running", "Fetching sources.", { doing: "Fetching sources.", progress: { done: 0, total: Math.max(pages.length, 1) } });
   }
@@ -31,15 +36,30 @@ export async function refreshSkill({ extensionPath, out, fetchImpl }) {
     }
   });
   recordDocs(out, summary);
-  if (ext.questionsAfterDocs) {
-    const more = await ext.questionsAfterDocs(readMerged(out)) || [];
-    const file = path.join(out, "questions.json");
-    const current = JSON.parse(fs.readFileSync(file, "utf8"));
-    const ids = new Set(current.map((item) => item.id));
-    const extra = more.filter((item) => item && !ids.has(item.id));
-    if (extra.length) fs.writeFileSync(file, `${JSON.stringify([...current, ...extra], null, 2)}\n`);
-  }
+  await appendQuestionsAfterDocs(ext, out);
   return { ok: summary.ok, fresh: summary.fresh, stale: summary.stale, failed: summary.failed, network: true };
+}
+
+async function appendQuestionsAfterDocs(ext, out) {
+  if (!ext.questionsAfterDocs) return;
+  const more = await ext.questionsAfterDocs(readMerged(out), out) || [];
+  const file = path.join(out, "questions.json");
+  const current = JSON.parse(fs.readFileSync(file, "utf8"));
+  const ids = new Set(current.map((item) => item.id));
+  const extra = more.filter((item) => item && !ids.has(item.id));
+  if (extra.length) fs.writeFileSync(file, `${JSON.stringify([...current, ...extra], null, 2)}\n`);
+}
+
+function readCachedSummary(target) {
+  const file = path.join(target, "summary.json");
+  if (!fs.existsSync(file)) return null;
+  try {
+    const summary = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (!summary || !Array.isArray(summary.pages) || !Array.isArray(summary.fresh) || !Array.isArray(summary.stale) || !Array.isArray(summary.failed)) return null;
+    return summary;
+  } catch {
+    return null;
+  }
 }
 
 const ranDirectly = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
