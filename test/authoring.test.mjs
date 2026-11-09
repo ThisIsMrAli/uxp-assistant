@@ -29,7 +29,10 @@ const TEXT = {
   manifest: "Current UXP hosts use manifest version 5.\nminVersion is a required string.\n",
   "premiere.reference": "importFiles\n\nfunction\n\nImport files into the active project.\n",
   "css-styling": "CSS transitions and animations are not supported\n",
-  "css-styles": "text-transform is not supported\n"
+  "css-styles": "text-transform is not supported\n",
+  // The real photoshopCore and Photoshop pages, so core.executeAsModal and app.activeDocument resolve to their owner class.
+  "photoshop.core": fs.readFileSync(new URL("./fixtures/real-docs/photoshop.core.txt", import.meta.url), "utf8"),
+  "photoshop.app": fs.readFileSync(new URL("./fixtures/real-docs/photoshop.app.txt", import.meta.url), "utf8")
 };
 
 function fetchImpl(failId) {

@@ -15,7 +15,8 @@ import {
   testsCoverFeature,
   undocumentedHostCalls
 } from "../.claude/skills/uxp-assistant/scripts/lib/review.mjs";
-import { pinnedInstallArgs, toolingPrefix } from "../.claude/skills/uxp-assistant/scripts/lib/scaffold.mjs";
+import { toolingPrefix } from "../.claude/skills/uxp-assistant/scripts/lib/scaffold.mjs";
+import { installTree, verifyTree } from "../.claude/skills/uxp-assistant/scripts/lib/tooling.mjs";
 import { stageDecision } from "../.claude/skills/uxp-assistant/scripts/lib/stages.mjs";
 import { snapshotTemps, sweepOwnedTemps } from "../.claude/skills/uxp-assistant/scripts/lib/temps.mjs";
 import { applyDocsRefresh, run } from "../.claude/skills/uxp-assistant/scripts/skill.mjs";
@@ -217,14 +218,25 @@ test("NS8 create-bolt-uxp is pinned beside the skill, not at the project root", 
   assert.equal(prefix, path.join(install, ".agents", "skills", ".uxp-tooling"));
   assert.equal(prefix.endsWith(`${path.sep}.uxp-tooling`) && prefix.includes(`${path.sep}skills${path.sep}`), true);
   assert.notEqual(prefix, path.join(install, ".uxp-tooling"));
-  fs.mkdirSync(prefix, { recursive: true });
-  fs.writeFileSync(path.join(prefix, "package.json"), "{\"private\":true}\n");
-  fs.writeFileSync(path.join(prefix, ".gitignore"), "*\n");
-  const installed = spawnSync("npm", pinnedInstallArgs(prefix), { encoding: "utf8", timeout: 170000 });
-  assert.equal(installed.status, 0, installed.stderr || installed.stdout);
+  // NQ11: the real install, npm ci of the shipped lock with npm by absolute path. A fake npm first on PATH must not run.
+  const fakeBin = path.join(install, "fake-bin");
+  const marker = path.join(install, "fake-npm-ran.txt");
+  fs.mkdirSync(fakeBin, { recursive: true });
+  fs.writeFileSync(path.join(fakeBin, "npm"), `#!/bin/sh\necho ran > "${marker}"\nexit 0\n`);
+  fs.chmodSync(path.join(fakeBin, "npm"), 0o755);
+  const savedPath = process.env.PATH;
+  process.env.PATH = `${fakeBin}${path.delimiter}${savedPath}`;
+  try {
+    installTree(prefix);
+  } finally {
+    process.env.PATH = savedPath;
+  }
+  assert.equal(fs.existsSync(marker), false, "the npm on PATH ran");
+  assert.deepEqual(verifyTree(path.join(prefix, "node_modules"), { fresh: true }), { ok: true });
   const pkg = JSON.parse(fs.readFileSync(path.join(prefix, "package.json"), "utf8"));
   assert.equal(pkg.dependencies["create-bolt-uxp"], "1.3.27");
   assert.equal(fs.readFileSync(path.join(prefix, ".gitignore"), "utf8").includes("*"), true);
+  assert.equal(fs.existsSync(`${prefix}.lock`), false);
   fs.rmSync(install, { recursive: true, force: true });
 });
 

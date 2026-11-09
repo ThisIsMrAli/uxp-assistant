@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { skillRoot } from "./paths.mjs";
 import { ensureInstaller } from "./scaffold.mjs";
+import { verifyTree } from "./tooling.mjs";
 
 let parserModule;
 
@@ -21,7 +22,8 @@ export function parserCandidates(root = skillRoot) {
     // not the source repo
   }
   const list = [];
-  for (const dir of modules) {
+  // NQ11: only a tree that matches the shipped lock and digests is used.
+  for (const dir of modules.filter((item) => fs.existsSync(item) && verifyTree(item).ok)) {
     list.push(path.join(dir, "@babel", "parser"));
     list.push(path.join(dir, "create-bolt-uxp", "node_modules", "@babel", "parser"));
     list.push(path.join(dir, "bolt-uxp", "node_modules", "@babel", "parser"));
@@ -78,11 +80,19 @@ export function parseSource(text, filename) {
   const parser = loadParser();
   const lower = String(filename || "").toLowerCase();
   const jsx = lower.endsWith(".tsx") || lower.endsWith(".jsx") || !lower || !/\.(?:ts|mts|cts|js|mjs|cjs)$/.test(lower);
-  const plugins = ["typescript", ...(jsx ? ["jsx"] : [])];
+  const plugins = ["typescript", "decorators-legacy", ...(jsx ? ["jsx"] : [])];
   const source = String(text || "");
   try {
     return parseOnce(parser, source, plugins);
   } catch (error) {
+    if (/decorator/i.test(error instanceof Error ? error.message : "")) {
+      // TC39 decorators (`export @d class`, accessor members) need the standard plugin, not the legacy one.
+      try {
+        return parseOnce(parser, source, ["typescript", ["decorators", { decoratorsBeforeExport: false, allowCallParenthesized: true }], ...(jsx ? ["jsx"] : [])]);
+      } catch {
+        throw error;
+      }
+    }
     if (!/Adjacent JSX/.test(error instanceof Error ? error.message : "")) throw error;
     const wrapped = source.replace(/return\s+(<[\s\S]*?);/g, (full, jsxText) => {
       const opens = jsxText.match(/<(?!\/)[A-Za-z]/g) || [];

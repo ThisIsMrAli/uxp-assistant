@@ -1,23 +1,6 @@
-// The rerun4 host corpus: 54 cases with synthetic docs. Shared by host-corpus and host-corpus-rerun5 tests.
-export const DOCS = `
-addNotificationListener
-getActiveProject
-Returns: Promise<Project>
-Project
-getActiveSequence
-Returns: Promise<Sequence>
-Sequence
-getVideoTrack
-Returns: Promise<VideoTrack>
-VideoTrack
-getTrackItems
-executeAsModal
-activeDocument
-activeLayers
-app
-core
-name
-`;
+// The rerun4 host corpus: 54 cases. Shared by host-corpus and host-corpus-rerun5 tests.
+// Scored on the real fetched docs (fixtures/real-docs). The old one-word synthetic list matched any name anywhere.
+export { REAL_DOCS as DOCS } from "./real-docs.mjs";
 
 export const hostReexport = { rel: "src/host.ts", body: "export { photoshop } from \"./globals\";\n" };
 

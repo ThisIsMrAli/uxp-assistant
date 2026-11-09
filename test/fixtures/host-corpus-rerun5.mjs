@@ -114,24 +114,6 @@ const broken = (id) => {
 
 export const BROKEN_SYNTAX = [broken("L42"), broken("L43"), broken("L45")];
 
-const page = (owner, text) => `${owner} ${owner} ${text}`;
-
-// Synthetic API pages written for this corpus, in the shape of the fetched Adobe reference pages:
-// one line per page, owner name twice, a property table (name Type R [W] version), and versioned methods.
-// Members the cases call must be on the owner page. layer.rename and action.subscribeToEverything are not.
-export const DOCS_RERUN5 = [
-  page("photoshopAction", "The action module of the photoshop namespace runs action descriptors and listens for host events in the running application. Methods batchPlay 23.0 Promise<ActionDescriptor[]> addNotificationListener 23.0 Promise<void> removeNotificationListener 23.0 Promise<void> validateReference 23.0 Promise<void>"),
-  page("photoshopCore", "The core module of the photoshop namespace runs modal work and history control while the application waits for the plugin to finish. Methods executeAsModal 23.0 Promise<any> showAlert 23.0 Promise<void> suspendHistory 23.0 Promise<number> resumeHistory 23.0 Promise<void>"),
-  page("Photoshop", "The app object is the root of the Photoshop document object model and gives the open documents and the active document of the application. Properties activeDocument Document R W 23.0 documents Documents R 23.0 Methods showAlert 23.0 Promise<void> open 23.0 Promise<Document>"),
-  page("Document", "Represents a single Photoshop document that is open in the application, with its layers, size, title, and selection in the current session. Properties activeLayers Layers R 23.0 layers Layers R 23.0 title string R 23.0 id number R 23.0 width number R 23.0 height number R 23.0 Methods duplicate 23.0 Promise<Document> save 23.0 Promise<void>"),
-  page("Layer", "Represents a single layer in a Photoshop document, such as a pixel layer, a text layer, or a group that holds other layers in the stack. Properties name string R W 23.0 id number R 23.0 visible boolean R W 23.0 opacity number R W 23.0 kind string R 23.0 parent Layer R 23.0 Methods duplicate 23.0 Promise<Layer> delete 23.0 void moveAbove 23.0 void"),
-  page("ExecutionContext", "The execution context is passed to the executeAsModal callback and gives cancellation state and history control for the modal scope in the host. Properties hostControl HostControl R 23.0 isCancelled boolean R 23.0 Methods reportProgress 23.0 void"),
-  page("HostControl", "Host control is part of the execution context and suspends and resumes history states for the document while the modal work runs in the host. Methods suspendHistory 23.0 Promise<number> resumeHistory 23.0 Promise<void>"),
-  page("Project", "A Premiere project holds sequences, bins, and media, and the active project is the one the user has open in the editor at this moment. getActiveProject Returns: Promise<Project> Methods getActiveProject 25.0 Promise<Project> getActiveSequence 25.0 Promise<Sequence> Properties name string R 25.0 Returns: Promise<Sequence>"),
-  page("Sequence", "A Premiere sequence is a timeline of video and audio tracks with clips that the user edits and plays back in the program monitor. Methods getVideoTrackCount 25.0 Promise<number> getVideoTrack 25.0 Promise<VideoTrack> getAudioTrackCount 25.0 Promise<number> getVideoTrack Returns: Promise<VideoTrack>"),
-  page("VideoTrack", "A video track in a Premiere sequence holds the track items for clips, transitions, and other media that are placed on that track of the timeline. Methods getTrackItems 25.0 Promise<TrackItem[]> getIndex 25.0 number Properties name string R 25.0"),
-  page("Constants", "Constants are the enumerations the Premiere API uses for track item types, media types, and similar choices that methods accept as arguments here. Properties TrackItemType object R 25.0 CLIP number R 25.0 EMPTY number R 25.0"),
-  page("uxp", "The uxp module gives the host, the plugin entrypoints, storage, dialogs, and versions to the plugin while it runs inside a UXP host app. Properties host Host R 6.0 entrypoints Entrypoints R 6.0 versions object R 6.0 storage object R 6.0 Methods setup 6.0 void"),
-  page("Host", "The host object names the application that runs the plugin and gives its version and UI locale for that running session of the application. Properties name string R 6.0 version string R 6.0 uiLocale string R 6.0"),
-  page("Entrypoints", "Entrypoints declare the panels and commands of a plugin and give access to its manifest data and setup callbacks in the host. Properties _pluginInfo object R 6.0 Methods setup 6.0 void getPanel 6.0 object")
-].join("\n");
+// The corpus is scored on the docs the skill really fetches (fixtures/real-docs), not on synthetic pages.
+// There is no hand-written Photoshop app page here: photoshop.app comes from the fetched classes/photoshop page.
+export { REAL_DOCS as DOCS_RERUN5 } from "./real-docs.mjs";

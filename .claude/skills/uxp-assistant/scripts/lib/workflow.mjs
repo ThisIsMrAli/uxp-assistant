@@ -17,6 +17,7 @@ import { writeLocalWebviewHost } from "./webview-shell.mjs";
 import { runPackage } from "./package-project.mjs";
 import { rememberOut } from "./paths.mjs";
 import { REVIEW_LIMIT, reviewArchive, reviewClaim, reviewCommandProvenance, selectArchives, snapshotProject, testsCoverFeature } from "./review.mjs";
+import { joinPages } from "./docs-index.mjs";
 import { refreshPages, readPageText } from "./refresh.mjs";
 import { pagesForRequest } from "./registry.mjs";
 import { bindScope, publishAsk, readAnswers, readMerged, recordFacts, setMode, setStep, startSession } from "./session.mjs";
@@ -470,11 +471,11 @@ function freshDocText(out) {
   const dir = path.join(out, "docs");
   if (!fs.existsSync(dir)) return "";
   const parts = [];
-  for (const name of fs.readdirSync(dir)) {
+  for (const name of fs.readdirSync(dir).sort()) {
     if (!name.endsWith(".txt")) continue;
     parts.push(fs.readFileSync(path.join(dir, name), "utf8"));
   }
-  return parts.join("\n");
+  return joinPages(parts);
 }
 
 function publishOutcome(out, state, success, archives = "") {

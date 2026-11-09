@@ -5,6 +5,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { DECLARED_MANIFEST } from "./floors.mjs";
 import { skillRoot } from "./paths.mjs";
+import { installTree, npmCommand, verifyTree } from "./tooling.mjs";
 
 export const repoRoot = path.resolve(skillRoot, "../../..");
 
@@ -44,7 +45,11 @@ export function installerRoots(skillDirectory = skillRoot) {
   return roots;
 }
 
-/** create-bolt-uxp must be exactly 1.3.27 with the published bytes, and its dependencies must sit in the same pinned node_modules. */
+/**
+ * create-bolt-uxp must be exactly 1.3.27 with the published bytes, and (NQ11) the whole tree it loads
+ * must match the lock and file digests shipped in tooling/: every dependency, exact versions, no
+ * symlink out of the folder, no extra package.
+ */
 export function verifyInstaller(modulesDir) {
   const dir = path.join(modulesDir, "create-bolt-uxp");
   const pkg = readJson(path.join(dir, "package.json"));
@@ -65,6 +70,8 @@ export function verifyInstaller(modulesDir) {
     const hoisted = path.join(modulesDir, name, "package.json");
     if (!fs.existsSync(nested) && !fs.existsSync(hoisted)) return { ok: false, reason: `${name} is not installed beside create-bolt-uxp in ${modulesDir}` };
   }
+  const tree = verifyTree(modulesDir);
+  if (!tree.ok) return { ok: false, reason: tree.reason };
   return { ok: true, entry };
 }
 
@@ -76,13 +83,16 @@ export function installerEntry(skillDirectory = skillRoot) {
   return "";
 }
 
+/** The install the skill runs: npm ci of the shipped lock (exact versions and integrity), with no install scripts. */
 export function pinnedInstallArgs(prefix) {
-  return ["install", "--prefix", prefix, "--save-exact", `create-bolt-uxp@${INSTALLER_VERSION}`, "--no-audit", "--no-fund"];
+  return ["ci", "--prefix", prefix, "--no-audit", "--no-fund", "--ignore-scripts", "--loglevel=error"];
 }
 
 /**
- * Install create-bolt-uxp beside the skill when no verified copy is there.
+ * Install the pinned tooling beside the skill when no verified copy is there. A tree that fails
+ * verification (tampered, half-written by a concurrent install, a symlinked copy) is replaced.
  * notify(text) is called before and after the install so the dashboard shows it.
+ * options.npm is for tests only: an absolute executable run instead of node + npm-cli.js.
  */
 export function ensureInstaller(options = {}) {
   const skillDirectory = options.skillDirectory || skillRoot;
@@ -90,23 +100,22 @@ export function ensureInstaller(options = {}) {
   const found = installerEntry(skillDirectory);
   if (found) return found;
   const prefix = toolingPrefix(skillDirectory);
+  const before = fs.existsSync(path.join(prefix, "node_modules")) ? verifyInstaller(path.join(prefix, "node_modules")) : null;
+  if (before && !before.ok) notify(`The pinned tooling in ${prefix} failed verification (${before.reason}). It will be replaced.`);
   notify(`Installing create-bolt-uxp@${INSTALLER_VERSION} into ${prefix}. This needs the network once and takes about 15 seconds.`);
-  fs.mkdirSync(prefix, { recursive: true });
-  if (!fs.existsSync(path.join(prefix, "package.json"))) {
-    fs.writeFileSync(path.join(prefix, "package.json"), "{\"private\":true}\n");
-  }
-  if (!fs.existsSync(path.join(prefix, ".gitignore"))) fs.writeFileSync(path.join(prefix, ".gitignore"), "*\n");
-  const installed = spawnSync(options.npm || "npm", pinnedInstallArgs(prefix), {
-    cwd: prefix,
-    encoding: "utf8",
-    timeout: 180000
-  });
-  const checked = verifyInstaller(path.join(prefix, "node_modules"));
-  if (installed.status !== 0 || !checked.ok) {
+  let installed;
+  try {
+    installed = installTree(prefix, { npm: options.npm, notify });
+  } catch (error) {
     notify(`create-bolt-uxp@${INSTALLER_VERSION} install into ${prefix} failed.`);
-    throw new Error(`create-bolt-uxp@${INSTALLER_VERSION} was not found beside the skill and npm install failed or did not give the published package. ${checked.ok ? "" : checked.reason} ${(installed.stderr || installed.stdout || "").slice(-400)}`.trim());
+    throw new Error(`create-bolt-uxp@${INSTALLER_VERSION} was not found beside the skill, and installing the pinned tooling failed: ${error.message} Fix that and run the same command again; the skill repairs ${prefix} itself.`);
   }
-  notify(`Installed create-bolt-uxp@${INSTALLER_VERSION} into ${prefix}.`);
+  const checked = verifyInstaller(path.join(prefix, "node_modules"));
+  if (!checked.ok) {
+    notify(`create-bolt-uxp@${INSTALLER_VERSION} install into ${prefix} failed.`);
+    throw new Error(`create-bolt-uxp@${INSTALLER_VERSION} install into ${prefix} did not give the published package: ${checked.reason}`);
+  }
+  notify(`Installed create-bolt-uxp@${INSTALLER_VERSION} into ${prefix}${installed.repaired ? " (the broken copy was replaced)" : ""}.`);
   return checked.entry;
 }
 
@@ -264,12 +273,12 @@ export function declareManifest(project, { id = "", displayName = "", host = "" 
 
 /** Update the generated lockfile inside the ranges Bolt already declared. Never pass --force. */
 function applyNonBreakingAuditFix(folder) {
-  const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+  const npm = npmCommand();
   const pkgPath = path.join(folder, "package.json");
   const lockPath = path.join(folder, "package-lock.json");
   const before = fs.existsSync(pkgPath) ? fs.readFileSync(pkgPath, "utf8") : "";
   const lockBefore = fs.existsSync(lockPath) ? fs.readFileSync(lockPath) : null;
-  const result = spawnSync(npm, ["audit", "fix", "--package-lock-only"], {
+  const result = spawnSync(npm.command, [...npm.args, "audit", "fix", "--package-lock-only"], {
     cwd: folder,
     encoding: "utf8",
     timeout: 180000
@@ -290,7 +299,7 @@ function applyNonBreakingAuditFix(folder) {
       reason: `npm audit fix did not finish (${result.error ? result.error.message : result.status}). The installer tree was left as create-bolt-uxp wrote it.`
     };
   }
-  const install = spawnSync(npm, ["ci"], { cwd: folder, encoding: "utf8", timeout: 180000 });
+  const install = spawnSync(npm.command, [...npm.args, "ci"], { cwd: folder, encoding: "utf8", timeout: 180000 });
   return {
     applied: install.status === 0,
     status: result.status,

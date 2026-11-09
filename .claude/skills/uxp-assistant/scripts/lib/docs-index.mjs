@@ -39,6 +39,46 @@ function pageMembers(text) {
   return { members, props };
 }
 
+const PRIMITIVE = new Set(["number", "string", "boolean", "void", "any", "object", "undefined", "null"]);
+
+/**
+ * Return types of the methods a page documents, in the two shapes the fetched reference pages use:
+ *  - Photoshop: `createLayer 23.0 async : Promise Layer >`, `batchPlaySync 23.1 ActionDescriptor[]`;
+ *  - Premiere: `getActiveSequence Get the active sequence Since: 25.6 Returns: Promise Sequence >`.
+ * A type is kept only when it is a fetched class page, an array of one, or a primitive.
+ */
+function methodReturns(line, pages) {
+  const out = [];
+  const keep = (type) => {
+    const raw = String(type || "").replace(/\s+/g, "");
+    if (!raw) return "";
+    if (PRIMITIVE.has(raw)) return raw;
+    const base = raw.replace(/\[\]$/, "");
+    if (pages.has(base) || /\[\]$/.test(raw) || /^[A-Z][\w$]*\.[A-Z][\w$]*$/.test(raw)) return raw;
+    return "";
+  };
+  for (const match of line.matchAll(/\b([a-z_$][\w$]*)\s+\d+\.\d+(?:\.\d+)?\s+(?:async\s*:\s*)?(?:(Promise)\s*<?\s*(?:([A-Za-z_$][\w$.]*(?:\s*\[\s*\])?)\s*>)?|([A-Za-z_$][\w$]*(?:\s*\[\s*\])?)(?=\s))/g)) {
+    const promise = Boolean(match[2]);
+    out.push([match[1], keep(promise ? match[3] : match[4]), promise]);
+  }
+  let previous = 0;
+  for (const match of line.matchAll(/Since:\s*\d+(?:\.\d+)*\s+Returns:\s*(?:(Promise)\s*<?\s*)?([A-Za-z_$][\w$.]*(?:\s*\[\s*\])?)/g)) {
+    const segment = line.slice(previous, match.index);
+    previous = match.index + match[0].length;
+    const cuts = [0];
+    for (const cut of segment.matchAll(/\s(?:-|>)\s|\b(?:Static Methods|Instance Methods|Methods)\s/g)) cuts.push(cut.index + cut[0].length);
+    let method = "";
+    for (let i = cuts.length - 1; i >= 0 && !method; i -= 1) {
+      const head = segment.slice(cuts[i]).trim().match(/^([a-z_$][\w$]*)\s+\S/);
+      if (head) method = head[1];
+    }
+    if (!method) continue;
+    const promise = Boolean(match[1]) || match[2] === "Promise";
+    out.push([method, match[2] === "Promise" ? "" : keep(match[2]), promise]);
+  }
+  return out;
+}
+
 export function docIndex(docs) {
   const key = String(docs || "");
   if (cache.has(key)) return cache.get(key);
@@ -69,16 +109,22 @@ export function docIndex(docs) {
     }
   }
   const asyncReturns = new Set();
-  for (const match of text.matchAll(/Returns:\s*(?:Promise\s*<\s*([A-Za-z_][\w]*)|([A-Za-z_][\w]*))/g)) {
-    const type = match[1] || match[2];
-    const before = text.slice(Math.max(0, match.index - 240), match.index);
-    const names = [...before.matchAll(/\b([a-z][A-Za-z0-9]*)\b/g)];
-    const method = names.at(-1)?.[1];
-    if (method && type && type !== "Promise" && !returns.has(method)) returns.set(method, type);
-    if (method && (match[1] || type === "Promise")) asyncReturns.add(method);
+  const owned = new Map();
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    const words = trimmed.split(/\s+/);
+    const owner = words.length > 20 && words[0] === words[1] && /^[A-Za-z_$][\w$]*$/.test(words[0]) ? words[0] : "";
+    for (const [method, type, promise] of methodReturns(trimmed, pages)) {
+      if (promise) asyncReturns.add(method);
+      if (!type) continue;
+      if (owner && !owned.has(`${owner}.${method}`)) owned.set(`${owner}.${method}`, type);
+      if (!returns.has(method)) returns.set(method, type);
+    }
   }
   for (const match of text.matchAll(/\b([a-z_$][\w$]*)\s+\d+\.\d+(?:\.\d+)?\s+(?:async\s*:\s*)?Promise\b/g)) asyncReturns.add(match[1]);
-  const index = { pages, global, propTypes, returns, asyncReturns };
+  const calls = new Set();
+  for (const match of text.matchAll(/\b([A-Za-z_$][\w$]*)\s*\.\s*([A-Za-z_$][\w$]*)\s*\(/g)) calls.add(`${match[1]}.${match[2]}`);
+  const index = { pages, global, propTypes, returns, owned, asyncReturns, calls };
   cache.set(key, index);
   return index;
 }
@@ -103,9 +149,18 @@ export function isCollectionType(type) {
   return /s$|\[\]$|Collection$|List$/.test(String(type || ""));
 }
 
+/**
+ * The class a member of a host module has: photoshop.action is photoshopAction, photoshop.core is photoshopCore,
+ * photoshop.app is the Photoshop class, and premierepro.Project is the Project class.
+ * The name is returned even without a fetched page, so a call on it is matched to that owner or needs review.
+ */
 export function hostModuleType(index, root, name) {
+  if (root === "photoshop" && name === "app") return "Photoshop";
+  if (root === "premierepro" && /^[A-Z]/.test(name)) return name;
   const candidate = `${root}${name.charAt(0).toUpperCase()}${name.slice(1)}`;
-  return index.pages.has(candidate) ? candidate : "";
+  if (index.pages.has(candidate)) return candidate;
+  if (root === "photoshop" && (name === "action" || name === "core")) return candidate;
+  return "";
 }
 
 /**
@@ -123,6 +178,21 @@ export function returnsPromise(index, method) {
   return Boolean(index.asyncReturns && index.asyncReturns.has(method));
 }
 
-export function returnType(index, method) {
+/** The documented return type of `method`, for its owner class when that page was fetched. */
+export function returnType(index, method, owner = "") {
+  if (owner && index.pages.has(owner)) return index.owned.get(`${owner}.${method}`) || "";
   return index.returns.get(method) || "";
+}
+
+/** Whether a fetched page shows `receiver.method(` in code, such as `core.executeAsModal(` or `entrypoints.setup(`. */
+export function calledOn(index, receiver, method) {
+  return Boolean(receiver && index.calls.has(`${receiver}.${method}`));
+}
+
+/**
+ * Whether a docs page set was fetched as one line per page, the shape docIndex reads.
+ * Each page's whitespace is collapsed so a page with line breaks keeps its owner and members together.
+ */
+export function joinPages(texts) {
+  return (texts || []).map((text) => String(text || "").replace(/\s+/g, " ").trim()).filter(Boolean).join("\n");
 }

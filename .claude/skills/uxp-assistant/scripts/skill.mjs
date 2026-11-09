@@ -236,8 +236,11 @@ export function specialize(result, out) {
     return { ...result, action: "domain", command: `node scripts/skill.mjs domain --out ${out}`, next, say: next };
   }
   if (recorded?.state === "script-change-stopped") {
-    const next = `${recorded.say} To ask again, run ${command} --reask.`;
-    return { ...result, action: "record", step: "decide", command, next, say: next, hostExecuted: false };
+    // NQ13: a chat stop is a pause, not another record. command is empty so an agent that follows
+    // next literally stops here; --reask is only for when the user asks to be asked again.
+    const reask = `${command} --reask`;
+    const next = `${recorded.say} The session is paused by your stop answer. Do not run record again. Only if the user asks to change that answer, run ${reask}. The host was NOT TESTED.`;
+    return { ...result, action: "paused", state: "script-change-stopped", step: "decide", command: "", reask, next, say: next, hostExecuted: false, neverStop: undefined };
   }
   if (recorded?.state === "script-change" || outcome === "script-change") {
     const pending = scriptChangePending(out);
@@ -323,7 +326,12 @@ export function domainDocsNext(out, result, main = readJson(path.join(out, "sess
     }
   })();
   const docsAt = newestMtime(path.join(out, "docs"));
-  const failed = (main?.docs?.failed || []).join(", ") || "none";
+  // NQ14: the main docs were fresh, so name what the domain step failed to fetch, never "none".
+  const domainDocs = readJson(path.join(out, "domain", "session.json"))?.docs || {};
+  const domainFailed = [...(domainDocs.failed || []), ...(domainDocs.stale || [])];
+  const failedText = domainFailed.length
+    ? `Failed in the domain step: ${[...new Set(domainFailed)].join(", ")}`
+    : "The main docs are fresh, but the domain step did not record a fresh fetch of its pages";
   const askCommand = `node scripts/skill.mjs session ask --id docs-retry --out ${out}`;
   const refresh = `node scripts/skill.mjs refresh --out ${out}`;
   if (state.rounds >= 3) {
@@ -336,7 +344,7 @@ export function domainDocsNext(out, result, main = readJson(path.join(out, "sess
     const next = `The docs were refreshed after the domain step failed to fetch them. Run ${command} once more. The host was NOT TESTED.`;
     return { ...result, action: "domain", step: "docs", command, next, say: next };
   }
-  const next = `The domain step could not fetch the docs (docs-incomplete). Failed in the main docs: ${failed}. Run ${refresh}, then session next. Do not run domain again until a refresh is newer. Do not scaffold until a fetch is fresh. The host was NOT TESTED.`;
+  const next = `The domain step could not fetch the docs (docs-incomplete). ${failedText}. Run ${refresh}, then session next. Do not run domain again until a refresh is newer. Do not scaffold until a fetch is fresh. The host was NOT TESTED.`;
   return { ...result, action: "refresh", step: "docs", command: refresh, next, say: next };
 }
 
