@@ -14,7 +14,10 @@ test("the boilerplate folder runs its own tests with no parent imports", () => {
   for (const key of Object.keys(env)) if (key.startsWith("NODE_TEST") || key === "NODE_CHANNEL_FD") delete env[key];
   const result = spawnSync("npm", ["test"], { cwd: BOILERPLATE_ROOT, encoding: "utf8", env });
   assert.equal(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stdout, /# fail 0/);
+  const summary = `${result.stdout}\n${result.stderr}`.replace(/\u001b\[[0-9;]*m/g, "");
+  const fails = summary.match(/^[^\d\n]*fail\s+(\d+)\s*$/m);
+  assert.ok(fails, summary);
+  assert.equal(Number(fails[1]), 0);
 });
 
 test("UXP Assistant imports the boilerplate only through api.mjs", () => {
