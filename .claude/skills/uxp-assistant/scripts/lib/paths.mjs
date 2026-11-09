@@ -10,22 +10,35 @@ export const liveDir = path.join(skillRoot, "references", "live");
 export const assetsDir = path.join(skillRoot, "assets", "dashboard");
 export const templateDir = path.join(skillRoot, "templates");
 
+function homeBase() {
+  if (!process.env.SKILL_TEST_HOME && process.env.NODE_TEST_CONTEXT) {
+    process.env.SKILL_TEST_HOME = fs.mkdtempSync(path.join(os.tmpdir(), "uxp-home-"));
+  }
+  if (process.env.SKILL_TEST_HOME) return process.env.SKILL_TEST_HOME;
+  return process.env.HOME || os.homedir();
+}
+
 /** Sessions live outside the skill and outside the plugin being built. */
-export const homeDir = path.join(os.homedir(), ".uxp-assistant");
-const pointer = path.join(homeDir, "current.json");
+export function homeDir() {
+  return path.join(homeBase(), ".uxp-assistant");
+}
+
+function pointer() {
+  return path.join(homeDir(), "current.json");
+}
 
 export function defaultOut(slug) {
-  return path.join(homeDir, slug);
+  return path.join(homeDir(), slug);
 }
 
 export function rememberOut(out) {
-  fs.mkdirSync(homeDir, { recursive: true });
-  fs.writeFileSync(pointer, `${JSON.stringify({ out, at: new Date().toISOString() })}\n`);
+  fs.mkdirSync(homeDir(), { recursive: true });
+  fs.writeFileSync(pointer(), `${JSON.stringify({ out, at: new Date().toISOString() })}\n`);
 }
 
 export function rememberedOut() {
   try {
-    const last = JSON.parse(fs.readFileSync(pointer, "utf8")).out;
+    const last = JSON.parse(fs.readFileSync(pointer(), "utf8")).out;
     return last && fs.existsSync(last) ? last : null;
   } catch {
     return null;

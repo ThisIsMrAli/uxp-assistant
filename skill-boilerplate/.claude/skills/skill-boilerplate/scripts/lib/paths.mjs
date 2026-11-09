@@ -8,8 +8,17 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 export const skillRoot = path.resolve(here, "../..");
 export const assetsDir = path.join(skillRoot, "assets", "dashboard");
 
+function homeBase() {
+  if (!process.env.SKILL_TEST_HOME && process.env.NODE_TEST_CONTEXT) {
+    process.env.SKILL_TEST_HOME = fs.mkdtempSync(path.join(os.tmpdir(), "skill-home-"));
+  }
+  if (process.env.SKILL_TEST_HOME) return process.env.SKILL_TEST_HOME;
+  return process.env.HOME || os.homedir();
+}
+
+/** Read HOME at call time. os.homedir() is cached at process start, so a test that sets HOME later would still write the real home. */
 export function homeDir() {
-  return path.join(os.homedir(), process.env.SKILL_HOME_NAME || ".skill-boilerplate");
+  return path.join(homeBase(), process.env.SKILL_HOME_NAME || ".skill-boilerplate");
 }
 
 const pointer = () => path.join(homeDir(), "current.json");

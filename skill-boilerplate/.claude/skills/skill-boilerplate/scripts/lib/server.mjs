@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
-import { appendAnswerLine, files, matchOption, now, readMerged, readReport, readSession } from "./session.mjs";
+import { answerFields, appendAnswerLine, files, matchOption, now, readMerged, readReport, readSession } from "./session.mjs";
 
 const MAX_BODY = 64 * 1024;
 const IMAGE_TYPES = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" };
@@ -75,7 +75,7 @@ export function createDashboardServer({ out, assets, token = crypto.randomBytes(
   function deny(res, req, url) {
     if (req.method === "GET" && url.pathname === "/") {
       res.writeHead(401, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-      res.end("<!doctype html><meta charset=utf-8><title>Review dashboard</title><body style=\"font:16px system-ui;margin:3rem\"><h1>Open the link from the agent</h1><p>This page needs the private link the agent printed when it started the dashboard.</p>");
+      res.end("<!doctype html><meta charset=utf-8><title>Session dashboard</title><body style=\"font:16px system-ui;margin:3rem\"><h1>Open the link from the agent</h1><p>This page needs the private link the agent printed when it started the dashboard.</p>");
       return;
     }
     send(res, 401, { error: "Missing or wrong token." });
@@ -149,7 +149,7 @@ export function createDashboardServer({ out, assets, token = crypto.randomBytes(
     if (ask.input === "text") {
       const value = String(body.value || "").trim();
       if (!value || value.length > (ask.maxLength || 500)) return send(res, 400, { error: "Enter the text for this question." });
-      appendAnswerLine(out, { type: "answer", askId: ask.id, nonce: ask.nonce, value, via: "dashboard", at: now() });
+      appendAnswerLine(out, answerFields(ask, value, "dashboard"));
       wake();
       return send(res, 200, { ok: true });
     }
@@ -162,7 +162,7 @@ export function createDashboardServer({ out, assets, token = crypto.randomBytes(
       if (secret.length > 2000) return send(res, 400, { error: "That is too long." });
       secrets.set(ask.nonce, secret);
     }
-    appendAnswerLine(out, { type: "answer", askId: ask.id, nonce: ask.nonce, value: option.id, via: "dashboard", secret: Boolean(secret), at: now() });
+    appendAnswerLine(out, answerFields(ask, option.id, "dashboard", secret ? { secret: true } : {}));
     wake();
     return send(res, 200, { ok: true });
   }

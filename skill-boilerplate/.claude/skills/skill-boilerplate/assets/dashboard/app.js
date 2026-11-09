@@ -198,7 +198,7 @@ const el = {
   strip: h("aside", { class: "card strip", "aria-label": "Captures", hidden: true }),
   box: h("dialog", { class: "lightbox", "aria-labelledby": "lightbox-title" })
 };
-const TABS = [["findings", "Findings"], ["panel", "Notes"], ["listing", "Details"], ["activity", "Activity"]];
+const TABS = [["findings", "Findings"], ["panel", "Notes"], ["listing", "Listing"], ["activity", "Activity"]];
 const tabButtons = {};
 for (const [id, label] of TABS) {
   const count = h("span", { class: "n" });
@@ -285,7 +285,7 @@ function chooseTab() {
   const ids = visibleTabIds();
   if (ui.tabPinned && ids.includes(ui.tab)) return;
   const running = steps().find((step) => step.status === "running" || step.status === "waiting");
-  const preferred = running?.id === "panel" || running?.id === "access" ? "panel" : running?.id === "listing" ? "listing" : "activity";
+  const preferred = running?.id === "panel" ? "panel" : running?.id === "listing" ? "listing" : "activity";
   ui.tab = ids.includes(preferred) ? preferred : "activity";
 }
 
@@ -339,8 +339,7 @@ function paintTop() {
 // ---- the step rail ------------------------------------------------------------------------
 
 function visibleSteps() {
-  const s = session();
-  return steps().filter((step) => step.status !== "skipped" || (step.id === "access" && s?.needsCredential));
+  return steps().filter((step) => step.status !== "skipped");
 }
 
 function paintRail() {
@@ -507,9 +506,9 @@ function paintStats() {
   const audit = s?.audit;
   const flags = surfaceFlags();
   const tiles = [];
-  if (flags.findings) {
+  if (flags.findings && d.total) {
     tiles.push(
-      { tone: d.errors.length ? "bad" : "ok", icon: d.errors.length ? "x" : "check", k: "Code errors", v: d.errors.length, s: d.total ? `${d.fixed.length} of ${d.total} findings fixed` : "Recorded so far" },
+      { tone: d.errors.length ? "bad" : "ok", icon: d.errors.length ? "x" : "check", k: "Code errors", v: d.errors.length, s: `${d.fixed.length} of ${d.total} findings fixed` },
       { tone: d.warnings.length ? "warn" : "ok", icon: d.warnings.length ? "alert" : "check", k: "Warnings", v: d.warnings.length, s: `${d.patterns.length} ${plural(d.patterns.length, "pattern")}` }
     );
   }
@@ -592,7 +591,6 @@ function turn(ask) {
     h("header", null, h("span", { class: "badge" }, icon("hand", 2.6), "Your turn"), h("h2", { id: `turn-title-${k}`, text: ask.title || ask.id })),
     h("p", { class: "prompt", text: ask.prompt }),
     shots.length ? h("div", { class: "proofs" }, shots.map((shot) => h("figure", null, h("img", { src: fileUrl(shot.file), alt: shot.label, width: shot.width, height: shot.height }), h("figcaption", { text: `${shot.label}, ${shot.width} by ${shot.height}` })))) : null,
-    ask.id === "listing-review" && s.listing ? listingBlock(s.listing) : null,
     form,
     ask.affects?.length ? h("details", { class: "will" }, h("summary", { text: `What this touches (${ask.affects.length})` }),
       h("ul", null, ask.affects.map((item) => h("li", null, badge(item.severity), h("code", { text: `${item.file}${item.line ? `:${item.line}` : ""}` }), item.id)))) : null);
@@ -641,7 +639,7 @@ function settled(ask) {
     h("span", { text: `${ask.title || ask.id}. ${ask.via === "chat" ? "Answered in chat." : delivered ? "The agent has it and is carrying on." : "Sent. Waiting for the agent to pick it up."}` }));
 }
 
-function listingBlock(listing) {
+function suppliedCopy(listing) {
   const rows = [["Name", listing.name], ["Summary", listing.summary], ["Description", listing.description], ["Keywords", Array.isArray(listing.keywords) ? listing.keywords.join(", ") : listing.keywords]].filter(([, value]) => value);
   return h("dl", { class: "copy-block" }, rows.map(([term, value]) => h("div", null, h("dt", { text: `${term}, ${String(value).length} characters` }), h("dd", { text: value }))));
 }
@@ -751,7 +749,7 @@ function listingPane() {
   const s = session();
   const shots = (s?.shots || []).filter((shot) => shot.kind === "listing");
   if (!s?.listing && !shots.length) return h("p", { class: "empty", text: "Nothing here yet." });
-  return h("div", null, s.listing ? listingBlock(s.listing) : null,
+  return h("div", null, s.listing ? suppliedCopy(s.listing) : null,
     shots.length ? h("div", { class: "shots" }, shots.map((shot) => h("figure", null, h("img", { src: fileUrl(shot.file), alt: shot.label, width: shot.width, height: shot.height }), h("figcaption", { text: `${shot.label}, ${shot.width} by ${shot.height}` })))) : null);
 }
 

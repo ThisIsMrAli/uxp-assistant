@@ -347,7 +347,8 @@ test("a failed docs fetch is not fresh and does not let package be marked done",
     fetchImpl: fetchImpl("css-styles"),
     scaffoldImpl: scaffold
   });
-  assert.equal(step(out, "docs").status, "failed");
+  assert.equal(step(out, "docs").status, "done");
+  assert.match(step(out, "docs").detail, /failed/);
   assert.equal(result.success, false);
   assert.equal(result.state, "docs-incomplete");
   assert.equal(nextAction(out).action, "refresh-docs");

@@ -2,17 +2,34 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { DECLARED_MANIFEST } from "./floors.mjs";
 import { skillRoot } from "./paths.mjs";
 
-/** The installer is resolved from this repository, not from process.cwd(). */
+/** The installer is resolved by walking parents, not from process.cwd() alone. */
 export const repoRoot = path.resolve(skillRoot, "../../..");
 
-export function installerEntry(root = repoRoot) {
-  return path.join(root, "node_modules/create-bolt-uxp/dist/index.js");
+function walkFor(start, relative) {
+  const seeds = [start, repoRoot, process.cwd()].filter(Boolean);
+  for (const seed of seeds) {
+    let dir = path.resolve(seed);
+    for (let i = 0; i < 8; i += 1) {
+      const candidate = path.join(dir, relative);
+      if (fs.existsSync(candidate)) return candidate;
+      const parent = path.dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+  }
+  return "";
 }
 
-export function starterIconsDir(root = repoRoot) {
-  return path.join(root, "node_modules/bolt-uxp/public/icons");
+export function installerEntry(start = repoRoot) {
+  return walkFor(start, "node_modules/create-bolt-uxp/dist/index.js");
+}
+
+export function starterIconsDir(start = repoRoot) {
+  const icons = walkFor(start, "node_modules/bolt-uxp/public/icons");
+  return icons || path.join(repoRoot, "node_modules/bolt-uxp/public/icons");
 }
 
 /**
@@ -105,8 +122,13 @@ export async function scaffoldWithInstaller(parent, options) {
       installDeps: Boolean(options.installDeps)
     });
     const folder = path.join(parent, options.folderName);
+    const declared = declareManifest(folder, {
+      id: options.id,
+      displayName: options.displayName,
+      host: options.app
+    });
     const repair = repairEntrypoint(folder);
-    const icons = copyStarterIcons(folder, options.repoRoot);
+    const icons = copyStarterIcons(folder, options.repoRoot || folder);
     const auditFix = options.installDeps ? applyNonBreakingAuditFix(folder) : { applied: false, reason: "Dependencies were not installed." };
     return {
       folder,
@@ -115,12 +137,45 @@ export async function scaffoldWithInstaller(parent, options) {
       hybrid: options.hybrid,
       repair,
       icons,
+      declared,
       auditFix,
       result: result ?? null
     };
   } finally {
     process.chdir(previous);
   }
+}
+
+/**
+ * Adobe's manifest page says current UXP hosts use manifest version 5.
+ * Premiere's introduction says Premiere (version 25.6). uniqueIds true appends a host suffix the user did not type.
+ */
+export function declareManifest(project, { id = "", displayName = "", host = "" } = {}) {
+  const configPath = path.join(project, "uxp.config.ts");
+  if (!fs.existsSync(configPath)) return { applied: false, reason: "uxp.config.ts is missing." };
+  let text = fs.readFileSync(configPath, "utf8");
+  text = text.replace(/uniqueIds:\s*true/, "uniqueIds: false");
+  text = text.replace(/manifestVersion:\s*\d+/, `manifestVersion: ${DECLARED_MANIFEST.version}`);
+  if (id) text = text.replace(/export const id = "[^"]+"/, `export const id = ${JSON.stringify(id)}`);
+  if (displayName) {
+    text = text.replace(/const name = "[^"]+"/, `const name = ${JSON.stringify(displayName)}`);
+    text = text.replaceAll("Bolt UXP", displayName);
+  }
+  if (host === "ppro" || host === "premierepro") {
+    text = text.replace(/(app:\s*"premierepro"[\s\S]*?minVersion:\s*")[^"]+"/, `$1${DECLARED_MANIFEST.premiereMinVersion}"`);
+  }
+  fs.writeFileSync(configPath, text);
+  for (const relative of ["index.html", "package.json"]) {
+    const file = path.join(project, relative);
+    if (!fs.existsSync(file) || !displayName) continue;
+    fs.writeFileSync(file, fs.readFileSync(file, "utf8").replaceAll("Bolt UXP", displayName));
+  }
+  return {
+    applied: true,
+    manifestVersion: DECLARED_MANIFEST.version,
+    uniqueIds: false,
+    premiereMinVersion: host === "ppro" || host === "premierepro" ? DECLARED_MANIFEST.premiereMinVersion : ""
+  };
 }
 
 /** Update the generated lockfile inside the ranges Bolt already declared. Never pass --force. */

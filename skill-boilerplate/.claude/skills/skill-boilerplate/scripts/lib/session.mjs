@@ -315,7 +315,8 @@ export function publishAsk(out, ask) {
     affects: ask.affects || [],
     images: ask.images || [],
     blocks: ask.blocks || [],
-    askedAt: now()
+    askedAt: now(),
+    ...(ask.scope ? { scope: ask.scope, scopeSha: ask.scopeSha || "" } : {})
   };
   const session = mutate(out, (draft) => {
     draft.asks = draft.asks.filter((item) => item.id !== ask.id);
@@ -328,6 +329,19 @@ export function publishAsk(out, ask) {
 }
 
 /** Record an answer given in chat, so the session shows what was decided and how. */
+export function answerFields(ask, value, via, extra = {}) {
+  return {
+    type: "answer",
+    askId: ask.id,
+    nonce: ask.nonce,
+    value,
+    via,
+    at: now(),
+    ...extra,
+    ...(ask.scope ? { scope: ask.scope, scopeSha: ask.scopeSha || "" } : {})
+  };
+}
+
 export function answerFromChat(out, id, value) {
   const session = readSession(out);
   const ask = session?.asks.find((item) => item.id === id);
@@ -335,12 +349,12 @@ export function answerFromChat(out, id, value) {
   if (ask.input === "text") {
     const text = String(value || "").trim();
     if (!text || text.length > (ask.maxLength || 500)) throw new Error("That text is empty or too long.");
-    appendAnswerLine(out, { type: "answer", askId: ask.id, nonce: ask.nonce, value: text, via: "chat", at: now() });
+    appendAnswerLine(out, answerFields(ask, text, "chat"));
     return { id: text, label: text };
   }
   const option = matchOption(ask, value);
   if (!option) throw new Error(`"${value}" is not one of: ${ask.options.map((item) => item.id).join(", ")}.`);
-  appendAnswerLine(out, { type: "answer", askId: ask.id, nonce: ask.nonce, value: option.id, via: "chat", at: now() });
+  appendAnswerLine(out, answerFields(ask, option.id, "chat"));
   mutate(out, (draft) => {
     const step = stepForAsk(id, draft);
     if (step) setStepIn(draft, step, "running", `You chose: ${plainLabel(option.label)}`);
@@ -403,7 +417,7 @@ export function recordDocs(out, summary) {
     draft.addon.fetchedAt = summary.retrievedAt || "";
     const detail = `fresh ${summary.fresh.length}, stale ${summary.stale.length}, failed ${summary.failed.length}`;
     if (draft.steps.some((step) => step.id === "docs")) {
-      setStepIn(draft, "docs", summary.ok ? "done" : "failed", detail, { doing: detail, progress: { done: summary.pages.length, total: summary.pages.length } });
+      setStepIn(draft, "docs", "done", detail, { doing: detail, progress: { done: summary.pages.length, total: summary.pages.length } });
     }
     log(draft, "docs", detail);
   });

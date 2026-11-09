@@ -32,7 +32,8 @@ export const HOST_PAGES = {
   "photoshop.layer": "https://developer.adobe.com/photoshop/uxp/2022/ps-reference/classes/layer",
   "photoshop.executeAsModal": "https://developer.adobe.com/photoshop/uxp/2022/ps-reference/media/executeasmodal",
   "photoshop.changelog": "https://developer.adobe.com/photoshop/uxp/2022/ps-reference/changelog/",
-  "premiere.reference": "https://developer.adobe.com/premiere-pro/uxp/ppro_reference/"
+  "premiere.reference": "https://developer.adobe.com/premiere-pro/uxp/ppro_reference/",
+  "premiere.introduction": "https://developer.adobe.com/premiere-pro/uxp/introduction/"
 };
 
 export function pagesForRequest({ host, goal = "", behaviors = [] } = {}) {
@@ -45,7 +46,10 @@ export function pagesForRequest({ host, goal = "", behaviors = [] } = {}) {
       pages.push({ id, url: HOST_PAGES[id], scope: "host" });
     }
   }
-  if (premiere) pages.push({ id: "premiere.reference", url: HOST_PAGES["premiere.reference"], scope: "host" });
+  if (premiere) {
+    pages.push({ id: "premiere.introduction", url: HOST_PAGES["premiere.introduction"], scope: "host" });
+    pages.push({ id: "premiere.reference", url: HOST_PAGES["premiere.reference"], scope: "host" });
+  }
   return pages;
 }
 

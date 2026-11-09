@@ -48,10 +48,13 @@ export async function refreshSources(target, pages, {
 async function fetchOne(page, { fetchImpl, timeoutMs, target }) {
   const dest = path.join(target, `${page.id}.txt`);
   const hadPrevious = fs.existsSync(dest);
+  let timer;
   try {
     const response = await Promise.race([
       fetchImpl(page.url, { headers: { accept: "text/html, text/plain", "user-agent": "skill-boilerplate" }, signal: AbortSignal.timeout(timeoutMs) }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error(`Timed out after ${timeoutMs}ms`)), timeoutMs + 50))
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`Timed out after ${timeoutMs}ms`)), timeoutMs + 50);
+      })
     ]);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const raw = await response.text();
@@ -68,6 +71,8 @@ async function fetchOne(page, { fetchImpl, timeoutMs, target }) {
     };
   } catch (error) {
     return pageResult(page, hadPrevious, error.message || String(error), target);
+  } finally {
+    clearTimeout(timer);
   }
 }
 

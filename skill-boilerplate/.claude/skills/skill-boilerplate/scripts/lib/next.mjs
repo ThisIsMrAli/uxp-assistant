@@ -4,6 +4,12 @@ import { readMerged } from "./session.mjs";
 import { dashboardBin, refreshBin, sessionBin } from "./paths.mjs";
 
 const OPEN = new Set(["pending", "running", "waiting"]);
+const HANDS_OFF = new Set(["tests", "test", "package", "host", "host-verification"]);
+
+function quote(value) {
+  const text = String(value);
+  return /[\s"]/.test(text) ? `"${text.replaceAll("\\", "\\\\").replaceAll("\"", "\\\"")}"` : text;
+}
 
 /**
  * The next command, from the session alone.
@@ -22,18 +28,19 @@ export function nextAction(out, { dashboardUp = false } = {}) {
   if (step("done")?.status === "done") {
     return { action: "finished", say: `The session is finished. Run \`${dashCmd} stop\` if the dashboard is still up.` };
   }
+  const outArg = `--out ${quote(out)}`;
   if (!session.mode) {
-    return { action: "ask-mode", say: `Ask the mode question with AskQuestion, then \`${sessionCmd} mode --set dashboard|chat\`. Do not fetch docs.` };
+    return { action: "ask-mode", command: `${sessionCmd} mode --set dashboard|chat ${outArg}`, say: `Ask the mode question with AskQuestion, then \`${sessionCmd} mode --set dashboard|chat ${outArg}\`. Do not fetch docs.` };
   }
   if (session.mode === "dashboard" && !dashboardUp) {
-    return { action: "start-dashboard", command: `${dashCmd} start`, say: `The dashboard is not running. Start it before any docs fetch. If it fails, \`${sessionCmd} mode --set chat\` and continue in chat.` };
+    return { action: "start-dashboard", command: `${dashCmd} start ${outArg}`, say: `The dashboard is not running. Start it before any docs fetch. If it fails, \`${sessionCmd} mode --set chat ${outArg}\` and continue in chat.` };
   }
 
   const pending = session.asks.find((ask) => ask.status === "pending");
   if (pending) {
     return dashboard
-      ? { action: "wait", ask: pending.id, command: `${sessionCmd} wait --id ${pending.id}`, say: `The question "${pending.title || pending.id}" is on the dashboard. Do not write to the user. Run the wait command now, and run it again while status is pending.` }
-      : { action: "ask-in-chat", ask: pending.id, say: `Ask "${pending.title || pending.id}" with AskQuestion, then record the click with \`${sessionCmd} answer --id ${pending.id} --value <option id>\`.` };
+      ? { action: "wait", ask: pending.id, command: `${sessionCmd} wait --id ${pending.id} ${outArg}`, say: `The question "${pending.title || pending.id}" is on the dashboard. Do not write to the user. Run \`${sessionCmd} wait --id ${pending.id} ${outArg}\` now, and run it again while status is pending.` }
+      : { action: "ask-in-chat", ask: pending.id, command: `${sessionCmd} answer --id ${pending.id} --value <option id> ${outArg}`, say: `Ask "${pending.title || pending.id}" with AskQuestion, then record the click with \`${sessionCmd} answer --id ${pending.id} --value <option id> ${outArg}\`.` };
   }
 
   const questions = readQuestions(out);
@@ -41,22 +48,25 @@ export function nextAction(out, { dashboardUp = false } = {}) {
     if (question.id === "mode") continue;
     const asked = session.asks.find((item) => item.id === question.id);
     if (!asked) {
-      return { action: "ask", ask: question.id, command: `${sessionCmd} ask --id ${question.id}`, say: dashboard
-        ? `Publish \`${question.id}\` on the dashboard, then wait. Do not ask it in chat.`
-        : `Ask \`${question.id}\` with AskQuestion, then record the answer.` };
+      return { action: "ask", ask: question.id, command: `${sessionCmd} ask --id ${question.id} ${outArg}`, say: dashboard
+        ? `Publish \`${question.id}\` on the dashboard, then wait. Do not ask it in chat. Command: \`${sessionCmd} ask --id ${question.id} ${outArg}\`.`
+        : `Ask \`${question.id}\` with AskQuestion, then record the answer with \`${sessionCmd} answer --id ${question.id} --value <option id> ${outArg}\`.` };
     }
   }
 
   const docs = step("docs");
   if (docs && OPEN.has(docs.status)) {
-    return { action: "refresh", command: refreshCmd, say: "Fetch the skill's sources now. The dashboard is already up when this session is in dashboard mode. Report each page as fresh, stale, or failed." };
+    return { action: "refresh", command: `${refreshCmd} --out ${quote(out)}`, say: `Fetch the skill's sources now with \`${refreshCmd} --out ${quote(out)}\`. The dashboard is already up when this session is in dashboard mode. Report each page as fresh, stale, or failed. The docs step finishes as done with those counts.` };
   }
 
   const work = session.steps.find((item) => item.id !== "done" && item.id !== "prepare" && item.id !== "docs" && OPEN.has(item.status));
   if (work) {
-    return { action: "apply", step: work.id, say: `Apply the answers for \`${work.id}\`, then \`${sessionCmd} step --id ${work.id} --status done\`.` };
+    if (HANDS_OFF.has(work.id)) {
+      return { action: "run", step: work.id, say: `Run the real command for \`${work.id}\` and record its exit. Do not mark it done from this line. The host is not launched.` };
+    }
+    return { action: "apply", step: work.id, say: `Apply the answers for \`${work.id}\`. Do not mark tests, package, or the host done unless those commands ran.` };
   }
-  return { action: "finish", command: `${sessionCmd} done --summary "<one short paragraph>"`, say: "Everything asked so far is answered. Run the done command, then stop the dashboard." };
+  return { action: "finish", command: `${sessionCmd} done --summary "<one short paragraph>" ${outArg}`, say: `Everything asked so far is answered. Run \`${sessionCmd} done --summary "<one short paragraph>" ${outArg}\`, then stop the dashboard. Do not mark tests, package, or the host done unless those commands ran.` };
 }
 
 export function reminder(out, options) {

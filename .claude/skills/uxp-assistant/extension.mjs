@@ -7,12 +7,6 @@ import { pagesForRequest } from "./scripts/lib/registry.mjs";
 import { contextEvidence, runtimeOffer } from "./scripts/lib/runtime.mjs";
 import { skillRoot } from "./scripts/lib/paths.mjs";
 
-const OS = [
-  { id: "darwin", label: "macOS", detail: "The manifest and the build run on macOS." },
-  { id: "win32", label: "Windows", detail: "The manifest and the build run on Windows." },
-  { id: "linux", label: "Linux", detail: "The manifest and the build run on Linux." }
-];
-
 /**
  * UXP Assistant's extension. The boilerplate owns the session and the dashboard.
  * This file adds the UXP links, questions, and the handoff that runs after them.
@@ -32,7 +26,6 @@ export default {
     goal: "intake",
     host: "intake",
     framework: "intake",
-    os: "intake",
     context: "intake",
     name: "intake",
     id: "intake",
@@ -49,13 +42,14 @@ export default {
   prepare({ input, kind }) {
     return { name: "UXP Assistant", path: input || "", kind: kind || "empty", findings: [] };
   },
-  questions() {
-    return [
+  questions(prepared) {
+    const existing = prepared?.kind === "existing";
+    const questions = [
       text("goal", "Goal", "What should the plugin do? The words are kept as you type them.", 400),
-      hostAsk(),
-      frameworkAsk(),
-      { id: "os", title: "OS", prompt: "Which OS is this session for?", options: OS },
-      {
+      hostAsk()
+    ];
+    if (!existing) {
+      questions.push(frameworkAsk(), {
         id: "context",
         title: "Context",
         prompt: "Which entrypoint context should the fresh pages be checked against?",
@@ -64,11 +58,20 @@ export default {
           { id: "command", label: "Command", detail: "A command entrypoint." },
           { id: "dialog", label: "Dialog", detail: "A dialog entrypoint." }
         ]
-      },
-      text("name", "Display name", "Display name for an empty-folder starter.", 80),
-      text("id", "Plugin id", "Plugin id, such as com.example.panel.", 80),
-      text("permissions", "Requested permissions", "Type none, or a comma-separated list of keys the request already names. An unknown name is not added.", 200)
-    ];
+      }, text("name", "Display name", "Display name for an empty-folder starter.", 80), text("id", "Plugin id", "Plugin id, such as com.example.panel.", 80));
+    }
+    questions.push({
+      id: "permissions",
+      title: "Requested permissions",
+      prompt: "Which permission does this request already name? An unnamed key is not added.",
+      options: [
+        { id: "none", label: "None (Recommended)", detail: "A native panel gets an empty requiredPermissions object. A WebView that does not communicate keeps the local keys with the message bridge off." },
+        { id: "localFileSystem", label: "Local files", detail: "The request names local file access." },
+        { id: "network", label: "Network", detail: "The request names network access." },
+        { id: "clipboard", label: "Clipboard", detail: "The request names the clipboard." }
+      ]
+    });
+    return questions;
   },
   sources(session) {
     const answers = answered(session);

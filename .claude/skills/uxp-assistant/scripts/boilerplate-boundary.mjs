@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -6,14 +7,30 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 /**
  * The only path from UXP Assistant into the skill boilerplate.
  *
- * Today the boilerplate is the vendored folder at the top of this repo.
- * BOILERPLATE.lock pins that folder by content hash. Replace it with the
- * repository sync script. The source repository is private and is not
- * pushed from here. Do not import anything except api.mjs.
+ * The repo layout keeps the boilerplate at the repository root. An
+ * `npx skills add` layout keeps it beside this skill. Either way this
+ * file imports api.mjs and nothing under the boilerplate skill tree.
  */
-export const BOILERPLATE_ROOT = path.resolve(here, "../../../../skill-boilerplate");
-export const BOILERPLATE_API = path.join(BOILERPLATE_ROOT, "api.mjs");
+export function findBoilerplateApi(start = here) {
+  let dir = start;
+  for (let i = 0; i < 8; i += 1) {
+    const beside = path.join(dir, "skill-boilerplate", "api.mjs");
+    if (fs.existsSync(beside)) return beside;
+    const sibling = path.join(path.dirname(dir), "skill-boilerplate", "api.mjs");
+    if (fs.existsSync(sibling)) return sibling;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return "";
+}
+
+export const BOILERPLATE_API = findBoilerplateApi();
+export const BOILERPLATE_ROOT = BOILERPLATE_API ? path.dirname(BOILERPLATE_API) : "";
 
 export async function loadBoilerplate() {
+  if (!BOILERPLATE_API) {
+    throw new Error("Cannot find skill-boilerplate/api.mjs. Install that folder beside this skill, or at the repository root. This skill does not fetch it.");
+  }
   return import(pathToFileURL(BOILERPLATE_API).href);
 }

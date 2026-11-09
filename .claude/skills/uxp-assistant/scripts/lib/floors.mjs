@@ -4,6 +4,20 @@
  * is not an input.
  */
 
+/**
+ * What the generated manifest declares after the installer runs.
+ * https://developer.adobe.com/uxp/guides/explanation/concepts/manifest/ says current UXP hosts use manifest version 5.
+ * https://developer.adobe.com/premiere-pro/uxp/introduction/ says Premiere (version 25.6).
+ * Photoshop keeps the starter minVersion 24.2.0. The installer itself still writes version 6 and uniqueIds true; declareManifest rewrites that.
+ */
+export const DECLARED_MANIFEST = {
+  version: 5,
+  premiereMinVersion: "25.6.0",
+  photoshopMinVersion: "24.2.0",
+  manifestUrl: "https://developer.adobe.com/uxp/guides/explanation/concepts/manifest/",
+  premiereUrl: "https://developer.adobe.com/premiere-pro/uxp/introduction/"
+};
+
 export const BOLT_STARTER = {
   repository: "https://github.com/hyperbrew/bolt-uxp",
   commit: "bcc092f1b16c72cddbd2b88f106c33f09c089bcb",

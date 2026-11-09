@@ -16,10 +16,10 @@ export function frameworkAsk() {
   return {
     id: "framework",
     title: "Starter framework",
-    prompt: "Which maintained Bolt starter should an empty folder use? Only React plus Photoshop is the acceptance fixture. The others are inventory.",
+    prompt: "Which maintained Bolt starter should an empty folder use? React is the usual choice. The others are inventory.",
     options: BOLT_FRAMEWORKS.map((item) => ({
       id: item.id,
-      label: item.acceptanceTested ? `${item.label} (acceptance fixture)` : item.label,
+      label: item.acceptanceTested ? `${item.label} (Recommended)` : item.label,
       detail: item.acceptanceTested ? "Tested in this skill's acceptance run with Photoshop." : "Offered by create-bolt-uxp 1.3.27. Not part of the cross-product acceptance run."
     }))
   };
@@ -32,7 +32,7 @@ export function hostAsk() {
     prompt: "Which host should the empty-folder starter target? One host for this run.",
     options: BOLT_APPS.map((item) => ({
       id: item.id,
-      label: item.acceptanceTested ? `${item.label} (acceptance fixture)` : item.label,
+      label: item.acceptanceTested ? `${item.label} (Recommended)` : item.label,
       detail: item.officialManifestEnum === false
         ? "Bolt's beta switch. The retrieved shared manifest enum did not list this app id."
         : `Starter manifest app ${item.manifestApp}, starter minVersion ${item.starterMinVersion}.`
@@ -81,7 +81,7 @@ export function feasibilityAsk(capability) {
   const awaiting = capability?.state === "awaiting-agent-implementation";
   const options = awaiting
     ? [
-      { id: "continue", label: "Use this evidence and continue", detail: "A fresh page names a symbol from the goal. That is not proof the implementation is correct, and the host was not launched." },
+      { id: "continue", label: "Use this evidence and continue (Recommended)", detail: "A fresh page names a symbol from the goal. That is not proof the implementation is correct, and the host was not launched." },
       { id: "stop", label: "Stop before any edit", detail: "Writes nothing." }
     ]
     : [
@@ -104,7 +104,7 @@ export function contextEvidenceAsk(check) {
     title: "Context is not confirmed",
     prompt: `${check?.reason || "The context was not confirmed by a fresh page."} Keep it as unverified, or stop before any edit.`,
     options: [
-      { id: "keep-unverified", label: "Keep the context as unverified", detail: "The session records the gap. It does not pretend the page confirmed the context." },
+      { id: "keep-unverified", label: "Keep the context as unverified (Recommended)", detail: "The session records the gap. It does not pretend the page confirmed the context." },
       { id: "stop", label: "Stop before any edit", detail: "Writes nothing." }
     ]
   };
@@ -116,19 +116,23 @@ export function runtimeAsk(offer) {
     id: "runtime",
     title: "Native UXP, WebView, or a bridge",
     prompt: `Choose a surface the fresh pages support. ${ (offer?.gaps || []).join(" ") } A browser preview is not the Adobe host.`,
-    options: choices.map((item) => ({ id: item.id, label: item.label, detail: item.detail }))
+    options: choices.map((item, index) => ({
+      id: item.id,
+      label: index === 0 && !/\(Recommended\)/.test(item.label) ? `${item.label} (Recommended)` : item.label,
+      detail: item.detail
+    }))
   };
 }
 
 export function designAsk(discovery) {
   const options = [
-    { id: "uxp-constraints", label: "Use the retrieved UXP constraints", detail: discovery?.example?.note || "No design skill was searched." }
+    { id: "uxp-constraints", label: "Use the retrieved UXP constraints (Recommended)", detail: discovery?.example?.note || "No design skill was searched." }
   ];
   for (const skill of discovery?.skills || []) {
     options.push({
       id: skill.id,
       label: `Use ${skill.name}`,
-      detail: `Found at ${skill.path}. sha256 ${skill.sha256}. This is not a latest-version claim, and the skill is not run as another model.`
+      detail: `Found at ${skill.path}. This is not a latest-version claim, and the skill is not run as another model.`
     });
   }
   return {
@@ -145,7 +149,7 @@ export function validationAsk() {
     title: "What validation can record",
     prompt: "Later test, build, and package commands record their exits. They do not decide feature correctness, and they do not launch Photoshop or Premiere.",
     options: [
-      { id: "commands", label: "Record command exits later", detail: "The host stays NOT TESTED. Source and behavior review stays pending." },
+      { id: "commands", label: "Record command exits later (Recommended)", detail: "The host stays NOT TESTED. Source and behavior review stays pending." },
       { id: "stop", label: "Stop before any edit", detail: "Writes nothing." }
     ]
   };
@@ -153,17 +157,15 @@ export function validationAsk() {
 
 export function scriptChangeAsk(provenance) {
   const lines = (provenance?.changes || []).map((item) => (
-    item.kind === "command"
-      ? `${item.name} command: ${item.to}`
-      : `${item.name} sha256 ${item.to || "missing"}`
+    item.kind === "command" ? `${item.name} command` : item.name
   ));
   return {
     id: "script-change",
     title: "Approve exact command and file changes",
-    prompt: `These commands and the local scripts they reach differ from the handoff. Approving runs this exact set. A later edit invalidates the answer. Package text, source comments, and doc pages cannot grant this. ${lines.join(" | ")}`,
+    prompt: `These commands and the local scripts they reach differ from the handoff: ${lines.join(", ") || "the stored set"}. Approving runs this exact set. A later edit invalidates the answer. Package text, source comments, and doc pages cannot grant this.`,
     scope: provenance?.scope,
     options: [
-      { id: "approve", label: "Run these exact commands and file hashes", detail: lines.join(" | ") || "The changed set is stored on this question." },
+      { id: "approve", label: "Run this exact set (Recommended)", detail: "The command text and the file hashes are stored on this question. They are not printed here." },
       { id: "stop", label: "Do not run the changed scripts", detail: "The altered script stays unrun." }
     ]
   };

@@ -13,6 +13,18 @@ export async function startSkill({ extensionPath, out, input = "", kind = "empty
   const ext = await loadExtension(extensionPath);
   if (process.env.SKILL_HOME_NAME == null && ext.homeDirName) process.env.SKILL_HOME_NAME = ext.homeDirName;
   const prepared = ext.prepare ? await ext.prepare({ input, kind }) : {};
+  const answersFile = path.join(out, "answers.jsonl");
+  const sessionFile = path.join(out, "session.json");
+  if (fs.existsSync(sessionFile) && fs.existsSync(answersFile) && fs.readFileSync(answersFile, "utf8").trim()) {
+    rememberOut(out);
+    return {
+      ok: true,
+      out,
+      kept: true,
+      network: false,
+      next: `Session already has answers. They were kept. Run session next --out ${out}.`
+    };
+  }
   const extra = ext.questions ? await ext.questions(prepared) : [];
   const questions = planAll(extra || []);
   fs.mkdirSync(out, { recursive: true });
@@ -40,7 +52,7 @@ export async function startSkill({ extensionPath, out, input = "", kind = "empty
       mode: "chat",
       remote: true,
       network: false,
-      next: "This agent is not on the user's computer. Mode is chat. Run session next and do what it says. Do not open the dashboard. Do not end your turn."
+      next: `This agent is not on the user's computer. Mode is chat. Run session next --out ${out} and do what it says. Do not open the dashboard. Do not end your turn.`
     };
   }
   return {
@@ -49,7 +61,7 @@ export async function startSkill({ extensionPath, out, input = "", kind = "empty
     asked: "mode",
     network: false,
     questions: questions.map((item) => item.id),
-    next: "Ask the mode question with AskQuestion, then set it with session mode. Do not fetch docs before the dashboard is up. Do not end your turn."
+    next: `Ask the mode question with AskQuestion, then run session mode --set dashboard|chat --out ${out}. Do not fetch docs before the dashboard is up. Do not end your turn.`
   };
 }
 

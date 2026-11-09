@@ -3,10 +3,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { dashboard, refresh, session, start } from "../api.mjs";
 import { refreshSources } from "../.claude/skills/skill-boilerplate/scripts/lib/refresh.mjs";
 
-const extensionPath = path.resolve("examples/blank/extension.mjs");
+const boilerplateRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const extensionPath = path.join(boilerplateRoot, "examples/blank/extension.mjs");
 const bins = {
   sessionBin: "node scripts/session.mjs",
   dashboardBin: "node scripts/dashboard.mjs",
@@ -204,8 +206,8 @@ export default {
 });
 
 test("the dashboard copy stays generic until a session supplies a surface", () => {
-  const page = fs.readFileSync(path.resolve(".claude/skills/skill-boilerplate/assets/dashboard/app.js"), "utf8");
-  const html = fs.readFileSync(path.resolve(".claude/skills/skill-boilerplate/assets/dashboard/index.html"), "utf8");
+  const page = fs.readFileSync(path.join(boilerplateRoot, ".claude/skills/skill-boilerplate/assets/dashboard/app.js"), "utf8");
+  const html = fs.readFileSync(path.join(boilerplateRoot, ".claude/skills/skill-boilerplate/assets/dashboard/index.html"), "utf8");
   const joined = `${page}\n${html}`;
   for (const phrase of ["Panel bugs", "From the scan", "Skip to the review", "review pattern", "Panel at 320", "Waiting for a review", "Measured at 320"]) {
     assert.equal(joined.includes(phrase), false, phrase);
@@ -217,8 +219,8 @@ test("the dashboard copy stays generic until a session supplies a surface", () =
 });
 
 test("the dashboard question card does not offer a chat answer", () => {
-  const page = fs.readFileSync(path.resolve(".claude/skills/skill-boilerplate/assets/dashboard/app.js"), "utf8");
-  const theme = fs.readFileSync(path.resolve(".claude/skills/skill-boilerplate/assets/dashboard/theme.js"), "utf8");
+  const page = fs.readFileSync(path.join(boilerplateRoot, ".claude/skills/skill-boilerplate/assets/dashboard/app.js"), "utf8");
+  const theme = fs.readFileSync(path.join(boilerplateRoot, ".claude/skills/skill-boilerplate/assets/dashboard/theme.js"), "utf8");
   const hint = page.match(/const DASHBOARD_CARD_HINT = "([^"]*)"/);
   assert.ok(hint, "dashboard card hint is missing");
   assert.equal(/chat/i.test(hint[1]), false);
@@ -234,7 +236,7 @@ test("the dashboard question card does not offer a chat answer", () => {
 });
 
 test("the boilerplate folder does not import the parent repo", () => {
-  const root = path.resolve(".");
+  const root = boilerplateRoot;
   const bad = [];
   walk(root, (file, text) => {
     const outside = ["uxp-", "assistant"].join("") ;

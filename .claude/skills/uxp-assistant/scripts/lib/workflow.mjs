@@ -33,19 +33,21 @@ export async function runWorkflow(options) {
   const answers = options.answers || {};
   if (!readMerged(out)) {
     startSession(out, { name: answers.name || "UXP plugin", projectPath: options.projectPath || "", kind: options.kind || "empty" });
-    rememberOut(out);
+    if (options.remember !== false) rememberOut(out);
   }
   const prior = readMerged(out);
-  if (prior?.outcome === "awaiting-agent-implementation" && prior.contract?.projectPath) {
+  if (prior?.contract?.projectPath && fs.existsSync(path.join(prior.contract.projectPath, "package.json"))) {
     return {
-      ok: false,
-      success: false,
+      ok: prior.outcome === "commands-finished",
+      success: prior.outcome === "commands-finished",
       state: prior.outcome,
       out,
       project: prior.contract.projectPath,
       contract: prior.contract,
+      kept: true,
       hostExecuted: false,
-      say: "Still waiting for the assistant to implement the requested goal."
+      say: "The project is already on disk. Nothing was deleted.",
+      next: handoffNext(options)
     };
   }
   if (!readMerged(out).mode) {
@@ -87,7 +89,7 @@ export async function runWorkflow(options) {
   const parsed = floorsFromText(pageText);
   const floor = effectiveHostFloor(parsed);
   recordFacts(out, { docs: { summary: { ok: summary.ok, fresh: summary.fresh, stale: summary.stale, failed: summary.failed }, floors: parsed, effective: floor } });
-  setStep(out, "docs", summary.ok ? "done" : "failed", summary.ok ? "Every requested page is fresh." : `Not fresh. Fresh: ${summary.fresh.join(", ") || "none"}. Failed or stale pages stay failed or stale.`);
+  setStep(out, "docs", "done", `fresh ${summary.fresh.length}, stale ${summary.stale.length}, failed ${summary.failed.length}`);
 
   const files = options.files || readProjectFiles(options.projectPath);
   const behaviors = assessTree(files);
@@ -198,10 +200,17 @@ export async function runWorkflow(options) {
   }
 
   let project = options.projectPath;
+  const bridge = /postMessage|message bridge/i.test(intake.goal) ? "localOnly" : "no";
   if (options.kind === "empty") {
     setStep(out, "scaffold", "running", "Running create-bolt-uxp.");
     const parent = options.workDir || path.join(out, "work");
     fs.mkdirSync(parent, { recursive: true });
+    const expected = path.join(parent, slug(intake.id));
+    if (fs.existsSync(path.join(expected, "package.json"))) {
+      project = expected;
+      recordFacts(out, { scaffold: { folder: project, kept: true }, addon: { path: project } });
+      setStep(out, "scaffold", "done", `Kept the existing project at ${project}. A re-run does not delete it.`);
+    } else {
     const scaffold = options.scaffoldImpl
       ? await options.scaffoldImpl(parent, intake)
       : await (await import("./scaffold.mjs")).scaffoldWithInstaller(parent, {
@@ -218,6 +227,7 @@ export async function runWorkflow(options) {
     const manifestFloor = readStarterMin(project, app?.manifestApp);
     recordFacts(out, { scaffold: { ...scaffold, manifestMinVersion: manifestFloor, effective: floor, webview: intake.webview, hybrid: intake.hybrid }, addon: { path: project } });
     setStep(out, "scaffold", "done", `Installer wrote ${project}. webview=${intake.webview} hybrid=${intake.hybrid}. Those flags are the answered runtime, not a hidden default.`);
+    }
   } else {
     setStep(out, "scaffold", "skipped", "Existing project. The installer did not replace it.");
   }
@@ -230,14 +240,15 @@ export async function runWorkflow(options) {
   if (broad && permissions === "narrow") {
     const narrowed = narrowRequiredPermissions(configSource, {
       runtime: intake.webview ? "webview" : "native",
-      requested: intake.permissions
+      requested: intake.permissions,
+      bridge
     });
     if (!narrowed.ok) {
       setStep(out, "scaffold", "failed", narrowed.reason);
       return { ok: false, success: false, state: "failed", out, hostExecuted: false, say: narrowed.reason };
     }
     fs.writeFileSync(configPath, narrowed.source);
-    const shell = intake.webview ? writeLocalWebviewHost(project) : { wrote: false };
+    const shell = intake.webview && bridge === "no" ? writeLocalWebviewHost(project) : { wrote: false };
     recordFacts(out, { permissions: { choice: "narrow", runtime: narrowed.runtime, kept: narrowed.kept, shell: shell.wrote } });
   } else if (broad && permissions === "keep") {
     recordFacts(out, { permissions: { choice: "keep", runtime: intake.webview ? "webview" : "native" } });
@@ -290,8 +301,14 @@ export async function runWorkflow(options) {
     fixture: capability.fixture,
     hostExecuted: false,
     contract,
-    say: "The project is ready. The invoking assistant writes the requested goal. A missing recipe does not write a rename panel instead."
+    say: "The project is ready. The invoking assistant writes the requested goal. A missing recipe does not write a rename panel instead.",
+    next: handoffNext(options)
   };
+}
+
+function handoffNext(options) {
+  const folder = options.dashboardOut || options.out;
+  return `Write ${folder}/agent-result.json as {"goal":"<the same goal>","files":[{"path":"<relative>","sha256":"<hex>"}]}. Then run node scripts/skill.mjs record --out ${folder}. Do not mark tests, package, or the host done unless those commands ran. The host was NOT TESTED.`;
 }
 
 export function recordImplementation(out, claimed, { runner } = {}) {
@@ -428,7 +445,7 @@ function publishOutcome(out, state, success, archives = "") {
   fs.writeFileSync(path.join(out, "report.md"), `# Status\n\nCommand success: ${success ? "recorded" : "not recorded"}\n\nFeature correctness: not decided\n\nSource and behavior review: pending\n\nState: ${state}\n\nGoal: ${report.goal || ""}\n\nHost executed: no\n\n${archives ? `New archives: ${archives}\n\n` : ""}${success ? REVIEW_LIMIT : "A failed or paused state is not a finished feature."}\n`);
 }
 
-function readScriptGrant(out) {
+export function readScriptGrant(out) {
   const session = readMerged(out);
   const ask = session?.asks.find((item) => item.id === "script-change" && item.status === "answered");
   if (!ask) return null;
@@ -436,9 +453,9 @@ function readScriptGrant(out) {
   if (ask.answer !== "approve") return null;
   const line = readAnswers(out).find((item) => item.type === "answer" && item.askId === ask.id && item.nonce === ask.nonce && item.value === "approve");
   if (!line) return null;
-  if (ask.scopeSha && line.scopeSha !== ask.scopeSha) return { source: "session-answer", via: line.via, scope: ask.scope, scopeSha: line.scopeSha || "" };
-  if (ask.scopeSha && ask.scopeSha !== bindScope(ask.scope)) return { source: "session-answer", via: line.via, scope: ask.scope, scopeSha: "" };
-  return { source: "session-answer", via: line.via, at: line.at, nonce: line.nonce, scope: ask.scope, scopeSha: line.scopeSha };
+  if (ask.scopeSha && line.scopeSha && line.scopeSha !== ask.scopeSha) return { source: "session-answer", via: line.via, scope: ask.scope, scopeSha: line.scopeSha, mismatch: true };
+  if (ask.scopeSha && ask.scopeSha !== bindScope(ask.scope)) return { source: "session-answer", via: line.via, scope: ask.scope, scopeSha: "", mismatch: true };
+  return { source: "session-answer", via: line.via, at: line.at, nonce: line.nonce, scope: ask.scope, scopeSha: line.scopeSha || ask.scopeSha };
 }
 
 function hold(out, intake, capability, projectPath, summary, plan, behaviors, kept, extras = {}) {

@@ -48,7 +48,7 @@ The skill adds only these:
 
 `docs.everyInvocation` is read. `true` fetches on every refresh. `false` reuses `docs/summary.json` when that file is already there and does not fetch. A missing summary is fetched either way. Leave it `true` when a later session must not treat an old download as fresh.
 
-The dashboard shows Findings, Notes, Details, and Captures only when the session has them. `prepare().findings` fills Findings. Notes or an audit fill Notes. A listing fills Details. Panel shots fill Captures. An extension that leaves those empty shows the workflow, the decision, and the activity log.
+The dashboard shows Findings, Notes, Listing, and Captures only when the session has them. `prepare().findings` fills Findings. Notes or an audit fill Notes. A listing fills Listing. Panel shots fill Captures. An extension that leaves those empty shows the workflow, the decision, and the activity log. A running step shows Now only while that step's status is running.
 
 A text question is for a short answer such as a name. A secret still uses an option with `secret` and is kept in the dashboard process, not in `session.json`.
 

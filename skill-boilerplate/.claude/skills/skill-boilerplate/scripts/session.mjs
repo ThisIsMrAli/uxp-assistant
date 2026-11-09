@@ -31,7 +31,7 @@ export async function sessionCommand(argv, envOut) {
   if (command === "mode") {
     if (!["dashboard", "chat"].includes(args.set)) throw new Error("Use --set dashboard or --set chat.");
     setMode(out, args.set);
-    return { ok: true, mode: args.set };
+    return { ok: true, mode: args.set, next: nextAction(out, { dashboardUp: dashboardUp(out) }).say };
   }
   if (command === "step") {
     if (!args.id || !args.status) throw new Error("Use --id and --status.");
@@ -52,7 +52,7 @@ export async function sessionCommand(argv, envOut) {
   }
   if (command === "next") {
     const action = nextAction(out, { dashboardUp: dashboardUp(out) });
-    return { ok: true, ...action, neverStop: action.action === "finished" ? undefined : "A session ends at done. Do not end your turn before then. Do not write to the user between ask and wait." };
+    return { ok: true, ...action, next: action.say, neverStop: action.action === "finished" ? undefined : "A session ends at done. Do not end your turn before then. Do not write to the user between ask and wait." };
   }
   if (command === "show") {
     const merged = readMerged(out);
