@@ -68,14 +68,17 @@ export function docIndex(docs) {
       else pages.set(owner, new Set(members));
     }
   }
+  const asyncReturns = new Set();
   for (const match of text.matchAll(/Returns:\s*(?:Promise\s*<\s*([A-Za-z_][\w]*)|([A-Za-z_][\w]*))/g)) {
     const type = match[1] || match[2];
     const before = text.slice(Math.max(0, match.index - 240), match.index);
     const names = [...before.matchAll(/\b([a-z][A-Za-z0-9]*)\b/g)];
     const method = names.at(-1)?.[1];
     if (method && type && type !== "Promise" && !returns.has(method)) returns.set(method, type);
+    if (method && (match[1] || type === "Promise")) asyncReturns.add(method);
   }
-  const index = { pages, global, propTypes, returns };
+  for (const match of text.matchAll(/\b([a-z_$][\w$]*)\s+\d+\.\d+(?:\.\d+)?\s+(?:async\s*:\s*)?Promise\b/g)) asyncReturns.add(match[1]);
+  const index = { pages, global, propTypes, returns, asyncReturns };
   cache.set(key, index);
   return index;
 }
@@ -113,6 +116,11 @@ export function hostModuleType(index, root, name) {
 export function documentedMember(index, type, method) {
   if (type && index.pages.has(type)) return { ok: index.pages.get(type).has(method), owner: type };
   return { ok: index.global.has(method), owner: "" };
+}
+
+/** Whether the docs say this method returns a Promise, so then, catch, and finally are the Promise's. */
+export function returnsPromise(index, method) {
+  return Boolean(index.asyncReturns && index.asyncReturns.has(method));
 }
 
 export function returnType(index, method) {
