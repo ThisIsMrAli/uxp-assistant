@@ -8,7 +8,7 @@ const NS = "http://www.w3.org/2000/svg";
 const ui = { tab: "", tabPinned: false, filter: "all", shotTheme: "all", pickedShot: null, choice: {}, secret: {}, error: {}, sending: {}, conn: "live", skew: 0, copied: "", theme: "auto" };
 const fromHash = location.hash.slice(1);
 if (["findings", "panel", "listing", "activity"].includes(fromHash)) { ui.tab = fromHash; ui.tabPinned = true; }
-try { ui.theme = localStorage.getItem("review-theme") || "auto"; } catch { /* storage off */ }
+try { ui.theme = localStorage.getItem("session-theme") || localStorage.getItem("review-theme") || "auto"; } catch { /* storage off */ }
 let state = null;
 let downTimer = null;
 let loading = false;
@@ -192,12 +192,12 @@ const el = {
   stats: h("section", { class: "stats", "aria-label": "Summary" }),
   hero: h("section", { class: "card hero", "aria-live": "polite", "aria-labelledby": "hero-title" }),
   sheet: h("div", { id: "sheet" }),
-  tabs: h("div", { class: "tabs", role: "tablist", "aria-label": "Review details" }),
+  tabs: h("div", { class: "tabs", role: "tablist", "aria-label": "Session details" }),
   pane: h("div", { class: "pane", role: "tabpanel" }),
-  strip: h("aside", { class: "card strip", "aria-label": "Panel at 320 pixels" }),
+  strip: h("aside", { class: "card strip", "aria-label": "Captures", hidden: true }),
   box: h("dialog", { class: "lightbox", "aria-labelledby": "lightbox-title" })
 };
-const TABS = [["findings", "Findings"], ["panel", "Panel bugs"], ["listing", "Listing"], ["activity", "Activity"]];
+const TABS = [["findings", "Findings"], ["panel", "Notes"], ["listing", "Details"], ["activity", "Activity"]];
 const tabButtons = {};
 for (const [id, label] of TABS) {
   const count = h("span", { class: "n" });
@@ -206,7 +206,7 @@ for (const [id, label] of TABS) {
   el.tabs.append(button);
 }
 el.tabs.addEventListener("keydown", (event) => {
-  const ids = TABS.map(([id]) => id);
+  const ids = visibleTabIds();
   const at = ids.indexOf(ui.tab);
   const next = event.key === "ArrowRight" ? ids[(at + 1) % ids.length] : event.key === "ArrowLeft" ? ids[(at + ids.length - 1) % ids.length] : null;
   if (!next) return;
@@ -218,12 +218,13 @@ el.tabs.addEventListener("keydown", (event) => {
 });
 el.box.addEventListener("click", (event) => { if (event.target === el.box) el.box.close(); });
 
+el.frame = h("div", { class: "frame" },
+  h("nav", { class: "rail", "aria-label": "Session steps" }, el.railHead, el.steps),
+  h("main", { class: "main", id: "main" }, el.alert, el.sheet, el.hero, el.stats, el.tabs, el.pane),
+  el.strip);
 root.append(
   h("header", { class: "topbar" }, h("div", { class: "brand" }, markSvg(), el.who), el.facts),
-  h("div", { class: "frame" },
-    h("nav", { class: "rail", "aria-label": "Review steps" }, el.railHead, el.steps),
-    h("main", { class: "main", id: "main" }, el.alert, el.sheet, el.hero, el.stats, el.tabs, el.pane),
-    el.strip),
+  el.frame,
   el.box
 );
 
@@ -261,38 +262,64 @@ function paint() {
   paintTitle();
 }
 
-/** Follow the work: the panel tab while the walk runs, the listing tab when it starts, until the user picks one. */
+/** Findings, notes, details, and captures render only when the session actually has them. */
+function surfaceFlags() {
+  const s = session();
+  const r = report();
+  return {
+    findings: (r.findings || []).length > 0 || (s?.baseline || []).length > 0,
+    panel: (s?.notes || []).length > 0 || Boolean(s?.audit) || (r.views || []).length > 0,
+    listing: Boolean(s?.listing) || (s?.shots || []).some((shot) => shot.kind === "listing"),
+    captures: (s?.shots || []).some((shot) => shot.kind === "panel") || steps().some((step) => step.id === "panel" && (step.status === "running" || step.status === "waiting"))
+  };
+}
+
+function visibleTabIds() {
+  const flags = surfaceFlags();
+  return TABS.map(([id]) => id).filter((id) => id === "activity" || flags[id]);
+}
+
+/** Follow the work when that surface is supplied. Otherwise stay on activity. */
 function chooseTab() {
-  if (ui.tabPinned) return;
+  const ids = visibleTabIds();
+  if (ui.tabPinned && ids.includes(ui.tab)) return;
   const running = steps().find((step) => step.status === "running" || step.status === "waiting");
-  ui.tab = running?.id === "panel" || running?.id === "access" ? "panel" : running?.id === "listing" ? "listing" : ui.tab || "findings";
+  const preferred = running?.id === "panel" || running?.id === "access" ? "panel" : running?.id === "listing" ? "listing" : "activity";
+  ui.tab = ids.includes(preferred) ? preferred : "activity";
 }
 
 // ---- top bar ------------------------------------------------------------------------------
 
 function cycleTheme() {
   ui.theme = ui.theme === "auto" ? "light" : ui.theme === "light" ? "dark" : "auto";
-  try { localStorage.setItem("review-theme", ui.theme); } catch { /* storage off */ }
+  try { localStorage.setItem("session-theme", ui.theme); } catch { /* storage off */ }
   if (ui.theme === "auto") delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = ui.theme;
   painted.delete(el.facts);
   paintTop();
 }
 
+function docsLabel(s, r) {
+  const docs = s?.docs;
+  const counted = docs && Array.isArray(docs.fresh) && Array.isArray(docs.stale) && Array.isArray(docs.failed);
+  const fetched = s?.addon?.fetchedAt || r.fetchedAt;
+  const when = fetched ? new Date(fetched).toLocaleDateString([], { month: "short", day: "numeric" }) : "";
+  if (!counted) return "Docs not fetched";
+  return `Docs fresh ${docs.fresh.length}, stale ${docs.stale.length}, failed ${docs.failed.length}${when ? `, ${when}` : ""}`;
+}
+
 function paintTop() {
   const s = session();
   const r = report();
-  const sha = (s?.addon?.docsSha || r.docsSha || "").slice(0, 7);
-  const fetched = s?.addon?.fetchedAt || r.fetchedAt;
-  const when = fetched ? new Date(fetched).toLocaleDateString([], { month: "short", day: "numeric" }) : "";
+  const docs = docsLabel(s, r);
   region(el.who, JSON.stringify([s?.addon?.name, r.addon, s?.addon?.path]), () => [
     h("h1", { text: s?.addon?.name || r.addon || "Session" }),
-    h("p", { class: "path", text: s?.addon?.path || "Waiting for a review to start" })
+    h("p", { class: "path", text: s?.addon?.path || "Waiting for a session to start" })
   ]);
   const conn = { live: ["ok", "Live", true], retry: ["warn", "Reconnecting"], down: ["bad", "Dashboard stopped"] }[ui.conn];
-  region(el.facts, JSON.stringify([ui.conn, ui.theme, s?.mode, sha, when]), () => [
+  region(el.facts, JSON.stringify([ui.conn, ui.theme, s?.mode, docs]), () => [
     h("span", { class: "pill", text: s?.mode === "chat" ? "Decisions in chat" : "Decisions here" }),
-    h("span", { class: "pill", text: sha ? `Docs ${sha}${when ? `, ${when}` : ""}` : "Docs not fetched" }),
+    h("span", { class: "pill", text: docs }),
     h("a", { class: "pill", href: fileUrl("report.md"), target: "_blank", rel: "noopener" }, icon("doc", 2), "Full report"),
     h("span", { class: "pill", role: "status", "data-tone": conn[0], "data-live": conn[2] ? "true" : "false" }, h("i", { class: "dot" }), conn[1]),
     h("button", { class: "pill iconbtn", type: "button", "aria-label": `Theme: ${ui.theme}. Press to change.`, title: `Theme: ${ui.theme}`, onclick: cycleTheme }, icon(ui.theme === "dark" ? "moon" : ui.theme === "light" ? "sun" : "auto", 2))
@@ -397,21 +424,21 @@ function paintHero() {
     if (!s) {
       return [
         h("div", { class: "hero-top" }, h("p", { class: "eyebrow", text: "Waiting" })),
-        h("h2", { id: "hero-title", text: "No review yet" }),
-        h("p", { class: "lede", text: "Run the review from your agent. This page fills in as it works." }),
+        h("h2", { id: "hero-title", text: "No session yet" }),
+        h("p", { class: "lede", text: "Run the session from your agent. This page fills in as it works." }),
         h("div", { class: "meter" }, progressBar(null))
       ];
     }
     if (finished()) {
       return [
         h("div", { class: "hero-top" }, h("div", { class: "hero-step" }, icon("check", 3), h("p", { class: "eyebrow", text: "Finished" }))),
-        h("h2", { id: "hero-title", text: "Review finished" }),
+        h("h2", { id: "hero-title", text: "Session finished" }),
         h("p", { class: "summary", text: s.summary || "Everything you chose is done." }),
-        d.total || d.bugsFixed.length ? h("p", { class: "lede" }, [d.total ? `${d.fixed.length} of ${d.total} findings fixed` : "", d.total && d.bugsFixed.length ? ", " : "", d.bugsFixed.length ? `${d.bugsFixed.length} panel ${plural(d.bugsFixed.length, "bug")} confirmed fixed` : ""].join("") + ".") : null
+        d.total || d.bugsFixed.length ? h("p", { class: "lede" }, [d.total ? `${d.fixed.length} of ${d.total} findings fixed` : "", d.total && d.bugsFixed.length ? ", " : "", d.bugsFixed.length ? `${d.bugsFixed.length} ${plural(d.bugsFixed.length, "note")} confirmed fixed` : ""].join("") + ".") : null
       ];
     }
-    const label = current?.label || "Review";
-    const eyebrow = `${index ? `Step ${index} of ${list.length}` : "Review"} · ${label}`;
+    const label = current?.label || "Session";
+    const eyebrow = `${index ? `Step ${index} of ${list.length}` : "Session"} · ${label}`;
     if (tone === "wait") {
       return [
         h("div", { class: "hero-top" }, h("div", { class: "hero-step" }, icon("hand", 2.4), h("p", { class: "eyebrow", text: eyebrow })), timer(pending.askedAt, "Waiting")),
@@ -468,12 +495,18 @@ function paintStats() {
   const list = visibleSteps().filter((step) => step.status !== "skipped");
   const done = list.filter((step) => step.status === "done").length;
   const audit = s?.audit;
-  const tiles = [
-    { tone: d.errors.length ? "bad" : "ok", icon: d.errors.length ? "x" : "check", k: "Code errors", v: d.errors.length, s: d.total ? `${d.fixed.length} of ${d.total} findings fixed` : "From the scan" },
-    { tone: d.warnings.length ? "warn" : "ok", icon: d.warnings.length ? "alert" : "check", k: "Warnings", v: d.warnings.length, s: `${d.patterns.length} review ${plural(d.patterns.length, "pattern")}` },
-    { tone: d.bugsOpen.length ? "bad" : audit ? "ok" : "work", icon: "bug", k: "Panel bugs open", v: audit || d.bugsOpen.length || d.bugsFixed.length ? d.bugsOpen.length : "–", s: audit ? `${d.bugsFixed.length} fixed, ${audit.screens ?? 0} ${plural(audit.screens ?? 0, "screen")} measured` : "Measured at 320px" },
-    { tone: "work", icon: "layers", k: "Steps done", v: `${done}/${list.length}`, s: s?.startedAt ? "Running for " : "", since: s?.startedAt }
-  ];
+  const flags = surfaceFlags();
+  const tiles = [];
+  if (flags.findings) {
+    tiles.push(
+      { tone: d.errors.length ? "bad" : "ok", icon: d.errors.length ? "x" : "check", k: "Code errors", v: d.errors.length, s: d.total ? `${d.fixed.length} of ${d.total} findings fixed` : "Recorded so far" },
+      { tone: d.warnings.length ? "warn" : "ok", icon: d.warnings.length ? "alert" : "check", k: "Warnings", v: d.warnings.length, s: `${d.patterns.length} ${plural(d.patterns.length, "pattern")}` }
+    );
+  }
+  if (flags.panel) {
+    tiles.push({ tone: d.bugsOpen.length ? "bad" : audit ? "ok" : "work", icon: "bug", k: "Notes open", v: audit || d.bugsOpen.length || d.bugsFixed.length ? d.bugsOpen.length : "–", s: audit ? `${d.bugsFixed.length} fixed, ${audit.screens ?? 0} ${plural(audit.screens ?? 0, "screen")} recorded` : "Recorded so far" });
+  }
+  tiles.push({ tone: "work", icon: "layers", k: "Steps done", v: `${done}/${list.length}`, s: s?.startedAt ? "Running for " : "", since: s?.startedAt });
   region(el.stats, JSON.stringify(tiles.map((tile) => [tile.v, tile.s, tile.tone])), () => tiles.map((tile) =>
     h("article", { class: "card stat", "data-tone": tile.tone }, h("div", { class: "k" }, icon(tile.icon, 2.6), tile.k), h("div", { class: "v", text: String(tile.v) }),
       h("div", { class: "s" }, tile.since ? [tile.s, h("span", { "data-since": tile.since, text: dur(nowMs() - Date.parse(tile.since)) })] : tile.s))));
@@ -502,7 +535,7 @@ function turn(ask) {
   const submit = h("button", { class: "btn primary", type: "submit", disabled: true, text: "Confirm choice" });
   const secretBox = h("div", { class: "field", hidden: true });
   const secretInput = h("input", { type: "password", id: `secret-${k}`, autocomplete: "off", spellcheck: "false", oninput: (event) => { ui.secret[k] = event.target.value; sync(); } });
-  secretBox.append(h("label", { for: `secret-${k}`, id: `secret-label-${k}` }), secretInput, h("small", { text: "Kept in memory on this computer while the review runs. It is never written to a file." }));
+  secretBox.append(h("label", { for: `secret-${k}`, id: `secret-label-${k}` }), secretInput, h("small", { text: "Kept in memory on this computer while this session runs. It is never written to a file." }));
 
   const choose = (id) => { ui.choice[k] = id; sync(); };
   const list = h("fieldset", { class: "choices" }, h("legend", { class: "sr", text: "Choose one option" }),
@@ -606,6 +639,7 @@ function listingBlock(listing) {
 function paintTabs() {
   const d = derived();
   const s = session();
+  const visible = new Set(visibleTabIds());
   const counts = {
     findings: d.errors.length + d.warnings.length + d.patterns.length,
     panel: (s?.notes || []).length,
@@ -614,6 +648,7 @@ function paintTabs() {
   };
   for (const [id] of TABS) {
     const { button, count } = tabButtons[id];
+    button.hidden = !visible.has(id);
     button.setAttribute("aria-selected", String(ui.tab === id));
     button.setAttribute("tabindex", ui.tab === id ? "0" : "-1");
     count.textContent = counts[id] ? String(counts[id]) : "";
@@ -668,13 +703,13 @@ function panelPane() {
   const walking = steps().find((step) => step.id === "panel")?.status === "running" && !audit;
   const head = notes.length || audit
     ? h("div", { class: "bugs-head" },
-      h("p", null, h("b", { text: `${d.bugsOpen.length} open` }), `, ${d.bugsFixed.length} fixed`, audit ? `. ${audit.screens ?? 0} ${plural(audit.screens ?? 0, "screen")} measured at 320px in light and dark.` : "."),
-      h("span", { class: "hint", text: "Bugs the walk measured are fixed without asking. Warnings are offered to you." }))
+      h("p", null, h("b", { text: `${d.bugsOpen.length} open` }), `, ${d.bugsFixed.length} fixed`, audit ? `. ${audit.screens ?? 0} ${plural(audit.screens ?? 0, "screen")} recorded.` : "."),
+      h("span", { class: "hint", text: "Notes recorded by the skill. Warnings are offered to you." }))
     : null;
   return h("div", null, head,
     notes.length ? h("ul", { class: "list" }, notes.map(bugCard))
       : audit ? h("p", { class: "empty", text: "Nothing to fix. Every screen the walk reached passed the measurements." })
-      : h("p", { class: "empty", text: walking ? "The walk is running. Problems it measures appear here as it finds them." : "No panel problems recorded yet. They appear here while the panel is walked." }),
+      : h("p", { class: "empty", text: walking ? "Recording is running. Notes appear here as they are found." : "No notes recorded yet." }),
     views.length ? h("div", { class: "views" }, h("h3", { text: `Screens named in the code (${views.length})` }),
       h("ul", null, views.slice(0, 12).map((view) => h("li", null, h("b", { text: view.name }), `  ${view.kind}, ${view.file}${view.line ? `:${view.line}` : ""}`)))) : null);
 }
@@ -716,9 +751,17 @@ function activityPane() {
     h("span", { class: "st", text: labels[entry.step] || "" }), h("span", { text: entry.text })))) : h("p", { class: "empty", text: "Nothing yet." });
 }
 
-// ---- the 320px column -------------------------------------------------------------------------
+// ---- captures ----------------------------------------------------------------------------------
 
 function paintStrip() {
+  const on = surfaceFlags().captures;
+  el.strip.hidden = !on;
+  el.frame.classList.toggle("has-captures", on);
+  if (!on) {
+    painted.delete(el.strip);
+    fill(el.strip);
+    return;
+  }
   const s = session();
   const all = (s?.shots || []).filter((shot) => shot.kind === "panel");
   const hasThemes = all.some((shot) => shot.theme);
@@ -728,12 +771,12 @@ function paintStrip() {
   const key = JSON.stringify([shots.map((shot) => shot.id), current?.id, ui.shotTheme, walking]);
   region(el.strip, key, () => [
     h("div", { class: "strip-head" },
-      h("h2", { text: "Panel at 320px" }),
+      h("h2", { text: "Captures" }),
       hasThemes ? h("div", { class: "seg", role: "group", "aria-label": "Theme" }, ["all", "light", "dark"].map((id) => h("button", { type: "button", "data-fid": `theme-${id}`, "aria-pressed": String(ui.shotTheme === id), onclick: () => { ui.shotTheme = id; ui.pickedShot = null; paintStrip(); } }, id === "all" ? "All" : cap(id)))) : null),
     h("p", { class: "cap", text: current ? current.label : walking ? "Opening the panel…" : "Captures appear as each screen is walked." }),
     current
       ? h("div", { class: "device" }, h("div", { class: "screen", tabindex: "0", role: "region", "aria-label": `Capture: ${current.label}` }, h("img", { src: fileUrl(current.file), alt: current.label })))
-      : h("div", { class: `device blank` }, h("div", { class: "screen" }, walking ? [h("div", { class: "skeleton" }), h("div", { class: "skeleton" }), h("div", { class: "skeleton" }), h("p", { text: "Starting the browser and opening the panel." })] : h("p", { text: "No capture yet." }))),
+      : h("div", { class: `device blank` }, h("div", { class: "screen" }, walking ? [h("div", { class: "skeleton" }), h("div", { class: "skeleton" }), h("div", { class: "skeleton" }), h("p", { text: "Waiting for the first capture." })] : h("p", { text: "No capture yet." }))),
     shots.length > 1 ? h("div", { class: "film", role: "group", "aria-label": "Captures" }, shots.map((shot) => h("button", { type: "button", "data-fid": `shot-${shot.id}`, "aria-label": shot.label, "aria-current": String(shot.id === current.id), onclick: () => { ui.pickedShot = shot.id; paintStrip(); } }, h("img", { src: fileUrl(shot.file), alt: "" })))) : null
   ]);
 }
@@ -759,7 +802,7 @@ function paintTitle() {
   const pending = s?.mode === "dashboard" && pendingAsk();
   const running = steps().find((step) => step.status === "running");
   const p = running?.progress;
-  let title = `${name} review`;
+  let title = name;
   let tone = "idle";
   if (finished()) { title = `Done · ${name}`; tone = "ok"; }
   else if (pending) { title = `Your turn · ${name}`; tone = "wait"; }
@@ -811,9 +854,9 @@ function connect() {
 }
 
 // First paint is a skeleton the user can see at once, then real data.
-fill(el.hero, h("div", { class: "skeleton" }), h("p", { class: "lede", text: "Loading the review." }));
+fill(el.hero, h("div", { class: "skeleton" }), h("p", { class: "lede", text: "Loading the session." }));
 paintTop();
 load();
 connect();
-// A review in progress still moves when the server sends nothing, because the agent's clock is the server's.
+// A session in progress still moves when the server sends nothing, because the agent's clock is the server's.
 setInterval(() => { if (ui.conn === "live") load(); }, 15000);
