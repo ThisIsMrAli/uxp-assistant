@@ -94,10 +94,16 @@ test("NR7 static error text fails and a rendered state variable passes", () => {
   assert.equal(showsHonestUiState("export function Panel(){ return <sp-body>Error codes are listed in the docs.</sp-body>; }"), false);
   const honest = `export function Panel(){
     const [msg, setMsg] = useState("");
-    function onRead(){ setMsg("No open document."); }
+    function onRead(){ try { setMsg(read()); } catch (e) { setMsg(String(e)); } }
     return <button onClick={onRead}>{msg || "No open document."}</button>;
   }`;
   assert.equal(showsHonestUiState(honest), true);
+  const anyState = `export function Panel(){
+    const [msg, setMsg] = useState("");
+    function onRead(){ setMsg("No open document."); }
+    return <button onClick={onRead}>{msg || "No open document."}</button>;
+  }`;
+  assert.equal(showsHonestUiState(anyState), false, "NT8: any rendered useState no longer counts");
 });
 
 test("NR8 a temp directory created with the preload is gone after the process exits", () => {
@@ -304,7 +310,7 @@ test("NR1 the advertised skills install can scaffold and finish", { timeout: 600
   fs.mkdirSync(path.join(project, "src"), { recursive: true });
   fs.mkdirSync(path.join(project, "test"), { recursive: true });
   fs.writeFileSync(path.join(project, "src", "read-title.mjs"), "export function readTitle(app) { if (!app || !app.activeDocument) return { ok: false, title: \"\" }; return { ok: true, title: app.activeDocument.title + (app.layerComps ? \":yes\" : \":no\") }; }\n");
-  fs.writeFileSync(path.join(project, "src", "TitlePanel.tsx"), "export function TitlePanel(){ const [phase, setPhase] = useState(\"waiting\"); return <button disabled={!phase} onClick={() => setPhase(\"ready\")}>{phase}</button>; }\n");
+  fs.writeFileSync(path.join(project, "src", "TitlePanel.tsx"), "export function TitlePanel(){ const [phase, setPhase] = useState(\"waiting\"); return <button disabled={phase === \"reading\"} onClick={() => { setPhase(\"reading\"); try { setPhase(\"ready\"); } catch (e) { setPhase(String(e)); } }}>{phase}</button>; }\n");
   fs.writeFileSync(path.join(project, "test", "read-title.test.mjs"), `import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readTitle } from "../src/read-title.mjs";

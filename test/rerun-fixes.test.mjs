@@ -63,8 +63,10 @@ test("N11 an offline runtime question has a Recommended option and is never empt
 });
 
 test("N13 a wired waiting state passes and static text does not", () => {
-  const wired = "export function Panel(){ const [phase, setPhase] = useState('waiting'); return <button onClick={() => setPhase('ready')}>{phase}</button>; }";
+  const wired = "export function Panel(){ const [busy, setBusy] = useState(false); async function go(){ setBusy(true); await run(); setBusy(false); } return <button disabled={busy} onClick={go}>{busy ? 'Waiting for Photoshop' : 'Read'}</button>; }";
   assert.equal(showsHonestUiState(wired), true);
+  const setOnce = "export function Panel(){ const [phase, setPhase] = useState('waiting'); return <button onClick={() => setPhase('ready')}>{phase}</button>; }";
+  assert.equal(showsHonestUiState(setOnce), false, "NT8: a rendered state set once to a constant is not a waiting state");
   assert.equal(showsHonestUiState("export function Panel(){ return <p>Waiting for Photoshop</p>; }"), false);
   assert.equal(showsHonestUiState("export function Panel(){ return <sp-body>Error codes are listed in the docs.</sp-body>; }"), false);
   assert.equal(showsHonestUiState("export const status = 1;\nexport function Panel(){ return <p>{status}</p>; }"), false);

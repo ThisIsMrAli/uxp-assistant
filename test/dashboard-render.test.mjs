@@ -189,7 +189,7 @@ writeStoredZip("out.ccx", entries);
 
 function writeShow(project) {
   fs.mkdirSync(path.join(project, "test"), { recursive: true });
-  fs.writeFileSync(path.join(project, "src", "Selection.tsx"), "export function SelectionPanel(){ const [phase, setPhase] = useState(\"idle\"); return <section><h1>Selected layer ids</h1><p>{phase}</p><button type=\"button\" disabled={!phase} onClick={() => setPhase(\"read\")}>Read selection</button></section>; }\n");
+  fs.writeFileSync(path.join(project, "src", "Selection.tsx"), "export function SelectionPanel(){ const [phase, setPhase] = useState(\"idle\"); return <section><h1>Selected layer ids</h1><p>{phase}</p><button type=\"button\" disabled={phase === \"reading\"} onClick={() => { setPhase(\"reading\"); try { setPhase(\"read\"); } catch (e) { setPhase(String(e)); } }}>Read selection</button></section>; }\n");
   fs.writeFileSync(path.join(project, "src", "selection-read.mjs"), "export function readSelection(app){ const layers = app?.activeDocument?.activeLayers || []; return { status: layers.length ? \"Read outside executeAsModal.\" : \"No selected layer.\" }; }\n");
   fs.writeFileSync(path.join(project, "test", "selection.test.mjs"), "import assert from \"node:assert/strict\"; import { test } from \"node:test\"; import { readSelection } from \"../src/selection-read.mjs\"; test(\"missing host\", () => { assert.match(readSelection(null).status, /selected layer/); });\n");
 }
