@@ -22,7 +22,9 @@ node .claude/skills/uxp-assistant/scripts/session.mjs next --out /tmp/uxp-sessio
 
 `skill-boilerplate/` is vendored so agent skill loaders see real files. The skill-boilerplate repository is private, so this project does not use an npm git dependency or a submodule. Those would fail for other people.
 
-`BOILERPLATE.lock` records `ThisIsMrAli/skill-boilerplate`, `sourceCommit`, and `contentHash`. `sourceCommit` is null until a checkout sha is filled in. `contentHash` is SHA-256 over sorted lines of `type`, relative path, and SHA-256. A file hashes its bytes. A symlink hashes its target string and is not followed. `.git`, `node_modules`, and `.env` are omitted.
+`BOILERPLATE.lock` records `ThisIsMrAli/skill-boilerplate`, `sourceCommit`, and `contentHash`. `sourceCommit` is null until a checkout sha is filled in. `contentHash` is SHA-256 over the vendored subset: sorted lines of `type`, relative path, and SHA-256. A file hashes its bytes. A symlink hashes its target string and is not followed. `.git`, `node_modules`, and `.env` are omitted.
+
+The vendored subset also omits the root agent-install directories named in `install-agents.mjs` (`.cursor`, `.agents`, and the other agent folders). The real boilerplate repo commits those as relative links such as `.cursor/skills/skill-boilerplate -> ../../.claude/skills/skill-boilerplate`. UXP Assistant has its own installer, so those links are not part of the pin. The canonical skill files under `.claude/` stay. The hash covers exactly that subset, which is the committed `skill-boilerplate/` tree.
 
 Replace the folder from a local checkout:
 
@@ -30,4 +32,4 @@ Replace the folder from a local checkout:
 node scripts/sync-boilerplate.mjs /path/to/skill-boilerplate-checkout --commit <sha>
 ```
 
-The script refuses `.git`, `node_modules`, `.env`, an absolute symlink, a symlink target containing `..`, and a symlink that resolves outside the checkout. It then rewrites the lock. Omit `--commit` only when the sha is still unknown. `test/boilerplate-lock.test.mjs` fails if the vendored folder drifts from `contentHash`. Edit the boilerplate in its own repository and sync it back. UXP Assistant imports `skill-boilerplate/api.mjs` and nothing else from that folder.
+The script refuses `.git`, `node_modules`, `.env`, an absolute symlink, and a symlink that resolves outside the checkout. A relative target may contain `..` when the resolved path stays inside the checkout. It then rewrites the lock. Omit `--commit` only when the sha is still unknown. `test/boilerplate-lock.test.mjs` fails if the vendored folder drifts from `contentHash`. Edit the boilerplate in its own repository and sync it back. UXP Assistant imports `skill-boilerplate/api.mjs` and nothing else from that folder.

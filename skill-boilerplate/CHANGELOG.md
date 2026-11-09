@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.3
+
+- Consumers vendor this folder without the root agent-install links. `install-agents.mjs` still creates those links in a checkout of this repository.
+- A relative symlink that stays inside the checkout is allowed. An absolute symlink, or one that resolves outside the checkout, is refused.
+
 ## 0.1.2
 
 - The dashboard question card no longer says to answer in chat. Chat mode and a stopped dashboard still say so.

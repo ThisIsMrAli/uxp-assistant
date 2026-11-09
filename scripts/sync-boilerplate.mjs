@@ -11,7 +11,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const SOURCE_REPO = "ThisIsMrAli/skill-boilerplate";
-export const ALGORITHM = "sha256 of sorted lines `type<TAB>relative-path<TAB>sha256`, UTF-8, with a trailing newline. Paths use `/` and sort by raw UTF-8 bytes. A file hashes its bytes. A symlink hashes its target string and is not followed. Entries named .git, node_modules, or .env are omitted.";
+export const ALGORITHM = "sha256 of sorted lines `type<TAB>relative-path<TAB>sha256`, UTF-8, with a trailing newline. Paths use `/` and sort by raw UTF-8 bytes. A file hashes its bytes. A symlink hashes its target string and is not followed. Entries named .git, node_modules, or .env are omitted. Root directories named by install-agents.mjs projectAgents are omitted; those are agent install links and are not vendored. A relative symlink target may contain '..' when the resolved path stays inside the checkout. An absolute target, or a target that resolves outside the checkout, is refused.";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -42,26 +42,38 @@ export function syncBoilerplate({ source, dest, lockFile, commit = null }) {
   return lock;
 }
 
+export function agentInstallRoots(root) {
+  const file = path.join(root, "install-agents.mjs");
+  if (!fs.existsSync(file)) return [];
+  const stat = fs.lstatSync(file);
+  if (!stat.isFile()) return [];
+  const block = fs.readFileSync(file, "utf8").match(/const projectAgents = \[([\s\S]*?)\];/);
+  if (!block) return [];
+  return [...new Set([...block[1].matchAll(/"([^"]+)"/g)].map((hit) => hit[1].split("/")[0]))];
+}
+
 export function collect(root, { strict }) {
+  const resolved = path.resolve(root);
   const entries = [];
-  walk(path.resolve(root), path.resolve(root), entries, strict);
+  walk(resolved, resolved, entries, strict, new Set(agentInstallRoots(resolved)));
   entries.sort((a, b) => Buffer.compare(Buffer.from(a.path), Buffer.from(b.path)));
   return entries;
 }
 
-function walk(dir, root, entries, strict) {
+function walk(dir, root, entries, strict, agentRoots) {
   for (const name of fs.readdirSync(dir)) {
     if (skipped(name)) continue;
     const full = path.join(dir, name);
     const rel = path.relative(root, full).split(path.sep).join("/");
     if (rel.split("/").includes("..")) throw new Error(`Refusing a path that contains '..': ${rel}`);
+    if (!rel.includes("/") && agentRoots.has(rel)) continue;
     const stat = fs.lstatSync(full);
     if (stat.isSymbolicLink()) {
       const target = fs.readlinkSync(full);
       if (strict) assertSymlink(full, root, target, rel);
       entries.push({ path: rel, type: "symlink", target, sha256: digest(Buffer.from(target)) });
     } else if (stat.isDirectory()) {
-      walk(full, root, entries, strict);
+      walk(full, root, entries, strict, agentRoots);
     } else if (stat.isFile()) {
       entries.push({ path: rel, type: "file", sha256: digest(fs.readFileSync(full)) });
     } else if (strict) {
@@ -72,7 +84,6 @@ function walk(dir, root, entries, strict) {
 
 function assertSymlink(full, root, target, rel) {
   if (path.isAbsolute(target)) throw new Error(`Refusing absolute symlink ${rel} -> ${target}`);
-  if (target.split(/[\\/]/).includes("..")) throw new Error(`Refusing symlink ${rel} because its target contains '..'.`);
   const resolved = path.resolve(path.dirname(full), target);
   const base = path.resolve(root);
   if (resolved !== base && !resolved.startsWith(base + path.sep)) {
