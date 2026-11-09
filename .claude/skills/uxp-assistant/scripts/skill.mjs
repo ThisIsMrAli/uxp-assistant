@@ -18,6 +18,7 @@ const bins = {
   dashboardBin: "node scripts/skill.mjs dashboard",
   refreshBin: "node scripts/skill.mjs refresh"
 };
+const DOC_REFRESH_LIMIT = 3;
 
 const ranDirectly = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (ranDirectly) {
@@ -65,7 +66,7 @@ export async function run(argv) {
     const result = api.dashboard(rest, common);
     return result.json || { ok: false, status: result.status, error: result.stderr || result.stdout };
   }
-  if (command === "refresh") return api.refresh(common);
+  if (command === "refresh") return applyDocsRefresh(out, await api.refresh(common));
   if (command === "domain") {
     try {
       const handed = await domain(out, api);
@@ -154,14 +155,34 @@ function specialize(result, out) {
   const main = readJson(path.join(out, "session.json"));
   const answers = answersFromSafe(out);
   const docsFailed = main?.docs && main.docs.ok === false;
-  if (answers["docs-retry"] === "pause" || answers["docs-retry"] === "stop" || answers.feasibility === "pause" || answers.feasibility === "stop" || outcome === "stopped") {
-    const next = "Stopped before any edit. The host was NOT TESTED.";
-    return { ...result, action: "stop", step: "decide", command: "", next, say: next };
+  if (answers["docs-retry"] === "pause" || answers.feasibility === "pause" || outcome === "paused") {
+    const next = `Paused before any edit. Nothing was written. The session is not finished. Run node scripts/skill.mjs session next --out ${out} when the user is ready to answer. The host was NOT TESTED.`;
+    return { ...result, action: "pause", step: "decide", command: `node scripts/skill.mjs session next --out ${out}`, next, say: next, neverStop: undefined };
   }
-  if (docsFailed && (answers["docs-retry"] === "refresh" || outcome === "docs-incomplete")) {
-    const refresh = `node scripts/skill.mjs refresh --out ${out}`;
-    const next = `The docs are not fresh. Run ${refresh}. Do not scaffold, and do not ask design questions, until a fetch is fresh.`;
-    return { ...result, action: "refresh", step: "docs", command: refresh, next, say: next };
+  if (answers["docs-retry"] === "stop" || answers.feasibility === "stop" || outcome === "stopped") {
+    const next = "Stopped before any edit. The session ends here. The host was NOT TESTED.";
+    return { ...result, action: "stop", step: "decide", command: "", next, say: next, neverStop: undefined };
+  }
+  if (docsFailed) {
+    const retry = docsRetryState(out);
+    const ask = (main?.asks || []).find((item) => item.id === "docs-retry");
+    const nonce = ask?.nonce || "";
+    const failed = (main.docs.failed || []).join(", ") || "none";
+    const stale = (main.docs.stale || []).join(", ") || "none";
+    if (retry.attempts >= 3) {
+      const next = `Docs are still offline after ${retry.attempts} fetches. Failed: ${failed}. Stale: ${stale}. The docs step is not done. Do not run refresh again. Pause or stop. The host was NOT TESTED.`;
+      return { ...result, action: "offline", step: "docs", command: "", next, say: next, neverStop: undefined };
+    }
+    if (answers["docs-retry"] === "refresh" && nonce && retry.appliedNonce === nonce) {
+      const command = `node scripts/skill.mjs session ask --id docs-retry --out ${out}`;
+      const next = `The last fetch still failed. Failed: ${failed}. Stale: ${stale}. The docs step is not done. Ask docs-retry again and use the user's answer. Do not run refresh until they choose it. Command: ${command}`;
+      return { ...result, action: "ask", ask: "docs-retry", step: "docs", command, next, say: next };
+    }
+    if (answers["docs-retry"] === "refresh" || outcome === "docs-incomplete") {
+      const refresh = `node scripts/skill.mjs refresh --out ${out}`;
+      const next = `The docs are not fresh. Failed: ${failed}. Stale: ${stale}. The docs step is not done. Run ${refresh}. Do not scaffold, and do not ask design questions, until a fetch is fresh.`;
+      return { ...result, action: "refresh", step: "docs", command: refresh, next, say: next };
+    }
   }
   const domainError = readJson(path.join(out, "domain-error.json"));
   if (domainError?.error && outcome !== "awaiting-agent-implementation" && outcome !== "commands-finished") {
@@ -188,7 +209,53 @@ function specialize(result, out) {
     const next = `Run ${command}. Do not mark tests, package, or the host done. The host is not launched.`;
     return { ...result, action: "domain", command, next, say: next };
   }
-  return { ...result, next: result.next || result.say };
+  return hideBrowser(result?.next || result?.say ? { ...result, next: result.next || result.say } : result);
+}
+
+function docsRetryState(out) {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(out, "docs-retry-state.json"), "utf8"));
+  } catch {
+    return { attempts: 0, appliedNonce: "" };
+  }
+}
+
+export function applyDocsRefresh(out, result) {
+  const body = result && typeof result === "object" ? { ...result } : { ok: false, error: "Refresh returned nothing." };
+  const failed = Array.isArray(body.failed) ? body.failed : [];
+  const stale = Array.isArray(body.stale) ? body.stale : [];
+  const fresh = Array.isArray(body.fresh) ? body.fresh : [];
+  const failedFetch = body.ok === false || failed.length > 0 || stale.length > 0;
+  if (failedFetch) {
+    const counts = `fresh ${fresh.length}, stale ${stale.length}, failed ${failed.length}`;
+    body.ok = false;
+    const again = out ? ` Run node scripts/skill.mjs session next --out ${out}.` : "";
+    body.next = `Docs are not done (${counts}). Failed: ${failed.join(", ") || "none"}. Stale: ${stale.join(", ") || "none"}. The docs step is not done.${again}`;
+    body.say = body.next;
+    if (out) {
+      const session = readJson(path.join(out, "session.json"));
+      const ask = (session?.asks || []).find((item) => item.id === "docs-retry");
+      const state = docsRetryState(out);
+      const attempts = Math.min(DOC_REFRESH_LIMIT, (state.attempts || 0) + 1);
+      fs.writeFileSync(path.join(out, "docs-retry-state.json"), `${JSON.stringify({ attempts, appliedNonce: ask?.nonce || state.appliedNonce || "" }, null, 2)}\n`);
+      if (attempts >= DOC_REFRESH_LIMIT) {
+        body.next = `${body.next} Refresh was tried ${attempts} times and is not offered again. Pause or stop.`;
+        body.say = body.next;
+        body.bounded = true;
+      }
+    }
+    return body;
+  }
+  if (out) fs.rmSync(path.join(out, "docs-retry-state.json"), { force: true });
+  return body;
+}
+
+function hideBrowser(result) {
+  if (!result || typeof result !== "object") return result;
+  const text = `${result.next || ""}\n${result.say || ""}\n${result.fallback || ""}`;
+  if (!/server-down|dashboard is down|dashboard is not running/i.test(text)) return result;
+  const fix = (value) => (typeof value === "string" ? value.replace(/dashboard start(?! --no-open)/g, "dashboard start --no-open") : value);
+  return { ...result, next: fix(result.next), say: fix(result.say), command: fix(result.command) };
 }
 
 function answersFromSafe(out) {
@@ -202,8 +269,8 @@ function answersFromSafe(out) {
 function scriptChangeNext(out, result) {
   const mode = readJson(path.join(out, "session.json"))?.mode || "dashboard";
   if (mode === "chat") {
-    const command = `node scripts/skill.mjs session answer --id script-change --value approve --out ${out}`;
-    const next = `Ask the script-change question in chat with AskQuestion. The question text includes the command. Then run ${command}. Do not run the changed scripts before it is approved. There is no dashboard in chat mode.`;
+    const command = `node scripts/skill.mjs session answer --id script-change --value <approve or stop, the option the user chose> --out ${out}`;
+    const next = `Ask the script-change question in chat with AskQuestion. The options are approve and stop. Record the user's choice. Then run ${command}. Do not write approve unless the user chose approve. Do not run the changed scripts before it is approved. There is no dashboard in chat mode.`;
     return { ...result, action: "ask-in-chat", ask: "script-change", step: "decide", command, next, say: next };
   }
   const command = `node scripts/skill.mjs session wait --id script-change --out ${out}`;

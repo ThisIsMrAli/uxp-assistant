@@ -8,6 +8,7 @@ import { test } from "node:test";
 import { readZip } from "../.claude/skills/uxp-assistant/scripts/lib/archive.mjs";
 import { narrowRequiredPermissions } from "../.claude/skills/uxp-assistant/scripts/lib/permissions.mjs";
 import { installerEntry, starterIconsDir } from "../.claude/skills/uxp-assistant/scripts/lib/scaffold.mjs";
+import { answerFromChat } from "../.claude/skills/uxp-assistant/scripts/lib/session.mjs";
 import { recordImplementation, runWorkflow } from "../.claude/skills/uxp-assistant/scripts/lib/workflow.mjs";
 
 const GOAL = "Show the active document title in the panel.";
@@ -48,7 +49,7 @@ test("create-bolt-uxp scaffolds from a cwd that is not the repository, and both 
     const starterMain = fs.readFileSync(path.join(empty.project, "src", "main.tsx"), "utf8");
     const starterConfig = fs.readFileSync(path.join(empty.project, "uxp.config.ts"), "utf8");
     writeTitle(empty.project);
-    const recorded = recordImplementation(path.join(root, "empty-session"), { goal: GOAL, files: ["src/document-title.mjs", "src/DocumentTitle.tsx", "src/main.tsx"] });
+    const recorded = finishRecord(path.join(root, "empty-session"), { goal: GOAL, files: ["src/document-title.mjs", "src/DocumentTitle.tsx", "src/main.tsx"] });
     assert.equal(recorded.success, true);
     assert.equal(recorded.hostExecuted, false);
     assert.match(recorded.limits, /NOT TESTED/);
@@ -123,7 +124,7 @@ test("create-bolt-uxp scaffolds from a cwd that is not the repository, and both 
     assert.equal(existing.fixture, null);
     assert.match(fs.readFileSync(path.join(copy, "uxp.config.ts"), "utf8"), /requiredPermissions: \{\}/);
     writeTitle(copy);
-    const again = recordImplementation(path.join(root, "existing-session"), { goal: GOAL, files: ["src/document-title.mjs", "src/DocumentTitle.tsx", "src/main.tsx"] });
+    const again = finishRecord(path.join(root, "existing-session"), { goal: GOAL, files: ["src/document-title.mjs", "src/DocumentTitle.tsx", "src/main.tsx"] });
     assert.equal(again.success, true);
     assert.equal(again.hostExecuted, false);
     fs.copyFileSync(path.join(copy, again.package.artifacts[0].file), path.join(root, "kept", "existing-document-title.ccx"));
@@ -177,6 +178,15 @@ test("the live Premiere class pages resolve importFiles when the index does not 
     evidence: result.contract.evidence
   }, null, 2)}\n`);
 });
+
+function finishRecord(out, claim) {
+  let recorded = recordImplementation(out, claim);
+  if (recorded.state === "script-change") {
+    answerFromChat(out, "script-change", "approve");
+    recorded = recordImplementation(out, claim);
+  }
+  return recorded;
+}
 
 function answers(goal, extra = {}) {
   return {

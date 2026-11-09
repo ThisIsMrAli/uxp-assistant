@@ -168,7 +168,7 @@ export function validationAsk() {
 
 export function scriptChangeAsk(provenance) {
   const changes = provenance?.changes || [];
-  const commands = changes.filter((item) => item.kind === "command" && item.to).map((item) => `${item.name}: ${item.to}`);
+  const commands = changes.filter((item) => item.kind === "command").map((item) => (item.to ? `${item.name}: ${item.to}` : `${item.name}: removed`));
   const files = changes.filter((item) => item.kind === "file").map((item) => item.name);
   return {
     id: "script-change",

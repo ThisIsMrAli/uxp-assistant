@@ -188,6 +188,10 @@ export async function runWorkflow(options) {
       next: `Run node scripts/skill.mjs refresh --out ${options.dashboardOut || out}. Do not choose a runtime from an empty list.`
     };
   }
+  if (staged.action === "pause") {
+    recordFacts(out, { outcome: "paused", verification: { hostExecuted: false, status: "NOT TESTED" } });
+    return { ok: false, success: false, state: "paused", out, hostExecuted: false, say: staged.say || "Paused before any edit. Nothing was written." };
+  }
   if (staged.action === "stop" || staged.action === "reject-runtime" || staged.action === "reject-design") {
     recordFacts(out, { outcome: "stopped", verification: { hostExecuted: false, status: "NOT TESTED" } });
     return { ok: false, success: false, state: "stopped", out, hostExecuted: false, say: staged.say };
@@ -395,10 +399,18 @@ export function recordImplementation(out, claimed, { runner } = {}) {
 
   const tests = runPackage(project, { runner, only: ["test"] });
   if (tests.status === "unavailable" || tests.status === "failed") {
-    setStep(out, "tests", "failed", tests.reason);
-    recordFacts(out, { outcome: "failed", packageResult: tests, verification: { hostExecuted: false, status: "NOT TESTED" } });
+    const logDir = path.join(out, "logs");
+    fs.mkdirSync(logDir, { recursive: true });
+    const logFile = path.join(logDir, "test-output.txt");
+    const excerpt = String(tests.output || "").trim();
+    fs.writeFileSync(logFile, excerpt ? `${excerpt}\n` : "");
+    const say = excerpt
+      ? `${tests.reason}\nLog: ${logFile}`
+      : `${tests.reason} No test output was captured. Log: ${logFile}`;
+    setStep(out, "tests", "failed", say);
+    recordFacts(out, { outcome: "failed", packageResult: { ...tests, log: logFile }, verification: { hostExecuted: false, status: "NOT TESTED" } });
     publishOutcome(out, "failed", false);
-    return { ok: false, success: false, state: "failed", hostExecuted: false, say: tests.reason };
+    return { ok: false, success: false, state: "failed", hostExecuted: false, say };
   }
   setStep(out, "tests", "done", `test exited 0. ${covered.file} imports the module that uses the documented API and has a non-tautological assertion. ${tests.note || ""} ${REVIEW_LIMIT}`, { verified: true });
 

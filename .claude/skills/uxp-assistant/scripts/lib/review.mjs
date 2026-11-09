@@ -321,7 +321,7 @@ export function reviewClaim({ contract, files, bodies }) {
   }
   const outside = renameOutsideModal(contract, feature);
   if (outside) return { ok: false, say: outside };
-  const missing = undocumentedHostCalls(feature, contract?.docText || "");
+  const missing = undocumentedHostCalls(feature, contract?.docText || "", contract?.projectPath || "");
   if (missing.length) {
     return {
       ok: false,
@@ -336,7 +336,7 @@ export function reviewClaim({ contract, files, bodies }) {
 }
 
 const CALL_SKIP = new Set(["map", "filter", "forEach", "reduce", "find", "findIndex", "some", "every", "flat", "flatMap", "push", "pop", "shift", "unshift", "slice", "splice", "join", "split", "trim", "replace", "replaceAll", "match", "matchAll", "test", "exec", "then", "catch", "finally", "resolve", "reject", "all", "race", "any", "allSettled", "keys", "values", "entries", "assign", "create", "freeze", "log", "warn", "error", "info", "debug", "stringify", "parse", "now", "bind", "call", "apply", "toString", "valueOf", "includes", "indexOf", "startsWith", "endsWith", "padStart", "padEnd", "toLowerCase", "toUpperCase", "toFixed", "substring", "charAt", "repeat", "at", "sort", "reverse", "concat", "from", "of", "get", "set", "has", "add", "delete", "clear", "querySelector", "querySelectorAll", "addEventListener", "removeEventListener", "preventDefault", "stopPropagation", "focus", "blur", "click", "setAttribute", "getAttribute", "appendChild", "removeChild", "closest", "contains"]);
-const RECEIVER_SKIP = new Set(["console", "JSON", "Math", "Object", "Promise", "Array", "Date", "Number", "String", "document", "window", "globalThis", "process", "Buffer", "fs", "path", "crypto", "assert", "React"]);
+const RECEIVER_SKIP = new Set(["console", "JSON", "Math", "Object", "Promise", "Array", "Date", "Number", "String", "document", "window", "globalThis", "process", "Buffer", "fs", "path", "crypto", "assert", "React", "Reflect"]);
 
 export function showsHonestUiState(source) {
   const text = String(source || "").replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^\\])\/\/.*$/gm, "$1");
@@ -350,7 +350,7 @@ export function showsHonestUiState(source) {
     ? new RegExp(`\\b${item.setter}\\s*\\(`).test(text)
     : new RegExp(`\\b${item.name}\\s*=`).test(text));
   if (states.some((item) => rendered(item.name) && updated(item))) return true;
-  return /\b(?:disabled|aria-busy|aria-disabled)\s*=\s*\{/.test(text) && /\bon[A-Z][A-Za-z]+\s*=/.test(text);
+  return states.some((item) => new RegExp(`\\b(?:disabled|aria-busy|aria-disabled)\\s*=\\s*\\{[^}]*\\b${item.name}\\b`).test(text) && /\bon[A-Z][A-Za-z]+\s*=/.test(text));
 }
 
 export function renameOutsideModal(contract, feature) {
@@ -358,17 +358,93 @@ export function renameOutsideModal(contract, feature) {
   if (!/rename/i.test(goal)) return "";
   for (const item of feature || []) {
     if (isTestPath(item.rel)) continue;
-    const code = codeSurface(item.body);
-    const writes = [];
-    for (const match of code.matchAll(/\.name\s*=/g)) writes.push(match.index);
-    for (const match of code.matchAll(/Object\.assign\s*\(\s*[^,]+,\s*\{[^}]*\bname\b/g)) writes.push(match.index);
-    for (const index of writes) {
-      if (!hostModalWraps(code, index)) {
-        return "A layer rename writes .name, or Object.assign of name, outside executeAsModal. An alias, an index, or a local function named executeAsModal does not count. The fetched modal page requires the host wrapper.";
-      }
+    const code = commentStripped(item.body);
+    const plain = plainObjectNames(code);
+    const fns = namedFunctionRanges(code);
+    for (const write of renameWrites(code)) {
+      if (plain.has(write.target)) continue;
+      if (writeIsInsideModal(code, write.index, fns)) continue;
+      return "A layer rename writes .name, ['name'], Reflect.set, Object.defineProperty, or Object.assign of name, outside executeAsModal. An alias, an index, or a local function named executeAsModal does not count. A helper is accepted only when every call is inside the host modal. The fetched modal page requires the host wrapper.";
     }
   }
   return "";
+}
+
+function plainObjectNames(code) {
+  const names = new Set();
+  for (const match of code.matchAll(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*\{/g)) names.add(match[1]);
+  for (const match of code.matchAll(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*Object\.assign\(\s*\{/g)) names.add(match[1]);
+  return names;
+}
+
+function renameWrites(code) {
+  const writes = [];
+  for (const match of code.matchAll(/([A-Za-z_$][\w$]*)\s*\.\s*name\s*=/g)) writes.push({ index: match.index, target: match[1] });
+  for (const match of code.matchAll(/([A-Za-z_$][\w$]*)\s*\[\s*["']name["']\s*\]\s*=/g)) writes.push({ index: match.index, target: match[1] });
+  for (const match of code.matchAll(/([A-Za-z_$][\w$]*)\s*\[[^\]]+\]\s*\.\s*name\s*=/g)) writes.push({ index: match.index, target: match[1] });
+  for (const match of code.matchAll(/Object\.assign\s*\(\s*([A-Za-z_$][\w$]*)\s*,\s*\{[^}]*\bname\b/g)) writes.push({ index: match.index, target: match[1] });
+  for (const match of code.matchAll(/Reflect\.set\s*\(\s*([A-Za-z_$][\w$]*)\s*,\s*["']name["']/g)) writes.push({ index: match.index, target: match[1] });
+  for (const match of code.matchAll(/Object\.defineProperty\s*\(\s*([A-Za-z_$][\w$]*)\s*,\s*["']name["']/g)) writes.push({ index: match.index, target: match[1] });
+  return writes;
+}
+
+function namedFunctionRanges(code) {
+  const ranges = [];
+  const patterns = [
+    /function\s+([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{/g,
+    /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>\s*\{/g,
+    /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?function\s*(?:[A-Za-z_$][\w$]*)?\s*\([^)]*\)\s*\{/g
+  ];
+  for (const pattern of patterns) {
+    for (const match of code.matchAll(pattern)) {
+      const open = match.index + match[0].length - 1;
+      const end = matchingClose(code, open);
+      if (end > open) ranges.push({ name: match[1], start: match.index, open, end });
+    }
+  }
+  return ranges;
+}
+
+function matchingClose(code, open) {
+  let depth = 0;
+  let quote = "";
+  for (let i = open; i < code.length; i += 1) {
+    const ch = code[i];
+    if (quote) {
+      if (ch === "\\") { i += 1; continue; }
+      if (ch === quote) quote = "";
+      continue;
+    }
+    if (ch === "'" || ch === "\"" || ch === "`") { quote = ch; continue; }
+    if (ch === "{") depth += 1;
+    else if (ch === "}") {
+      depth -= 1;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+function innermostFunction(ranges, index) {
+  let best = null;
+  for (const range of ranges) {
+    if (index > range.open && index < range.end && (!best || range.end - range.start < best.end - best.start)) best = range;
+  }
+  return best;
+}
+
+function writeIsInsideModal(code, index, ranges, stack = new Set()) {
+  if (hostModalWraps(code, index)) return true;
+  const fn = innermostFunction(ranges, index);
+  if (!fn || stack.has(fn.name)) return false;
+  stack.add(fn.name);
+  const calls = [];
+  for (const match of code.matchAll(new RegExp(`\\b${fn.name}\\s*\\(`, "g"))) {
+    if (match.index >= fn.start && match.index <= fn.end) continue;
+    calls.push(match.index);
+  }
+  if (!calls.length) return false;
+  return calls.every((at) => writeIsInsideModal(code, at, ranges, stack));
 }
 
 function hostModalWraps(code, index) {
@@ -413,16 +489,16 @@ function insideCall(code, name, index) {
   return false;
 }
 
-export function undocumentedHostCalls(feature, docText) {
+export function undocumentedHostCalls(feature, docText, project = "") {
   const docs = decodeDoc(docText);
   const returns = methodReturns(docs);
   const bodies = (feature || []).map((item) => item.body);
   const missing = [];
   for (const item of feature || []) {
     if (isTestPath(item.rel)) continue;
-    const skipReceivers = importedReceivers(item.body);
-    const code = codeSurface(item.body);
-    for (const call of extractHostCalls(code)) {
+    const skipReceivers = importedReceivers(item.body, item.rel, project);
+    const code = commentStripped(item.body);
+    for (const call of [...extractHostCalls(code), ...aliasedHostCalls(code)]) {
       const root = call.receiver.split(".")[0];
       if (RECEIVER_SKIP.has(root) || skipReceivers.has(root) || CALL_SKIP.has(call.method)) continue;
       if (locallyDefined(bodies, call.method)) continue;
@@ -478,22 +554,48 @@ function methodNearType(docs, method, type) {
 
 export function extractHostCalls(code) {
   const calls = [];
-  const re = /\.\s*([A-Za-z_$][\w$]*)\s*\(/g;
-  for (const match of String(code || "").matchAll(re)) {
+  const text = String(code || "");
+  const re = /(?:\.(\s*[A-Za-z_$][\w$]*)|\[\s*(['"])([A-Za-z_$][\w$]*)\2\s*\])\s*\(/g;
+  for (const match of text.matchAll(re)) {
+    const method = match[1] ? match[1].trim() : match[3];
     let index = match.index - 1;
-    while (index >= 0 && /\s/.test(code[index])) index -= 1;
+    while (index >= 0 && /\s/.test(text[index])) index -= 1;
     let receiver = "";
     let receiverCall = "";
-    if (code[index] === ")") {
+    if (text[index] === ")") {
       receiver = "()";
-      const open = matchingOpen(code, index);
-      const inner = open >= 0 ? code.slice(0, open).match(/\.([A-Za-z_$][\w$]*)\s*$/) : null;
+      const open = matchingOpen(text, index);
+      const inner = open >= 0 ? text.slice(0, open).match(/\.([A-Za-z_$][\w$]*)\s*$/) : null;
       if (inner) receiverCall = inner[1];
     } else {
-      const head = code.slice(0, index + 1).match(/([A-Za-z_$][\w$]*(?:\s*\.\s*[A-Za-z_$][\w$]*)*)$/);
+      const head = text.slice(0, index + 1).match(/([A-Za-z_$][\w$]*(?:\s*\.\s*[A-Za-z_$][\w$]*)*)$/);
       receiver = head ? head[1].replace(/\s/g, "") : "";
     }
-    calls.push({ method: match[1], receiver, receiverCall });
+    calls.push({ method, receiver, receiverCall });
+  }
+  return calls;
+}
+
+function aliasedHostCalls(code) {
+  const map = new Map();
+  for (const match of String(code || "").matchAll(/(?:const|let|var)\s*\{([^}]+)\}\s*=\s*([^;=\n]+)/g)) {
+    const source = match[2].trim().replace(/\s/g, "");
+    for (const part of match[1].split(",")) {
+      const bits = part.trim().split(/\s*:\s*/);
+      const original = bits[0]?.trim() || "";
+      const local = (bits[1] || bits[0] || "").trim();
+      if (/^[A-Za-z_$][\w$]*$/.test(original) && /^[A-Za-z_$][\w$]*$/.test(local)) map.set(local, { method: original, receiver: source });
+    }
+  }
+  for (const match of String(code || "").matchAll(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*([A-Za-z_$][\w$]*)\s*\.\s*([A-Za-z_$][\w$]*)\s*;/g)) {
+    map.set(match[1], { method: match[3], receiver: match[2] });
+  }
+  const calls = [];
+  for (const [local, info] of map) {
+    if (CALL_SKIP.has(info.method)) continue;
+    if (new RegExp(`\\b${local}\\s*(?:\\.\\s*(?:call|apply)\\s*\\(|\\()`).test(code)) {
+      calls.push({ method: info.method, receiver: info.receiver, receiverCall: "" });
+    }
   }
   return calls;
 }
@@ -510,13 +612,69 @@ function matchingOpen(code, close) {
   return -1;
 }
 
-function importedReceivers(source) {
+function importedReceivers(source, rel = "", project = "") {
   const skip = new Set();
   for (const statement of importStatements(source)) {
     if (/^(photoshop|premierepro|uxp)(\/|$)/.test(statement.spec)) continue;
-    for (const name of bindingsFrom(statement.text)) skip.add(name);
+    const pairs = bindingPairs(statement.text);
+    if (statement.spec.startsWith(".")) {
+      const host = hostExportNames(statement.spec, rel, project, new Set());
+      for (const pair of pairs) {
+        if (!host.has(pair.original)) skip.add(pair.local);
+      }
+      continue;
+    }
+    for (const pair of pairs) skip.add(pair.local);
   }
   return skip;
+}
+
+function bindingPairs(statement) {
+  return bindingsFrom(statement).map((local) => {
+    const text = String(statement || "");
+    const alias = new RegExp(`\\b([A-Za-z_$][\\w$]*)\\s+as\\s+${local}\\b`);
+    const found = text.match(alias);
+    return { local, original: found ? found[1] : local };
+  });
+}
+
+function hostExportNames(spec, fromRel, project, seen) {
+  const names = new Set();
+  if (!spec.startsWith(".") || !project) return names;
+  const key = `${fromRel}|${spec}`;
+  if (seen.has(key)) return names;
+  seen.add(key);
+  const from = path.posix.dirname(String(fromRel || "src/file.ts").split(path.sep).join("/"));
+  const base = path.posix.normalize(path.posix.join(from, spec));
+  let text = "";
+  let resolved = "";
+  for (const rel of [base, `${base}.ts`, `${base}.tsx`, `${base}.mts`, `${base}.mjs`, `${base}.js`, `${base}.jsx`]) {
+    const full = path.resolve(project, rel);
+    const root = path.resolve(project);
+    if (full !== root && !full.startsWith(`${root}${path.sep}`)) continue;
+    try {
+      text = fs.readFileSync(full, "utf8");
+      resolved = rel;
+      break;
+    } catch {
+      text = "";
+    }
+  }
+  if (!text) return names;
+  const body = commentStripped(text);
+  for (const match of body.matchAll(/export\s+(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*([\s\S]*?);/g)) {
+    if (/require\(\s*["'](?:photoshop|premierepro|uxp)["']\s*\)/.test(match[2])) names.add(match[1]);
+  }
+  for (const match of body.matchAll(/export\s*\{([^}]+)\}\s*from\s*["']([^"']+)["']/g)) {
+    const inner = hostExportNames(match[2], resolved, project, seen);
+    for (const part of match[1].split(",")) {
+      const bits = part.trim().split(/\s+as\s+/);
+      const original = bits[0]?.trim() || "";
+      const exported = (bits[1] || bits[0] || "").trim();
+      if (inner.has(original)) names.add(exported);
+    }
+  }
+  return names;
 }
 
 function locallyDefined(bodies, name) {
@@ -594,21 +752,49 @@ function splitArgs(list) {
   return args;
 }
 
+function balancedCall(code, start) {
+  const open = code.indexOf("(", start);
+  if (open < 0) return "";
+  let depth = 0;
+  let quote = "";
+  for (let i = open; i < code.length; i += 1) {
+    const ch = code[i];
+    if (quote) {
+      if (ch === "\\") { i += 1; continue; }
+      if (ch === quote) quote = "";
+      continue;
+    }
+    if (ch === "'" || ch === "\"" || ch === "`") { quote = ch; continue; }
+    if (ch === "(") depth += 1;
+    else if (ch === ")") {
+      depth -= 1;
+      if (depth === 0) return code.slice(start, i + 1);
+    }
+  }
+  return code.slice(start);
+}
+
 function assertionScore(source) {
   const code = commentStripped(source);
   let real = 0;
   let tautology = 0;
-  const re = /\b(?:assert\s*\.\s*[A-Za-z]+|expect)\s*\(([\s\S]*?)\)/g;
-  for (const match of code.matchAll(re)) {
-    const raw = match[0];
-    const args = splitArgs(match[1]);
+  const heads = /\b(?:assert\s*\.\s*[A-Za-z]+|expect)\s*\(/g;
+  for (const match of code.matchAll(heads)) {
+    const raw = balancedCall(code, match.index);
+    const open = raw.indexOf("(");
+    const inner = raw.slice(open + 1, -1);
+    const args = splitArgs(inner);
     const literal = /^(?:true|false|null|undefined|\d+|["'`][^"'`]*["'`])$/;
     const sameLiteral = args.length >= 2 && args[0] === args[1] && literal.test(args[0]);
     const okTrue = /assert\s*\.\s*ok\s*\(\s*(?:true|1)\s*\)/.test(raw);
     const expectLiteral = /expect\s*\(\s*(?:true|false|1|0)\s*\)\s*\.\s*to(?:Be|Equal)\s*\(\s*(?:true|false|1|0)\s*\)/.test(raw);
     const existence = /typeof\s+[A-Za-z_$][\w$]*\s*===?\s*["']function["']/.test(raw)
       || /typeof\s+[A-Za-z_$][\w$]*\s*,\s*["']function["']/.test(raw);
-    if (sameLiteral || okTrue || expectLiteral || existence) tautology += 1;
+    const arrayOnly = /assert\s*\.\s*ok\s*\(\s*Array\s*\.\s*isArray\s*\(/.test(raw)
+      || /assert\s*\.\s*equal\s*\(\s*Array\s*\.\s*isArray\s*\([\s\S]*\)\s*,\s*true\s*\)/.test(raw);
+    const keysOnly = /assert\s*\.\s*ok\s*\(\s*Object\s*\.\s*keys\s*\([\s\S]*?\)\s*\.length(?:\s*(?:>|>=)\s*0)?\s*\)/.test(raw)
+      || /Object\s*\.\s*keys\s*\([\s\S]*?\)\s*\.length\s*(?:>|>=)\s*0/.test(raw);
+    if (sameLiteral || okTrue || expectLiteral || existence || arrayOnly || keysOnly) tautology += 1;
     else real += 1;
   }
   return { real, tautology };
@@ -765,8 +951,7 @@ export function commandChangeSet(project, baseline) {
     if ((base[name] || "") !== (scripts[name] || "")) changes.push({ kind: "command", name, from: base[name] || "", to: scripts[name] || "" });
   }
   if ((base.test || "") !== (scripts.test || "")) {
-    const added = !base.test && /(?:^|\s)node --test(?:\s|$)/.test(scripts.test || "");
-    if (!added) changes.push({ kind: "command", name: "test", from: base.test || "", to: scripts.test || "" });
+    changes.push({ kind: "command", name: "test", from: base.test || "", to: scripts.test || "" });
   }
   const hashed = new Map(graph.files);
   for (const rel of PACKAGING) {

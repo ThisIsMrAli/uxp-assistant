@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { holdTemps, releaseTemps } from "./temps.mjs";
 
 /** Chromium-family browsers, best first. Any of them takes the same flags. */
 export function chromeCandidates(platform = process.platform, env = process.env) {
@@ -58,6 +59,7 @@ export function removeProfile(profile, rm = fs.rmSync) {
 /** Photographs `url` at an exact viewport. Throws only when the PNG is missing. */
 export function shoot({ chrome, url, out, width, height, scale = 1, background = "FFFFFFFF" }) {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), "uxp-assistant-chrome-"));
+  holdTemps();
   fs.rmSync(out, { force: true });
   const args = [
     "--headless=new",
@@ -82,6 +84,7 @@ export function shoot({ chrome, url, out, width, height, scale = 1, background =
     spawned = { status: null, error: error.message };
   }
   const cleanup = removeProfile(profile);
+  releaseTemps();
   const artifact = fs.existsSync(out) ? "written" : "missing";
   const report = { artifact, spawnStatus: spawned.status, spawnError: spawned.error, cleanup, out };
   if (artifact !== "written") {
