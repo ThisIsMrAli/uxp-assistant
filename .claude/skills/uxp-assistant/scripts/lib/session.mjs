@@ -249,11 +249,15 @@ export function bindScope(scope) {
 }
 
 export function answerFromChat(out, id, value) {
-  const session = readSession(out);
+  const session = readMerged(out);
   const ask = session?.asks.find((item) => item.id === id);
   if (!ask) throw new Error(`No question named ${id}. Publish it with the ask command first.`);
   const option = matchOption(ask, value);
   if (!option) throw new Error(`"${value}" is not one of: ${ask.options.map((item) => item.id).join(", ")}.`);
+  if (ask.status === "answered") {
+    if (ask.answer === option.id) return option;
+    throw new Error(`The ${id} question was already answered ${ask.answer}. That answer is closed. A new question is required before another choice. This answer was not recorded.`);
+  }
   appendAnswerLine(out, answerLine(ask, option.id, "chat"));
   mutate(out, (draft) => {
     const step = stepForAsk(id, draft);

@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { readZip } from "./archive.mjs";
 import { goalWasReplaced } from "./contract.mjs";
 import { readScripts } from "./package-project.mjs";
+import { hostCallFindings, panelRendersState, renameFindings } from "./host-flow.mjs";
 
 export const REVIEW_LIMIT = "These checks are bounded automated evidence: a changed file uses a documented API symbol the starter did not already contain, a test imports that module and asserts something other than a tautology, and every new archive contains that symbol. They are not semantic proof. Command success is not feature correctness and not a host pass. Source and behavior review is still pending. The Adobe host was NOT TESTED.";
 
@@ -323,10 +324,13 @@ export function reviewClaim({ contract, files, bodies }) {
   if (outside) return { ok: false, say: outside };
   const missing = undocumentedHostCalls(feature, contract?.docText || "", contract?.projectPath || "");
   if (missing.length) {
-    return {
-      ok: false,
-      say: `These host calls are not in the fetched API docs: ${missing.join(", ")}. A test that repeats the same call does not document it.`
-    };
+    const unresolved = missing.filter((item) => item.includes("needs review"));
+    const absent = missing.filter((item) => !item.includes("needs review"));
+    const parts = [];
+    if (absent.length) parts.push(`These host calls are not in the fetched API docs: ${absent.join(", ")}. A test that repeats the same call does not document it.`);
+    if (unresolved.length) parts.push(`These host accesses do not resolve to a documented member and need review: ${unresolved.join(", ")}.`);
+    if (!parts.length) parts.push(`These host calls are not in the fetched API docs: ${missing.join(", ")}. A test that repeats the same call does not document it.`);
+    return { ok: false, say: parts.join(" ") };
   }
   const ui = feature.filter((item) => /\.(tsx|jsx|vue|svelte|html)$/.test(item.rel));
   if (ui.length && !ui.some((item) => showsHonestUiState(item.body))) {
@@ -335,351 +339,19 @@ export function reviewClaim({ contract, files, bodies }) {
   return { ok: true, changed, feature, hit: usedSymbols, usedSymbols, introducedFiles: introduced.map((item) => item.rel), limits: REVIEW_LIMIT };
 }
 
-const CALL_SKIP = new Set(["map", "filter", "forEach", "reduce", "find", "findIndex", "some", "every", "flat", "flatMap", "push", "pop", "shift", "unshift", "slice", "splice", "join", "split", "trim", "replace", "replaceAll", "match", "matchAll", "test", "exec", "then", "catch", "finally", "resolve", "reject", "all", "race", "any", "allSettled", "keys", "values", "entries", "assign", "create", "freeze", "log", "warn", "error", "info", "debug", "stringify", "parse", "now", "bind", "call", "apply", "toString", "valueOf", "includes", "indexOf", "startsWith", "endsWith", "padStart", "padEnd", "toLowerCase", "toUpperCase", "toFixed", "substring", "charAt", "repeat", "at", "sort", "reverse", "concat", "from", "of", "get", "set", "has", "add", "delete", "clear", "querySelector", "querySelectorAll", "addEventListener", "removeEventListener", "preventDefault", "stopPropagation", "focus", "blur", "click", "setAttribute", "getAttribute", "appendChild", "removeChild", "closest", "contains"]);
-const RECEIVER_SKIP = new Set(["console", "JSON", "Math", "Object", "Promise", "Array", "Date", "Number", "String", "document", "window", "globalThis", "process", "Buffer", "fs", "path", "crypto", "assert", "React", "Reflect"]);
-
 export function showsHonestUiState(source) {
-  const text = String(source || "").replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^\\])\/\/.*$/gm, "$1");
-  const states = [];
-  for (const match of text.matchAll(/\b(?:const|let)\s*\[\s*([A-Za-z_$][\w$]*)\s*,\s*([A-Za-z_$][\w$]*)\s*\]\s*=\s*use(?:State|Reducer)\b/g)) {
-    states.push({ name: match[1], setter: match[2] });
-  }
-  for (const match of text.matchAll(/\blet\s+([A-Za-z_$][\w$]*)\b/g)) states.push({ name: match[1], setter: "" });
-  const rendered = (name) => new RegExp(`\\{[^}]*\\b${name}\\b`).test(text);
-  const updated = (item) => (item.setter
-    ? new RegExp(`\\b${item.setter}\\s*\\(`).test(text)
-    : new RegExp(`\\b${item.name}\\s*=`).test(text));
-  if (states.some((item) => rendered(item.name) && updated(item))) return true;
-  return states.some((item) => new RegExp(`\\b(?:disabled|aria-busy|aria-disabled)\\s*=\\s*\\{[^}]*\\b${item.name}\\b`).test(text) && /\bon[A-Z][A-Za-z]+\s*=/.test(text));
+  return panelRendersState(source);
 }
 
 export function renameOutsideModal(contract, feature) {
   const goal = String(contract?.goal || "");
   if (!/rename/i.test(goal)) return "";
-  for (const item of feature || []) {
-    if (isTestPath(item.rel)) continue;
-    const code = commentStripped(item.body);
-    const plain = plainObjectNames(code);
-    const fns = namedFunctionRanges(code);
-    for (const write of renameWrites(code)) {
-      if (plain.has(write.target)) continue;
-      if (writeIsInsideModal(code, write.index, fns)) continue;
-      return "A layer rename writes .name, ['name'], Reflect.set, Object.defineProperty, or Object.assign of name, outside executeAsModal. An alias, an index, or a local function named executeAsModal does not count. A helper is accepted only when every call is inside the host modal. The fetched modal page requires the host wrapper.";
-    }
-  }
-  return "";
-}
-
-function plainObjectNames(code) {
-  const names = new Set();
-  for (const match of code.matchAll(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*\{/g)) names.add(match[1]);
-  for (const match of code.matchAll(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*Object\.assign\(\s*\{/g)) names.add(match[1]);
-  return names;
-}
-
-function renameWrites(code) {
-  const writes = [];
-  for (const match of code.matchAll(/([A-Za-z_$][\w$]*)\s*\.\s*name\s*=/g)) writes.push({ index: match.index, target: match[1] });
-  for (const match of code.matchAll(/([A-Za-z_$][\w$]*)\s*\[\s*["']name["']\s*\]\s*=/g)) writes.push({ index: match.index, target: match[1] });
-  for (const match of code.matchAll(/([A-Za-z_$][\w$]*)\s*\[[^\]]+\]\s*\.\s*name\s*=/g)) writes.push({ index: match.index, target: match[1] });
-  for (const match of code.matchAll(/Object\.assign\s*\(\s*([A-Za-z_$][\w$]*)\s*,\s*\{[^}]*\bname\b/g)) writes.push({ index: match.index, target: match[1] });
-  for (const match of code.matchAll(/Reflect\.set\s*\(\s*([A-Za-z_$][\w$]*)\s*,\s*["']name["']/g)) writes.push({ index: match.index, target: match[1] });
-  for (const match of code.matchAll(/Object\.defineProperty\s*\(\s*([A-Za-z_$][\w$]*)\s*,\s*["']name["']/g)) writes.push({ index: match.index, target: match[1] });
-  return writes;
-}
-
-function namedFunctionRanges(code) {
-  const ranges = [];
-  const patterns = [
-    /function\s+([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{/g,
-    /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>\s*\{/g,
-    /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?function\s*(?:[A-Za-z_$][\w$]*)?\s*\([^)]*\)\s*\{/g
-  ];
-  for (const pattern of patterns) {
-    for (const match of code.matchAll(pattern)) {
-      const open = match.index + match[0].length - 1;
-      const end = matchingClose(code, open);
-      if (end > open) ranges.push({ name: match[1], start: match.index, open, end });
-    }
-  }
-  return ranges;
-}
-
-function matchingClose(code, open) {
-  let depth = 0;
-  let quote = "";
-  for (let i = open; i < code.length; i += 1) {
-    const ch = code[i];
-    if (quote) {
-      if (ch === "\\") { i += 1; continue; }
-      if (ch === quote) quote = "";
-      continue;
-    }
-    if (ch === "'" || ch === "\"" || ch === "`") { quote = ch; continue; }
-    if (ch === "{") depth += 1;
-    else if (ch === "}") {
-      depth -= 1;
-      if (depth === 0) return i;
-    }
-  }
-  return -1;
-}
-
-function innermostFunction(ranges, index) {
-  let best = null;
-  for (const range of ranges) {
-    if (index > range.open && index < range.end && (!best || range.end - range.start < best.end - best.start)) best = range;
-  }
-  return best;
-}
-
-function writeIsInsideModal(code, index, ranges, stack = new Set()) {
-  if (hostModalWraps(code, index)) return true;
-  const fn = innermostFunction(ranges, index);
-  if (!fn || stack.has(fn.name)) return false;
-  stack.add(fn.name);
-  const calls = [];
-  for (const match of code.matchAll(new RegExp(`\\b${fn.name}\\s*\\(`, "g"))) {
-    if (match.index >= fn.start && match.index <= fn.end) continue;
-    calls.push(match.index);
-  }
-  if (!calls.length) return false;
-  return calls.every((at) => writeIsInsideModal(code, at, ranges, stack));
-}
-
-function hostModalWraps(code, index) {
-  const local = /(?:function\s+executeAsModal\b|(?:const|let|var)\s+executeAsModal\s*=)/.test(code);
-  if (!local) return insideCall(code, "executeAsModal", index);
-  let from = 0;
-  while (from < index) {
-    const at = code.indexOf(".executeAsModal", from);
-    if (at < 0 || at > index) return false;
-    const open = code.indexOf("(", at);
-    if (open > 0 && parenWraps(code, open, index)) return true;
-    from = at + ".executeAsModal".length;
-  }
-  return false;
-}
-
-function parenWraps(code, open, index) {
-  let depth = 0;
-  for (let i = open; i < code.length; i += 1) {
-    if (code[i] === "(") depth += 1;
-    else if (code[i] === ")") {
-      depth -= 1;
-      if (depth === 0) return i > index;
-    }
-  }
-  return false;
-}
-
-function insideCall(code, name, index) {
-  const start = code.lastIndexOf(name, index);
-  if (start < 0) return false;
-  const open = code.indexOf("(", start);
-  if (open < 0 || open > index) return false;
-  let depth = 0;
-  for (let i = open; i < code.length; i += 1) {
-    if (code[i] === "(") depth += 1;
-    else if (code[i] === ")") {
-      depth -= 1;
-      if (depth === 0) return i > index;
-    }
-  }
-  return false;
+  const writes = renameFindings(feature, contract?.docText || "", contract?.projectPath || "");
+  return writes[0] || "";
 }
 
 export function undocumentedHostCalls(feature, docText, project = "") {
-  const docs = decodeDoc(docText);
-  const returns = methodReturns(docs);
-  const bodies = (feature || []).map((item) => item.body);
-  const missing = [];
-  for (const item of feature || []) {
-    if (isTestPath(item.rel)) continue;
-    const skipReceivers = importedReceivers(item.body, item.rel, project);
-    const code = commentStripped(item.body);
-    for (const call of [...extractHostCalls(code), ...aliasedHostCalls(code)]) {
-      const root = call.receiver.split(".")[0];
-      if (RECEIVER_SKIP.has(root) || skipReceivers.has(root) || CALL_SKIP.has(call.method)) continue;
-      if (locallyDefined(bodies, call.method)) continue;
-      const label = `${call.receiver || "()"}.${call.method}()`;
-      if (!docs.toLowerCase().includes(call.method.toLowerCase())) {
-        missing.push(label);
-        continue;
-      }
-      if (call.receiverCall) {
-        const type = returns.get(call.receiverCall);
-        if (type && !methodNearType(docs, call.method, type)) missing.push(`${label} is not a ${type} method in the fetched docs`);
-      }
-    }
-  }
-  return [...new Set(missing)];
-}
-
-function decodeDoc(text) {
-  return String(text || "")
-    .replace(/<!--[\s\S]*?-->/g, " ")
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
-    .replace(/&#(\d+);/g, (_, num) => String.fromCodePoint(Number(num)))
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&amp;/gi, "&");
-}
-
-function methodReturns(docs) {
-  const map = new Map();
-  for (const match of docs.matchAll(/Returns:\s*(?:Promise\s*<\s*([A-Za-z_][\w]*)|([A-Za-z_][\w]*))/g)) {
-    const type = match[1] || match[2];
-    const before = docs.slice(Math.max(0, match.index - 240), match.index);
-    const names = [...before.matchAll(/\b([a-z][A-Za-z0-9]*)\b/g)];
-    const method = names.at(-1)?.[1];
-    if (method && type && type !== "Promise") map.set(method, type);
-  }
-  return map;
-}
-
-function methodNearType(docs, method, type) {
-  const lower = docs.toLowerCase();
-  const name = method.toLowerCase();
-  let from = 0;
-  while (from < lower.length) {
-    const at = lower.indexOf(name, from);
-    if (at < 0) return false;
-    const window = docs.slice(Math.max(0, at - 1200), at);
-    if (window.includes(type)) return true;
-    from = at + name.length;
-  }
-  return false;
-}
-
-export function extractHostCalls(code) {
-  const calls = [];
-  const text = String(code || "");
-  const re = /(?:\.(\s*[A-Za-z_$][\w$]*)|\[\s*(['"])([A-Za-z_$][\w$]*)\2\s*\])\s*\(/g;
-  for (const match of text.matchAll(re)) {
-    const method = match[1] ? match[1].trim() : match[3];
-    let index = match.index - 1;
-    while (index >= 0 && /\s/.test(text[index])) index -= 1;
-    let receiver = "";
-    let receiverCall = "";
-    if (text[index] === ")") {
-      receiver = "()";
-      const open = matchingOpen(text, index);
-      const inner = open >= 0 ? text.slice(0, open).match(/\.([A-Za-z_$][\w$]*)\s*$/) : null;
-      if (inner) receiverCall = inner[1];
-    } else {
-      const head = text.slice(0, index + 1).match(/([A-Za-z_$][\w$]*(?:\s*\.\s*[A-Za-z_$][\w$]*)*)$/);
-      receiver = head ? head[1].replace(/\s/g, "") : "";
-    }
-    calls.push({ method, receiver, receiverCall });
-  }
-  return calls;
-}
-
-function aliasedHostCalls(code) {
-  const map = new Map();
-  for (const match of String(code || "").matchAll(/(?:const|let|var)\s*\{([^}]+)\}\s*=\s*([^;=\n]+)/g)) {
-    const source = match[2].trim().replace(/\s/g, "");
-    for (const part of match[1].split(",")) {
-      const bits = part.trim().split(/\s*:\s*/);
-      const original = bits[0]?.trim() || "";
-      const local = (bits[1] || bits[0] || "").trim();
-      if (/^[A-Za-z_$][\w$]*$/.test(original) && /^[A-Za-z_$][\w$]*$/.test(local)) map.set(local, { method: original, receiver: source });
-    }
-  }
-  for (const match of String(code || "").matchAll(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*([A-Za-z_$][\w$]*)\s*\.\s*([A-Za-z_$][\w$]*)\s*;/g)) {
-    map.set(match[1], { method: match[3], receiver: match[2] });
-  }
-  const calls = [];
-  for (const [local, info] of map) {
-    if (CALL_SKIP.has(info.method)) continue;
-    if (new RegExp(`\\b${local}\\s*(?:\\.\\s*(?:call|apply)\\s*\\(|\\()`).test(code)) {
-      calls.push({ method: info.method, receiver: info.receiver, receiverCall: "" });
-    }
-  }
-  return calls;
-}
-
-function matchingOpen(code, close) {
-  let depth = 0;
-  for (let i = close; i >= 0; i -= 1) {
-    if (code[i] === ")") depth += 1;
-    else if (code[i] === "(") {
-      depth -= 1;
-      if (depth === 0) return i;
-    }
-  }
-  return -1;
-}
-
-function importedReceivers(source, rel = "", project = "") {
-  const skip = new Set();
-  for (const statement of importStatements(source)) {
-    if (/^(photoshop|premierepro|uxp)(\/|$)/.test(statement.spec)) continue;
-    const pairs = bindingPairs(statement.text);
-    if (statement.spec.startsWith(".")) {
-      const host = hostExportNames(statement.spec, rel, project, new Set());
-      for (const pair of pairs) {
-        if (!host.has(pair.original)) skip.add(pair.local);
-      }
-      continue;
-    }
-    for (const pair of pairs) skip.add(pair.local);
-  }
-  return skip;
-}
-
-function bindingPairs(statement) {
-  return bindingsFrom(statement).map((local) => {
-    const text = String(statement || "");
-    const alias = new RegExp(`\\b([A-Za-z_$][\\w$]*)\\s+as\\s+${local}\\b`);
-    const found = text.match(alias);
-    return { local, original: found ? found[1] : local };
-  });
-}
-
-function hostExportNames(spec, fromRel, project, seen) {
-  const names = new Set();
-  if (!spec.startsWith(".") || !project) return names;
-  const key = `${fromRel}|${spec}`;
-  if (seen.has(key)) return names;
-  seen.add(key);
-  const from = path.posix.dirname(String(fromRel || "src/file.ts").split(path.sep).join("/"));
-  const base = path.posix.normalize(path.posix.join(from, spec));
-  let text = "";
-  let resolved = "";
-  for (const rel of [base, `${base}.ts`, `${base}.tsx`, `${base}.mts`, `${base}.mjs`, `${base}.js`, `${base}.jsx`]) {
-    const full = path.resolve(project, rel);
-    const root = path.resolve(project);
-    if (full !== root && !full.startsWith(`${root}${path.sep}`)) continue;
-    try {
-      text = fs.readFileSync(full, "utf8");
-      resolved = rel;
-      break;
-    } catch {
-      text = "";
-    }
-  }
-  if (!text) return names;
-  const body = commentStripped(text);
-  for (const match of body.matchAll(/export\s+(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*([\s\S]*?);/g)) {
-    if (/require\(\s*["'](?:photoshop|premierepro|uxp)["']\s*\)/.test(match[2])) names.add(match[1]);
-  }
-  for (const match of body.matchAll(/export\s*\{([^}]+)\}\s*from\s*["']([^"']+)["']/g)) {
-    const inner = hostExportNames(match[2], resolved, project, seen);
-    for (const part of match[1].split(",")) {
-      const bits = part.trim().split(/\s+as\s+/);
-      const original = bits[0]?.trim() || "";
-      const exported = (bits[1] || bits[0] || "").trim();
-      if (inner.has(original)) names.add(exported);
-    }
-  }
-  return names;
-}
-
-function locallyDefined(bodies, name) {
-  const pattern = new RegExp(`(?:function\\s+${name}\\b|(?:const|let|var)\\s+${name}\\s*=)`);
-  return bodies.some((body) => pattern.test(commentStripped(body)));
+  return hostCallFindings(feature, docText, project);
 }
 
 function commentStripped(source) {
@@ -794,7 +466,14 @@ function assertionScore(source) {
       || /assert\s*\.\s*equal\s*\(\s*Array\s*\.\s*isArray\s*\([\s\S]*\)\s*,\s*true\s*\)/.test(raw);
     const keysOnly = /assert\s*\.\s*ok\s*\(\s*Object\s*\.\s*keys\s*\([\s\S]*?\)\s*\.length(?:\s*(?:>|>=)\s*0)?\s*\)/.test(raw)
       || /Object\s*\.\s*keys\s*\([\s\S]*?\)\s*\.length\s*(?:>|>=)\s*0/.test(raw);
-    if (sameLiteral || okTrue || expectLiteral || existence || arrayOnly || keysOnly) tautology += 1;
+    const instanceOnly = /\binstanceof\b/.test(raw);
+    const expected = (args[1] || "").trim();
+    const actual = args[0] || "";
+    const emptyExpected = /^(?:0|false|null|undefined|""|''|``)$/.test(expected);
+    const nullFixture = /:\s*null\b|\bactiveDocument\s*:\s*null\b|\bname\s*:\s*""\b/.test(actual);
+    const successValue = /["'`][^"'`\n]+["'`]/.test(expected) && !/["'`](?:function|object|string|number|boolean|undefined)["'`]/.test(expected);
+    const nullPath = emptyExpected && nullFixture && !successValue;
+    if (sameLiteral || okTrue || expectLiteral || existence || arrayOnly || keysOnly || instanceOnly || nullPath) tautology += 1;
     else real += 1;
   }
   return { real, tautology };
@@ -832,7 +511,7 @@ export function testsCoverFeature(project, changed, usedSymbols, introducedFiles
     const score = assertionScore(text);
     if (usedBinding && score.real > 0) return { ok: true, file: rel };
   }
-  return { ok: false, say: `No test imports a changed module that uses the documented API (${[...users].join(", ")}) and then asserts on that use. Mentioning the file name, a comment-only import, assert.equal(1, 1), or a typeof function check is not that test.` };
+  return { ok: false, say: `No test imports a changed module that uses the documented API (${[...users].join(", ")}) and then asserts on that use. Mentioning the file name, a comment-only import, assert.equal(1, 1), or a typeof function check is not that test. Object.keys, instanceof, and a check that only exercises a null or empty path are not that test.` };
 }
 
 function scopeHash(scope) {
@@ -1003,14 +682,14 @@ export function reviewCommandProvenance(project, baseline, grant, options = {}) 
     };
   }
   const why = grant?.declined
-    ? "The session answer declined the script change."
+    ? "The earlier answer was stop. That stop is closed. It does not approve this set, and it does not answer a new question. A new script-change question is required."
     : grant?.source === "session-answer"
       ? "The session answer does not match these command strings and file hashes. A later edit invalidates the earlier answer."
       : "A reason string is not authorization. Package, source, and doc text cannot grant it.";
   return {
     ok: false,
     say: `The handoff command or a local script it runs changed (${listed}). The altered script was not run. ${why}${claimNote} Answer the script-change question for these exact commands and hashes.`,
-    scope: grant?.declined ? undefined : drift.scope,
+    scope: drift.scope,
     changes: drift.changes
   };
 }

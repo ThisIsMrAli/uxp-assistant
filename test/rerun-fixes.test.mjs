@@ -87,7 +87,7 @@ test("N4 a rename outside executeAsModal fails, and one inside it does not fail 
   const inside = reviewClaim({
     contract,
     files: ["src/layers.ts"],
-    bodies: ["export async function rename(layer, name) { return executeAsModal(async () => { layer.name = name; }); }\n"]
+    bodies: ["import { core } from \"photoshop\";\nexport async function rename(layer, name) { return core.executeAsModal(async () => { layer.name = name; }); }\n"]
   });
   assert.equal(/outside executeAsModal/.test(inside.say || ""), false);
 });
