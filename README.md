@@ -6,7 +6,7 @@ The invoking assistant writes the feature. A missing recipe is not an unsupporte
 
 ## Run
 
-Node 18 or newer.
+Node 20 or newer.
 
 ```bash
 npm test
@@ -14,7 +14,7 @@ npm run assist -- start --empty /path/to/parent --answers answers.json --out /tm
 node .claude/skills/uxp-assistant/scripts/session.mjs next --out /tmp/uxp-session
 ```
 
-`npm test` checks the skill. It does not launch Photoshop or Premiere. A build and a CCX file do not either. When the host is not launched, the result is NOT TESTED.
+`npm test` checks the skill by passing each `test/*.test.mjs` path to `node --test`, then running the vendored boilerplate suite. It does not launch Photoshop or Premiere. A build and a CCX file do not either. When the host is not launched, the result is NOT TESTED.
 
 `npm test` includes unit checks and `test/acceptance.test.mjs`. The acceptance file scaffolds with create-bolt-uxp 1.3.27, installs that project, and packages one documented non-rename goal. It does not launch Photoshop or Premiere. A rebuilt CCX may not match a previous digest byte for byte because zip timestamps differ. The retained archive and its digest are in `evidence/`.
 
@@ -22,7 +22,7 @@ node .claude/skills/uxp-assistant/scripts/session.mjs next --out /tmp/uxp-sessio
 
 `skill-boilerplate/` is vendored so agent skill loaders see real files. The skill-boilerplate repository is private, so this project does not use an npm git dependency or a submodule. Those would fail for other people.
 
-`BOILERPLATE.lock` records `ThisIsMrAli/skill-boilerplate`, `sourceCommit`, and `contentHash`. `sourceCommit` stays `43184ceda8b5dfae081aad22735fc171c2b1dc22`, on the unmerged draft branch `cursor/import-skill-boilerplate-87ea`. The vendored tree now differs from that commit. Its content hash is `2852824b4e33726302de0137a759651cc27fa82120f57752bc6983df1de6025a`. Update `sourceCommit` when that tree is synced back to the boilerplate repository. `contentHash` is SHA-256 over the vendored subset: sorted lines of `type`, relative path, and SHA-256. A file hashes its bytes. A symlink hashes its target string and is not followed. `.git`, `node_modules`, and `.env` are omitted.
+`BOILERPLATE.lock` records `ThisIsMrAli/skill-boilerplate`, `sourceCommit`, and `contentHash`. `sourceCommit` is `2e46bf3d6479505e15ca0c7196d31596c2dc87d7`, the head of skill-boilerplate draft pull request 1. That commit and this tree share the content hash `2852824b4e33726302de0137a759651cc27fa82120f57752bc6983df1de6025a`. The vendored bytes are unchanged. Update `sourceCommit` when a newer boilerplate commit is synced. `contentHash` is SHA-256 over the vendored subset: sorted lines of `type`, relative path, and SHA-256. A file hashes its bytes. A symlink hashes its target string and is not followed. `.git`, `node_modules`, and `.env` are omitted.
 
 The vendored subset also omits the root agent-install directories named in `install-agents.mjs` (`.cursor`, `.agents`, and the other agent folders). The real boilerplate repo commits those as relative links such as `.cursor/skills/skill-boilerplate -> ../../.claude/skills/skill-boilerplate`. UXP Assistant has its own installer, so those links are not part of the pin. The canonical skill files under `.claude/` stay. The hash covers exactly that subset, which is the committed `skill-boilerplate/` tree.
 
