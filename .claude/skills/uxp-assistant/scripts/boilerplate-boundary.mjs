@@ -6,11 +6,10 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 /**
  * The only path from UXP Assistant into the skill boilerplate.
  *
- * Today the boilerplate is the standalone folder at the top of this repo.
- * The repository https://github.com/ThisIsMrAli/skill-boilerplate is private.
- * This run does not push to it. After the owner moves the folder, change
- * BOILERPLATE_ROOT to that package and leave this file as the only import.
- * Do not import the boilerplate's scripts, assets, or tests.
+ * Today the boilerplate is the vendored folder at the top of this repo.
+ * BOILERPLATE.lock pins that folder by content hash. Replace it with the
+ * repository sync script. The source repository is private and is not
+ * pushed from here. Do not import anything except api.mjs.
  */
 export const BOILERPLATE_ROOT = path.resolve(here, "../../../../skill-boilerplate");
 export const BOILERPLATE_API = path.join(BOILERPLATE_ROOT, "api.mjs");

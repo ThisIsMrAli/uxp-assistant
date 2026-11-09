@@ -216,6 +216,23 @@ test("the dashboard copy stays generic until a session supplies a surface", () =
   assert.match(page, /docs\.fresh\.length/);
 });
 
+test("the dashboard question card does not offer a chat answer", () => {
+  const page = fs.readFileSync(path.resolve(".claude/skills/skill-boilerplate/assets/dashboard/app.js"), "utf8");
+  const theme = fs.readFileSync(path.resolve(".claude/skills/skill-boilerplate/assets/dashboard/theme.js"), "utf8");
+  const hint = page.match(/const DASHBOARD_CARD_HINT = "([^"]*)"/);
+  assert.ok(hint, "dashboard card hint is missing");
+  assert.equal(/chat/i.test(hint[1]), false);
+  assert.equal(page.includes("You can also answer in chat."), false);
+  assert.match(page, /This decision is being asked in chat/);
+  assert.match(page, /Reply in chat instead/);
+  assert.match(page, /skill-boilerplate-theme/);
+  assert.match(page, /getItem\("review-theme"\)/);
+  assert.equal(page.includes("setItem(\"review-theme\""), false);
+  assert.match(theme, /skill-boilerplate-theme/);
+  assert.match(theme, /getItem\("review-theme"\)/);
+  assert.equal(theme.includes("setItem(\"review-theme\""), false);
+});
+
 test("the boilerplate folder does not import the parent repo", () => {
   const root = path.resolve(".");
   const bad = [];
