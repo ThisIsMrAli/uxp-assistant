@@ -45,7 +45,9 @@ If the user types an answer in chat while the dashboard is waiting, record it wi
 node scripts/skill.mjs start --empty /absolute/path/to/parent --out /absolute/path/to/session
 ```
 
-   An existing project uses `--project /absolute/path/to/plugin` instead of `--empty`.
+   An existing project uses `--project /absolute/path/to/plugin` instead of `--empty`. The empty-folder scaffold is created inside the `--empty` folder. It is not created under the session.
+
+   An `npx skills add` layout does not include the boilerplate or create-bolt-uxp. From this repo, `node scripts/skill.mjs install --into <folder>` copies this skill and the boilerplate beside it and links `node_modules`. Then run `node scripts/skill.mjs` from the copied skill.
 
 2. **Ask where to follow.** On the user's computer, call AskQuestion with `mode`. Pass `prompt` and each option's `id` and `label` through unchanged.
 
@@ -54,15 +56,25 @@ node scripts/skill.mjs start --empty /absolute/path/to/parent --out /absolute/pa
 
 3. **Intake and later decisions.** Ask the objects in `questions.json` one at a time. Dashboard: `session ask`, then `session wait`. While `status` is `pending`, run `wait` again. Chat: AskQuestion, then `session answer`. If `wait` prints `server-down`, run `dashboard start` once. If that fails, `mode --set chat` and ask the same question with AskQuestion. That is the only dashboard path that uses chat.
 
-   The goal text is kept as typed. The Bolt starter's `requiredPermissions` is not approval. `narrow` writes the least set: `{}` for a native panel that requested no permission, and the documented local WebView keys (`allow` `"yes"`, `domains` `[]`, `allowLocalRendering` `"yes"`, `enableMessageBridge` `"no"`) when the runtime loads `plugin:/` content and does not communicate. `keep` leaves an existing project's manifest unchanged. Any other permission answer pauses and writes nothing. A `network` key and `enableMessageBridge` `"localOnly"` are grants. An unknown permission name is not added. When the bridge is `"no"`, the host shell still creates and appends the webview and does not call `postMessage` or `document.theme.onUpdated`.
+   The goal text is kept as typed. The Bolt starter's `requiredPermissions` is not approval. `narrow` writes the least set: `{}` for a native panel that requested no permission, and the documented local WebView keys (`allow` `"yes"`, `domains` `[]`, `allowLocalRendering` `"yes"`, `enableMessageBridge` `"no"`) when the runtime loads `plugin:/` content and does not communicate. A goal that needs `postMessage` gets `enableMessageBridge` `"localOnly"` instead. `keep` leaves an existing project's manifest unchanged. Any other permission answer pauses and writes nothing. A `network` key and `enableMessageBridge` `"localOnly"` are grants. An unknown permission name is not added. When the bridge is `"no"`, the host shell still creates and appends the webview and does not call `postMessage` or `document.theme.onUpdated`.
 
-4. **Docs.** `node scripts/skill.mjs refresh` fetches the official pages for the answered host and goal, in parallel, with a per-page timeout and an overall budget. Each page is fresh, stale, or failed. Stale is not fresh. A failed or stale page does not open an implementation handoff. The dashboard shows the step, a timer, and each page's label while this runs. Do this only after the dashboard is up when the mode is dashboard.
+   Every choice has a `(Recommended)` option. Permissions are choices. There is no OS question. An existing project does not ask the empty-folder name, id, framework, or context questions. Those come from the project.
 
-5. **Domain handoff.** `node scripts/skill.mjs domain` runs the handoff in `<session>/domain` so it does not overwrite the dashboard session. It keeps the no-write gates, the provenance checker, the permission narrowing, and the package checks. Follow `design-constraints.md`. When that file names Spectrum UXP tags from fresh widget pages, use those tags and do not import Spectrum Web Components. A browser approximation is not part of the package. This skill does not replace an arbitrary goal with a canned panel.
+4. **Docs.** `node scripts/skill.mjs refresh --out <session>` fetches the official pages for the answered host and goal, in parallel, with a per-page timeout and an overall budget. Each page is fresh, stale, or failed. Stale is not fresh. The docs step finishes as done, and its detail is the fresh, stale, and failed counts. A failed or stale page does not open an implementation handoff. The dashboard shows the step, a timer, and each page's label while this runs. Do this only after the dashboard is up when the mode is dashboard. Pass `--out` on this command. The current manifest page is https://developer.adobe.com/uxp/guides/explanation/concepts/manifest/ and says current UXP hosts use manifest version 5. Premiere's introduction is https://developer.adobe.com/premiere-pro/uxp/introduction/ and says Premiere (version 25.6). Generated manifests use version 5, `uniqueIds` false, and Premiere `minVersion` `25.6.0`. Photoshop keeps starter `minVersion` `24.2.0`. The visible title is the display name, not Bolt UXP.
+
+5. **Domain handoff.** `node scripts/skill.mjs domain --out <session>` runs the handoff in `<session>/domain` so it does not overwrite the dashboard session, and it does not move the session pointer. The scaffold is created in the `--empty` folder. Running it again does not delete a project that is already there. It keeps the no-write gates, the provenance checker, the permission narrowing, and the package checks. Follow `design-constraints.md`. When that file names Spectrum UXP tags from fresh widget pages, use those tags and do not import Spectrum Web Components. A browser approximation is not part of the package. This skill does not replace an arbitrary goal with a canned panel. A `script-change` answer is bound to the question by its nonce. The dashboard stores the scope with that answer.
 
    Write the feature yourself. Use the documented API in code. Add a test that imports that module and asserts on the call. Do not record a stock file. Leave the handoff `build` and `ccx` commands unchanged. A changed command or a changed script body is not run until `script-change` is answered for those exact commands and file hashes. The command checker refuses `eval(`, `new Function(`, `vm.run`, and the named `child_process` helpers in a hashed file. `globalThis["eval"]` is not one of those shapes. That list is not a sandbox.
 
-6. **Record and finish.** Record `agent-result.json` with the same goal and the files you changed. The handoff checks the diff, runs the test, build, and ccx commands, and checks every new archive for the documented symbol the starter did not already contain. Finish only after those checks pass. The done line is: Commands finished. The Adobe host was NOT TESTED. That line is command evidence. It is not feature correctness, and source and behavior review is still pending.
+6. **Record.** After the domain next line, write `<session>/agent-result.json`:
+
+```json
+{ "goal": "the same goal text", "files": [{ "path": "src/main.tsx", "sha256": "<64 hex characters>" }] }
+```
+
+   `path` is relative to the project. `sha256` is the file's bytes. Then run `node scripts/skill.mjs record --out <session>`. It checks the goal and the hashes. It does not mark tests, package, or the host done. Run those project scripts yourself and record their exits before anyone marks those steps done. The done line, after those commands have actually run, is: Commands finished. The Adobe host was NOT TESTED. That line is command evidence. It is not feature correctness, and source and behavior review is still pending.
+
+Every command prints a `next` line. Do that line next. Do not mark tests, package, or the host done because a next line mentioned them.
 
 ## Read next
 

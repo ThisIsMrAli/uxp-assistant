@@ -2,42 +2,60 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { loadExtension } from "./lib/extension.mjs";
+import { resolveOut, sessionBin } from "./lib/paths.mjs";
 import { refreshSources } from "./lib/refresh.mjs";
 import { readMerged, recordDocs, setStep } from "./lib/session.mjs";
 
 export async function refreshSkill({ extensionPath, out, fetchImpl }) {
+  const folder = resolveOut(out);
   const ext = await loadExtension(extensionPath);
-  const session = readMerged(out);
+  const session = readMerged(folder);
   if (!session) throw new Error("No session. Run start.mjs first.");
   if (!session.mode) throw new Error("Set mode before fetching docs.");
   const pages = ext.sources ? await ext.sources(session) : [];
   const policy = ext.docs || {};
-  const target = path.join(out, "docs");
+  const target = path.join(folder, "docs");
+  const impl = fetchImpl || fixtureFetch();
   const cached = policy.everyInvocation === false ? readCachedSummary(target) : null;
   if (cached) {
-    recordDocs(out, cached);
-    await appendQuestionsAfterDocs(ext, out);
-    return { ok: cached.ok, fresh: cached.fresh, stale: cached.stale, failed: cached.failed, network: false, cached: true };
+    recordDocs(folder, cached);
+    await appendQuestionsAfterDocs(ext, folder);
+    return documented(folder, { ok: cached.ok, fresh: cached.fresh, stale: cached.stale, failed: cached.failed, network: false, cached: true });
   }
   if (session.steps.some((step) => step.id === "docs")) {
-    setStep(out, "docs", "running", "Fetching sources.", { doing: "Fetching sources.", progress: { done: 0, total: Math.max(pages.length, 1) } });
+    setStep(folder, "docs", "running", "Fetching sources.", { doing: "Fetching sources.", progress: { done: 0, total: Math.max(pages.length, 1) } });
   }
   const summary = await refreshSources(target, pages, {
-    fetchImpl,
+    ...(impl ? { fetchImpl: impl } : {}),
     pageTimeoutMs: policy.pageTimeoutMs || 8000,
     budgetMs: policy.budgetMs || 20000,
     onPage: async ({ page, done, total }) => {
       if (!session.steps.some((step) => step.id === "docs")) return;
-      setStep(out, "docs", "running", `${page.id} ${page.freshness}`, {
+      setStep(folder, "docs", "running", `${page.id} ${page.freshness}`, {
         doing: `${page.id} is ${page.freshness} (${done} of ${total})`,
         progress: { done, total },
         log: `${page.id} ${page.freshness}`
       });
     }
   });
-  recordDocs(out, summary);
-  await appendQuestionsAfterDocs(ext, out);
-  return { ok: summary.ok, fresh: summary.fresh, stale: summary.stale, failed: summary.failed, network: true };
+  recordDocs(folder, summary);
+  await appendQuestionsAfterDocs(ext, folder);
+  return documented(folder, { ok: summary.ok, fresh: summary.fresh, stale: summary.stale, failed: summary.failed, network: true });
+}
+
+function documented(folder, result) {
+  const counts = `fresh ${(result.fresh || []).length}, stale ${(result.stale || []).length}, failed ${(result.failed || []).length}`;
+  return {
+    ...result,
+    out: folder,
+    next: `Docs recorded (${counts}). The docs step is done. Run ${sessionBin()} next --out ${folder}.`
+  };
+}
+
+function fixtureFetch() {
+  const body = process.env.SKILL_DOC_FIXTURE;
+  if (!body) return undefined;
+  return async (url) => ({ ok: true, status: 200, text: async () => `${body}\n${url}` });
 }
 
 async function appendQuestionsAfterDocs(ext, out) {

@@ -52,9 +52,9 @@ node scripts/start.mjs --extension /absolute/path/to/extension.mjs --out /absolu
 
 3. **Decide.** Ask the later objects in `questions.json` one at a time. Dashboard: `session.mjs ask`, then `session.mjs wait`. `wait` returns in 25 seconds. While `status` is `pending`, run it again. Chat: AskQuestion, then `session.mjs answer`. If `wait` prints `server-down`, run `dashboard.mjs start` once. If that fails, `mode --set chat` and ask the same question with AskQuestion.
 
-4. **Docs.** `node scripts/refresh.mjs` fetches the extension's sources in parallel. Each page is fresh, stale, or failed. Stale is not fresh. The dashboard shows the step, a timer, and the per-page line while this runs. Do not start this before the dashboard when the mode is dashboard.
+4. **Docs.** `node scripts/refresh.mjs --out <session>` fetches the extension's sources in parallel. Each page is fresh, stale, or failed. Stale is not fresh. The docs step finishes as done and the detail carries the fresh, stale, and failed counts. The dashboard shows the step, a timer, and the per-page line while this runs. Do not start this before the dashboard when the mode is dashboard. Pass `--out` on every command.
 
-5. **Apply.** Do what the extension's references say for the answers. Then `session.mjs step --status done` for that step.
+5. **Apply.** Do what the extension's references say for the answers. Run a real command before recording tests, package, or the host. Do not mark those done from the next line.
 
 6. **Close.** `node scripts/session.mjs done --summary "..."`, then `node scripts/dashboard.mjs stop`.
 

@@ -104,12 +104,12 @@ test("the dashboard walk answers every stage from the page and hands off the goa
         seen.push(nxt.ask);
         continue;
       }
-      if (nxt.action === "apply" || nxt.action === "finish") break;
+      if (nxt.action === "apply" || nxt.action === "finish" || nxt.action === "domain") break;
       throw new Error(`unexpected next ${JSON.stringify(nxt)}`);
     }
 
     assert.deepEqual(seen, [
-      "goal", "host", "framework", "os", "context", "name", "id", "permissions",
+      "goal", "host", "framework", "context", "name", "id", "permissions",
       "feasibility", "runtime", "design", "validation", "narrow-permissions", "consequential"
     ]);
     const lines = fs.readFileSync(path.join(out, "answers.jsonl"), "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line));

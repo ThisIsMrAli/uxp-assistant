@@ -63,19 +63,20 @@ export function narrowRequiredPermissions(source, options = {}) {
   if (end < 0) return { ok: false, source: text, reason: "requiredPermissions is not a balanced object.", runtime, permissions: null };
   const kept = topLevelEntries(text, brace, end).filter((entry) => requested.has(entry.name) && entry.name !== "webview");
   const lines = [];
+  const bridge = options.bridge === "localOnly" ? "localOnly" : "no";
   if (runtime === "webview") {
     lines.push(`webview: {
       allow: "yes",
       domains: [],
       allowLocalRendering: "yes",
-      enableMessageBridge: "no",
+      enableMessageBridge: "${bridge}",
     }`);
   }
   for (const entry of kept) lines.push(entry.text);
   const body = lines.length ? `{\n    ${lines.join(",\n    ")},\n  }` : "{}";
   const next = `${text.slice(0, key)}requiredPermissions: ${body}${text.slice(end + 1)}`;
   const permissions = runtime === "webview"
-    ? { webview: { ...LEAST_LOCAL_WEBVIEW }, ...Object.fromEntries(kept.map((entry) => [entry.name, entry.text])) }
+    ? { webview: { ...LEAST_LOCAL_WEBVIEW, enableMessageBridge: bridge }, ...Object.fromEntries(kept.map((entry) => [entry.name, entry.text])) }
     : Object.fromEntries(kept.map((entry) => [entry.name, entry.text]));
   return { ok: true, source: next, reason: "", runtime, permissions, kept: kept.map((entry) => entry.name) };
 }

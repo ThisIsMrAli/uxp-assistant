@@ -5,10 +5,16 @@ import { fileURLToPath } from "node:url";
 import { launch } from "./lib/cdp.mjs";
 import { findChrome } from "./lib/chrome.mjs";
 import { bundleEntries, serveBundle } from "./lib/bundle-preview.mjs";
+import { previewTarget } from "./lib/preview-target.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
-const ccxPath = path.resolve(process.argv[2] || path.join(root, "evidence/artifacts/document-title.ccx"));
-const evidence = path.join(root, "evidence/preview");
+const flag = (name) => {
+  const index = process.argv.indexOf(name);
+  return index >= 0 ? process.argv[index + 1] : "";
+};
+const ccxPath = path.resolve(flag("--ccx") || process.argv.find((item, index) => index >= 2 && !item.startsWith("--") && process.argv[index - 1] !== "--out") || path.join(root, "evidence/artifacts/document-title.ccx"));
+const target = previewTarget({ ccx: ccxPath, out: flag("--out") });
+const evidence = target.evidence;
 const chrome = findChrome();
 if (!chrome) {
   console.error("No Chrome, Edge, or Chromium is installed. The bundle was not opened.");
@@ -19,7 +25,8 @@ const scriptBytes = entries.get(script);
 const served = await serveBundle(ccxPath);
 const page = await launch({ width: 960, height: 800, chrome });
 const log = {
-  capturedOn: "this cloud environment",
+  capturedOn: target.capturedOn,
+  mocked: true,
   boxBrowser: false,
   hostExecuted: false,
   ccx: path.relative(root, ccxPath),
