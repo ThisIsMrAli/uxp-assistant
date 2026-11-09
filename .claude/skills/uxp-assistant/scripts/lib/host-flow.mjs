@@ -20,6 +20,10 @@ export { panelRendersState, parseSource, parserCandidates };
  * Proxy, WeakRef, Object.values/entries, destructuring of such a container, or for-of over one;
  * Reflect.*, bind/call/apply on a host method, eval, new Function, globalThis/window.require,
  * a computed member name on a host value, and any file that does not parse.
+ * Non-static module loads (import.meta.glob, module.require, createRequire, a require method)
+ * are needs review. A host value in an array-destructuring default, an exported let assigned
+ * inside a function, a getter, or a function or host value returned from executeAsModal is
+ * needs review. On a typed chain only that class's own members are accepted.
  * A false reject carries that reason. It is not a proof of correctness.
  */
 
@@ -183,6 +187,8 @@ function runAnalysis(text, rel, options) {
   const fnStack = [];
   const thisStack = [UNKNOWN];
   const exports = new Map();
+  const mutableExports = new Set();
+  const rechecked = options.rechecked || new Set();
 
   const look = (name) => {
     for (let i = scopes.length - 1; i >= 0; i -= 1) {
@@ -204,7 +210,7 @@ function runAnalysis(text, rel, options) {
   };
   const infoFor = (node) => {
     const id = fnId(rel, node);
-    if (!functions.has(id)) functions.set(id, { id, async: Boolean(node.async), generator: Boolean(node.generator), walked: false, ret: null, yields: null, label: node.id?.name || node.key?.name || "" });
+    if (!functions.has(id)) functions.set(id, { id, rel, async: Boolean(node.async), generator: Boolean(node.generator), walked: false, ret: null, yields: null, label: node.id?.name || node.key?.name || "" });
     return functions.get(id);
   };
   const call = (kind, text) => {
@@ -263,6 +269,13 @@ function runAnalysis(text, rel, options) {
       case "maybe": {
         let type = "";
         if (object.root && !object.label.includes(".")) type = hostModuleType(index, object.root, name);
+        // A typed chain accepts only that class's own members. A missing member does not
+        // fall through to "documented on some other page" or to a later calledOn match.
+        const page = object.lineage && object.type && index.pages.has(object.type) ? index.pages.get(object.type) : null;
+        const promiseMethod = (name === "then" || name === "catch" || name === "finally") && (object.promise || object.ownerPromise);
+        if (!type && page && !page.has(name) && !promiseMethod && !(CALL_SKIP.has(name) && isCollectionType(object.type))) {
+          return { kind: "dynamic", label: object.label ? `${object.label}.${name}` : name, method: name, why: `${name} is not a ${object.type} member in the fetched docs. On a typed chain only that class's members count` };
+        }
         if (!type) type = propertyType(index, object.type, name);
         return { kind: object.kind, label: object.label ? `${object.label}.${name}` : name, method: name, fromMethod: object.fromMethod || "", type: "", ownerType: object.type || "", ownerPromise: Boolean(object.promise), ownerSeg: object.seg || "", propType: type, elementType: elementType(index, type), lineage: Boolean(object.lineage), seg: name };
       }
@@ -319,9 +332,10 @@ function runAnalysis(text, rel, options) {
     if (CALL_SKIP.has(method) && (!type || !index.pages.has(type) || isCollectionType(type))) return { ok: true, skip: true };
     if (value.lineage) {
       // A value read from the imported host binding is matched against its owner class only.
-      // An owner whose type did not resolve to a fetched page needs review. It never falls back to "documented on any page".
+      // A known class with a fetched page never falls back to "documented on any page".
+      // calledOn is only for a receiver segment whose class page was not resolved (core.executeAsModal).
       if (type && index.pages.has(type)) return { ...documentedMember(index, type, method), type };
-      if (calledOn(index, value.ownerSeg, method)) return { ok: true, type, sample: `${value.ownerSeg}.${method}(` };
+      if (!type && calledOn(index, value.ownerSeg, method)) return { ok: true, type, sample: `${value.ownerSeg}.${method}(` };
       return { ok: false, unresolved: true, type };
     }
     const found = documentedMember(index, type, method);
@@ -387,7 +401,20 @@ function runAnalysis(text, rel, options) {
       return;
     }
     if (pattern.type === "AssignmentPattern") {
-      if (pattern.right) evalExpr(pattern.right);
+      const fallback = pattern.right ? evalExpr(pattern.right) : UNKNOWN;
+      // Default parameters stay caller-supplied (valueFor is a function). An array or object
+      // destructuring default that holds a host value is the binding when the element is missing.
+      if (typeof valueFor !== "function" && hosty(fallback)) {
+        const incoming = valueFor;
+        if (hosty(incoming) && (incoming.kind !== fallback.kind || incoming.type !== fallback.type || incoming.ownerType !== fallback.ownerType)) {
+          bindPattern(pattern.left, { kind: "dynamic", label: "destructuring default", method: "", why: "a host value is a destructuring default and the element may also be present, so the binding is not one owner class" });
+          return;
+        }
+        if (!incoming || incoming.kind === "unknown" || incoming.kind === "plain") {
+          bindPattern(pattern.left, fallback);
+          return;
+        }
+      }
       bindPattern(pattern.left, valueFor);
       return;
     }
@@ -575,6 +602,21 @@ function runAnalysis(text, rel, options) {
     return UNKNOWN;
   };
 
+  const getterReturnsHost = (node) => {
+    const current = unwrap(node);
+    if (!current || current.type !== "ObjectExpression") return false;
+    for (const prop of current.properties || []) {
+      if (prop.type === "ObjectProperty" && prop.value?.type === "ObjectExpression" && getterReturnsHost(prop.value)) return true;
+      const key = !prop.computed ? (prop.key?.name || prop.key?.value) : "";
+      const fn = prop.type === "ObjectMethod" ? prop : (key === "get" ? unwrap(prop.value) : null);
+      if (!fn || !isFunctionNode(fn)) continue;
+      if (prop.type === "ObjectMethod" && prop.kind !== "get" && key !== "get") continue;
+      const info = infoFor(fn);
+      if (hosty(info.ret) || hosty(info.yields)) return true;
+    }
+    return false;
+  };
+
   const evalCall = (node) => {
     const args = node.arguments || [];
     const callee = unwrap(node.callee);
@@ -600,6 +642,30 @@ function runAnalysis(text, rel, options) {
         evalArgs(args);
         call("call", `${callee.name}() with a string body needs review. It is eval`);
         return UNKNOWN;
+      }
+    }
+    if (callee?.type === "Identifier" && (callee.name === "createRequire" || look(callee.name)?.label === "createRequire")) {
+      evalArgs(args);
+      call("call", "createRequire() needs review: createRequire is a non-static module load and is not tracked. Use a static import");
+      return { kind: "evil", label: "createRequire()" };
+    }
+    if ((callee?.type === "MemberExpression" || callee?.type === "OptionalMemberExpression") && !callee.computed && callee.property?.type === "Identifier") {
+      const member = callee.property.name;
+      const meta = unwrap(callee.object);
+      const importMeta = meta?.type === "MetaProperty" && meta.meta?.name === "import";
+      if (importMeta && (member === "glob" || member === "globEager")) {
+        evalArgs(args);
+        call("call", `import.meta.${member}() needs review: it loads modules without a static import, so a host export in those modules is not checked. Use a static import`);
+        return { kind: "dynamic", label: `import.meta.${member}()`, method: "", why: `import.meta.${member} is a non-static module load` };
+      }
+      if (member === "require") {
+        const root = unwrap(callee.object);
+        const globalRequire = root?.type === "Identifier" && (root.name === "globalThis" || root.name === "window" || root.name === "global");
+        if (!globalRequire) {
+          evalArgs(args);
+          call("call", `${calleeName(callee) || "module.require"}() needs review: module.require and any require method are non-static module loads and are not tracked. Use a static import`);
+          return { kind: "dynamic", label: "module.require()", method: "", why: "a require method is a non-static module load" };
+        }
       }
     }
     if (callee?.type === "Import") {
@@ -633,6 +699,9 @@ function runAnalysis(text, rel, options) {
       if (objectNode?.type === "Identifier" && objectNode.name === "Object" && !look("Object") && (name === "assign" || name === "defineProperty" || name === "defineProperties" || name === "setPrototypeOf")) {
         const values = evalArgs(args);
         const target = values[0];
+        if ((name === "defineProperty" || name === "defineProperties") && getterReturnsHost(name === "defineProperty" ? args[2] : args[1])) {
+          call("call", "Object.defineProperty() needs review: a getter returns a host value, and a getter is not a tracked binding. Use a static import");
+        }
         if (target && (target.kind === "host" || target.kind === "maybe" || target.kind === "dynamic" || target.kind === "laundered")) {
           if (name === "defineProperty") {
             const key = literalString(args[1]);
@@ -697,6 +766,21 @@ function runAnalysis(text, rel, options) {
     if (fn?.kind === "fn") {
       const info = fn.info || functions.get(fn.id);
       if (info) callSites.push({ calleeId: info.id, inside: fnStack.at(-1)?.id || null, confers: !info.async || awaited(node) });
+      if (info && options.record && !options.collect && info.rel && info.rel !== rel && memory.has(info.rel) && (options.depth || 0) < 6) {
+        const hostArgs = evaluated.some((value) => value && value.lineage && (value.kind === "host" || value.kind === "maybe"));
+        const key = `${info.id}|${evaluated.map((value) => `${value?.kind || ""}:${value?.type || ""}:${value?.ownerType || ""}:${value?.lineage ? 1 : 0}`).join("|")}`;
+        if (hostArgs && !rechecked.has(key)) {
+          rechecked.add(key);
+          const summaries = new Map();
+          summaries.flows = new Map([[info.id, evaluated.map((value) => (value && value.lineage && (value.kind === "host" || value.kind === "maybe") ? copyValue(value) : null))]]);
+          try {
+            const nested = runAnalysis(memory.get(info.rel), info.rel, { docs, project, memory, cache: new Map(), loading: new Set(), record: true, summaries, rechecked, depth: (options.depth || 0) + 1 });
+            findings.push(...nested.raw.findings);
+          } catch {
+            call("call", `${info.rel} needs review: the helper was called with a host value and could not be checked again`);
+          }
+        }
+      }
       if (info && options.collect) {
         evaluated.forEach((value, position) => {
           if (!value || !value.lineage || (value.kind !== "host" && value.kind !== "maybe")) return;
@@ -715,13 +799,23 @@ function runAnalysis(text, rel, options) {
     }
     if (fn && (fn.kind === "host" || fn.kind === "maybe") && fn.method === "executeAsModal") {
       const callback = unwrap(args[0]);
-      if (callback && isFunctionNode(callback)) seeds.add(infoFor(callback).id);
-      else if (evaluated[0]?.kind === "fn" && evaluated[0].info) seeds.add(evaluated[0].info.id);
+      const callbackInfo = callback && isFunctionNode(callback) ? infoFor(callback) : (evaluated[0]?.kind === "fn" ? evaluated[0].info : null);
+      if (callbackInfo) seeds.add(callbackInfo.id);
+      const returned = callbackInfo?.ret;
+      if (returned && (returned.kind === "fn" || ((returned.kind === "host" || returned.kind === "maybe") && returned.lineage && !returned.promise))) {
+        call("call", "executeAsModal() needs review: the callback returns a function or a host value, which is used after the modal ends and is not a tracked binding");
+        return { kind: "dynamic", label: "executeAsModal()", method: "", why: "the modal callback returned a function or a host value" };
+      }
     }
     if (fn?.kind === "skip") {
       const label = fn.label;
       if (PLAIN_RESULT.has(label)) return PLAIN;
       if (label === "Proxy" || label === "Proxy.revocable") return evaluated.some(hosty) ? { kind: "laundered", label: "Proxy", method: "" } : UNKNOWN;
+      // Array.from(hostList) and Array.from(hostList) with a plain mapper copy the list. The elements stay that host type.
+      if (label === "Array.from" && evaluated[0] && (evaluated[0].kind === "host" || evaluated[0].kind === "maybe") && evaluated[0].lineage) {
+        if (!args[1] || !hosty(evaluated[1])) return copyValue(evaluated[0]);
+        return copyValue(evaluated[1]);
+      }
       if (CONTAINER_BUILDERS.has(label) || isNew) return evaluated.some(hosty) ? { kind: "container", label: `${label}()` } : UNKNOWN;
       if (fn.method && CALL_SKIP.has(fn.method)) return UNKNOWN;
       return UNKNOWN;
@@ -857,13 +951,16 @@ function runAnalysis(text, rel, options) {
       case "ObjectExpression":
         return objectValue(current);
       case "ArrayExpression": {
-        let carries = false;
+        const parts = [];
         for (const element of current.elements) {
           if (!element) continue;
-          const value = evalExpr(element.type === "SpreadElement" ? element.argument : element);
-          if (hosty(value)) carries = true;
+          const spread = element.type === "SpreadElement";
+          parts.push({ spread, value: evalExpr(spread ? element.argument : element) });
         }
-        return carries ? { kind: "container", label: "array" } : PLAIN;
+        const hostParts = parts.filter((part) => hosty(part.value));
+        // A single spread of a host list is that list, so forEach and map see its elements.
+        if (parts.length === 1 && parts[0].spread && (parts[0].value.kind === "host" || parts[0].value.kind === "maybe") && parts[0].value.lineage) return copyValue(parts[0].value);
+        return hostParts.length ? { kind: "container", label: "array" } : PLAIN;
       }
       case "FunctionExpression":
       case "ArrowFunctionExpression":
@@ -935,7 +1032,11 @@ function runAnalysis(text, rel, options) {
           return evalExpr(current.right);
         }
         if (current.left.type === "Identifier") {
-          const value = evalExpr(current.right);
+          let value = evalExpr(current.right);
+          if ((current.operator === "=" || current.operator === "||=" || current.operator === "??=" || current.operator === "&&=") && mutableExports.has(current.left.name) && fnStack.length && hosty(value)) {
+            value = { kind: "dynamic", label: current.left.name, method: "", why: `exported let ${current.left.name} is assigned a host value inside a function, so importers do not see one stable owner class` };
+            call("call", `${current.left.name} needs review: ${value.why}. Use a const import of the host binding`);
+          }
           if (current.operator === "=" || current.operator === "||=" || current.operator === "??=" || current.operator === "&&=") {
             const before = look(current.left.name);
             rebind(current.left.name, current.operator === "=" ? value : mergeValues(before, value));
@@ -1098,6 +1199,7 @@ function runAnalysis(text, rel, options) {
       } else if (item.type === "ImportSpecifier") {
         const imported = item.imported.type === "Identifier" ? item.imported.name : item.imported.value;
         if (resolved.host) bind(item.local.name, withType(access(hostRoot(resolved.host), imported)));
+        else if (imported === "createRequire") bind(item.local.name, { kind: "evil", label: "createRequire" });
         else if (resolved.exports) bind(item.local.name, resolved.exports.get(imported) || UNKNOWN);
         else if (resolved.missing) bind(item.local.name, { kind: "dynamic", label: `${item.local.name} (import "${spec}" did not resolve)`, method: "" });
         else bind(item.local.name, PLAIN);
@@ -1163,6 +1265,7 @@ function runAnalysis(text, rel, options) {
       };
       for (const declarator of decl.declarations) collectNames(declarator.id);
       for (const name of names) exports.set(name, copyValue(look(name) || UNKNOWN));
+      if (decl.kind !== "const") for (const name of names) mutableExports.add(name);
     }
   };
 
@@ -1179,6 +1282,10 @@ function runAnalysis(text, rel, options) {
       stmt._done = true;
       exportDeclaration(stmt);
     } else walkNode(stmt);
+  }
+  for (const name of mutableExports) {
+    const value = scopes[0].get(name);
+    if (value) exports.set(name, copyValue(value));
   }
 
   return {

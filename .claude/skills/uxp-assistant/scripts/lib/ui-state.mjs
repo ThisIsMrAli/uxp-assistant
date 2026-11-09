@@ -75,6 +75,7 @@ function reachableFunctions(ast, extraRoots = []) {
       any = true;
     }
   }
+  const fromTemplate = arguments.length > 1;
   const runs = (node) => {
     let current = node.parent;
     while (current) {
@@ -102,6 +103,7 @@ function reachableFunctions(ast, extraRoots = []) {
       }
     });
   }
+  if (fromTemplate) return reach;
   return any ? reach : null;
 }
 
@@ -127,27 +129,73 @@ function tryDoesWork(block) {
   return work;
 }
 
+function styleHides(key, value) {
+  if (key === "display" && value?.type === "StringLiteral" && value.value === "none") return true;
+  if (key === "visibility" && value?.type === "StringLiteral" && value.value === "hidden") return true;
+  if (key === "opacity" && ((value?.type === "NumericLiteral" && value.value === 0) || (value?.type === "StringLiteral" && /^0(?:\.0+)?$/.test(value.value)))) return true;
+  if (key === "height" && ((value?.type === "NumericLiteral" && value.value === 0) || (value?.type === "StringLiteral" && /^0(?:px|%|em|rem)?$/.test(value.value)))) return true;
+  return false;
+}
+
 function hiddenElement(opening) {
   for (const attr of opening?.attributes || []) {
     if (attr.type !== "JSXAttribute") continue;
     const name = attr.name?.name || "";
     const value = attr.value;
-    if (name === "hidden") {
+    if (name === "hidden" || name === "aria-hidden") {
       if (!value) return true;
-      if (value.type === "StringLiteral") return true;
+      if (value.type === "StringLiteral") return value.value !== "false";
       if (value.type === "JSXExpressionContainer" && staticTruth(value.expression, CONSTS) === true) return true;
     }
     if (name === "style" && value) {
-      if (value.type === "StringLiteral" && /(?:display\s*:\s*none|visibility\s*:\s*hidden)/i.test(value.value)) return true;
+      if (value.type === "StringLiteral" && /(?:display\s*:\s*none|visibility\s*:\s*hidden|opacity\s*:\s*0(?:\.0+)?\b|height\s*:\s*0(?:px|%|em|rem)?\b)/i.test(value.value)) return true;
       const expr = value.type === "JSXExpressionContainer" ? unwrap(value.expression) : null;
       if (expr?.type === "ObjectExpression") {
         for (const prop of expr.properties) {
           const key = prop.type === "ObjectProperty" && !prop.computed ? (prop.key.name || prop.key.value) : "";
           const v = prop.type === "ObjectProperty" ? unwrap(prop.value) : null;
-          if (key === "display" && v?.type === "StringLiteral" && v.value === "none") return true;
-          if (key === "visibility" && v?.type === "StringLiteral" && v.value === "hidden") return true;
+          if (styleHides(key, v)) return true;
         }
       }
+    }
+  }
+  return false;
+}
+
+/** createPortal into a node that is not document.body, documentElement, or a document query is not on the panel. */
+function detachedPortal(node) {
+  let parent = node?.parent;
+  while (parent) {
+    if (parent.type === "CallExpression" || parent.type === "OptionalCallExpression") {
+      const callee = unwrap(parent.callee);
+      const name = callee?.type === "Identifier" ? callee.name : (callee?.type === "MemberExpression" && !callee.computed ? callee.property?.name : "");
+      if (name === "createPortal" && parent.arguments?.[0] && node !== parent.arguments[1]) {
+        let inside = false;
+        walk(parent.arguments[0], (item) => {
+          if (item === node) inside = true;
+        });
+        if (inside && !mountedContainer(parent.arguments[1])) return true;
+      }
+    }
+    parent = parent.parent;
+  }
+  return false;
+}
+
+function mountedContainer(node) {
+  const value = unwrap(node);
+  if (!value) return false;
+  if ((value.type === "MemberExpression" || value.type === "OptionalMemberExpression") && !value.computed) {
+    const obj = unwrap(value.object);
+    const prop = value.property?.name;
+    if (obj?.type === "Identifier" && obj.name === "document" && (prop === "body" || prop === "documentElement")) return true;
+  }
+  if (value.type === "CallExpression") {
+    const callee = unwrap(value.callee);
+    if ((callee?.type === "MemberExpression" || callee?.type === "OptionalMemberExpression") && !callee.computed) {
+      const obj = unwrap(callee.object);
+      const prop = callee.property?.name;
+      if (obj?.type === "Identifier" && obj.name === "document" && (prop === "getElementById" || prop === "querySelector" || prop === "querySelectorAll")) return true;
     }
   }
   return false;
@@ -174,6 +222,7 @@ function dead(node) {
     if (parent.type === "IfStatement" && parent.consequent === current && isFalse(parent.test)) return true;
     if (parent.type === "IfStatement" && parent.alternate === current && isTrue(parent.test)) return true;
     if (parent.type === "JSXElement" && current !== parent.openingElement && hiddenElement(parent.openingElement)) return true;
+    if (detachedPortal(current)) return true;
     if (parent.type === "JSXAttribute" && /^(?:key|ref)$/.test(parent.name?.name || "")) return true;
     if (REACHABLE && (current.type === "FunctionDeclaration" || current.type === "ArrowFunctionExpression" || current.type === "FunctionExpression") && !REACHABLE.has(current)) return true;
     current = parent;
@@ -287,6 +336,39 @@ function stateVerdict(states, liveUse) {
   return { ok: false };
 }
 
+function bindsName(pattern, name) {
+  if (!pattern) return false;
+  if (pattern.type === "Identifier") return pattern.name === name;
+  if (pattern.type === "AssignmentPattern" || pattern.type === "RestElement") return bindsName(pattern.left || pattern.argument, name);
+  if (pattern.type === "ArrayPattern") return pattern.elements.some((item) => bindsName(item, name));
+  if (pattern.type === "ObjectPattern") return pattern.properties.some((prop) => bindsName(prop.type === "RestElement" ? prop.argument : prop.value, name));
+  return false;
+}
+
+/** The declaration of `name` that a use sees. An inner const or parameter is not the useState setter. */
+function nearestBinding(name, node) {
+  let current = node?.parent;
+  while (current) {
+    const statements = [];
+    if (current.type === "BlockStatement" || current.type === "Program") statements.push(...(current.body || []));
+    if (current.type === "SwitchCase") statements.push(...(current.consequent || []));
+    if (FN_TYPES.has(current.type)) {
+      for (const param of current.params || []) if (bindsName(param, name)) return current;
+      if (current.body?.type === "BlockStatement") statements.push(...current.body.body);
+    }
+    if (current.type === "CatchClause" && bindsName(current.param, name)) return current;
+    for (const stmt of statements) {
+      if (!stmt || (stmt.start !== undefined && node.start !== undefined && stmt.start >= node.start)) continue;
+      if (stmt.type === "FunctionDeclaration" && stmt.id?.name === name) return stmt;
+      if (stmt.type === "VariableDeclaration") {
+        for (const decl of stmt.declarations) if (bindsName(decl.id, name)) return decl;
+      }
+    }
+    current = current.parent;
+  }
+  return null;
+}
+
 function reactStates(ast) {
   const states = [];
   walk(ast, (node) => {
@@ -298,14 +380,17 @@ function reactStates(ast) {
     if (hook !== "useState" && hook !== "useReducer") return;
     const name = node.id.elements[0]?.type === "Identifier" ? node.id.elements[0].name : "";
     const setter = node.id.elements[1]?.type === "Identifier" ? node.id.elements[1].name : "";
-    if (name && setter) states.push({ name, setter, writes: [] });
+    if (name && setter) states.push({ name, setter, writes: [], decl: node });
   });
   walk(ast, (node) => {
     if (node.type !== "CallExpression" && node.type !== "OptionalCallExpression") return;
     const callee = unwrap(node.callee);
     if (callee?.type !== "Identifier") return;
     for (const state of states) {
-      if (state.setter === callee.name) state.writes.push({ node, value: valueKey(node.arguments[0]) });
+      if (state.setter !== callee.name) continue;
+      const binding = nearestBinding(callee.name, callee);
+      if (binding && binding !== state.decl) continue;
+      state.writes.push({ node, value: valueKey(node.arguments[0]) });
     }
   });
   return states;
@@ -316,12 +401,11 @@ function jsxUse(ast) {
     const use = { rendered: false, disabled: false, condition: false };
     walk(ast, (node) => {
       if (dead(node)) return;
-      if (node.type === "JSXExpressionContainer" && node.parent?.type !== "JSXAttribute" && references(name, node) && !staticValue(node.expression, CONSTS).known) use.rendered = true;
+      if (node.type === "JSXExpressionContainer" && node.parent?.type !== "JSXAttribute" && references(name, node) && !staticValue(node.expression, CONSTS).known && staticTruth(node.expression, CONSTS) !== false) use.rendered = true;
       if (node.type === "JSXAttribute" && node.value && node.value.type === "JSXExpressionContainer" && references(name, node.value) && staticTruth(node.value.expression, CONSTS) === undefined) {
         const attr = node.name?.name || "";
         if (/^(?:key|ref)$/.test(attr)) return;
         if (/^disabled$/i.test(attr) || /^aria-busy$/i.test(attr)) use.disabled = true;
-        else if (!/^on[A-Z]/.test(attr)) use.rendered = true;
       }
       if ((node.type === "Identifier" || node.type === "JSXIdentifier") && node.name === name && inConditionTest(node)) {
         let parent = node.parent;
@@ -378,14 +462,16 @@ function componentState(rel, body) {
   }
   setParents(ast);
   const consts = collectConsts(ast);
-  const deadCondition = (code) => {
+  addComputedConsts(ast, consts);
+  const truthOf = (code) => {
     try {
-      return staticTruth(parseExpressionText(code, true), consts) === false;
+      return staticTruth(parseExpressionText(code, true), consts);
     } catch {
-      return false;
+      return undefined;
     }
   };
-  const component = componentModule(rel, body, { deadCondition, hidden: true });
+  const deadCondition = (code) => truthOf(code) === false;
+  const component = componentModule(rel, body, { deadCondition, hidden: true, truth: truthOf });
   CONSTS = consts;
   SOURCE = component.script;
   try {
@@ -397,9 +483,60 @@ function componentState(rel, body) {
   }
 }
 
+const LIFECYCLE = new Set(["onMount", "onDestroy", "beforeUpdate", "afterUpdate", "onMounted", "onUnmounted", "onBeforeMount", "onBeforeUnmount", "created", "mounted", "setup", "beforeMount", "beforeUnmount"]);
+
+function addComputedConsts(ast, consts) {
+  walk(ast, (node) => {
+    if (node.type !== "VariableDeclarator" || node.id.type !== "Identifier" || !node.init) return;
+    const init = unwrap(node.init);
+    if (init.type !== "CallExpression") return;
+    const callee = unwrap(init.callee);
+    if (callee?.type !== "Identifier" || callee.name !== "computed") return;
+    const fn = unwrap(init.arguments[0]);
+    if (!fn || !FN_TYPES.has(fn.type)) return;
+    let expr = fn.body;
+    if (expr?.type === "BlockStatement") {
+      const ret = [...expr.body].reverse().find((stmt) => stmt.type === "ReturnStatement");
+      expr = ret?.argument;
+    }
+    if (expr && staticValue(unwrap(expr), consts).known) consts.set(node.id.name, unwrap(expr));
+  });
+}
+
+function dataStates(ast) {
+  const states = [];
+  walk(ast, (node) => {
+    const method = node.type === "ObjectMethod" && !node.computed && node.key?.name === "data" ? node
+      : (node.type === "ObjectProperty" && !node.computed && node.key?.name === "data" && FN_TYPES.has(unwrap(node.value)?.type) ? unwrap(node.value) : null);
+    if (!method) return;
+    let returned = method.body;
+    if (returned?.type === "BlockStatement") {
+      const ret = [...returned.body].reverse().find((stmt) => stmt.type === "ReturnStatement");
+      returned = ret?.argument;
+    }
+    returned = unwrap(returned);
+    if (returned?.type !== "ObjectExpression") return;
+    for (const prop of returned.properties) {
+      if (prop.type === "ObjectProperty" && !prop.computed && prop.key?.name) states.push({ name: prop.key.name, writes: [], field: true });
+    }
+  });
+  return states;
+}
+
+function templateRoots(component) {
+  const roots = new Set(LIFECYCLE);
+  for (const item of component.expressions || []) {
+    for (const match of String(item.code || "").matchAll(/\b[A-Za-z_$][\w$]*/g)) roots.add(match[0]);
+  }
+  return [...roots];
+}
+
 function componentVerdict(rel, svelte, ast, component) {
   const states = [];
   const byName = new Map();
+  if (svelte && component.awaitCatch) return { ok: true, why: "await-catch" };
+  const roots = new Set(templateRoots(component));
+  REACHABLE = reachableFunctions(ast, [...roots]);
   if (svelte) {
     // Svelte stores: const error = writable(""); error.set(...) on the error path; {$error} in markup.
     walk(ast, (node) => {
@@ -435,6 +572,12 @@ function componentVerdict(rel, svelte, ast, component) {
         byName.set(state.name, state);
       }
     });
+    for (const state of dataStates(ast)) {
+      if (!byName.has(state.name)) {
+        states.push(state);
+        byName.set(state.name, state);
+      }
+    }
   }
   const storeWrites = (tree) => walk(tree, (node) => {
     if (node.type !== "CallExpression") return;
@@ -449,6 +592,15 @@ function componentVerdict(rel, svelte, ast, component) {
   walk(ast, (node) => {
     if (node.type !== "AssignmentExpression" && node.type !== "UpdateExpression") return;
     const target = unwrap(node.type === "AssignmentExpression" ? node.left : node.argument);
+    if (node.type === "AssignmentExpression" && target?.type === "MemberExpression" && !target.computed && unwrap(target.object)?.type === "ThisExpression") {
+      const field = byName.get(target.property?.name || "");
+      if (field?.field) {
+        let owner = node.parent;
+        while (owner && !FN_TYPES.has(owner.type) && owner.type !== "ObjectMethod") owner = owner.parent;
+        const ownerName = owner?.id?.name || owner?.key?.name || "";
+        if (!ownerName || roots.has(ownerName) || LIFECYCLE.has(ownerName)) field.writes.push({ node, value: valueKey(node.right) });
+      }
+    }
     let root = target;
     while (root && (root.type === "MemberExpression" || root.type === "OptionalMemberExpression")) root = unwrap(root.object);
     if (root?.type !== "Identifier" || !byName.has(root.name)) return;
@@ -485,7 +637,7 @@ function componentVerdict(rel, svelte, ast, component) {
       else if (item.attr === "if" || item.attr === "else-if" || item.attr === "show") {
         out.condition = true;
         out.rendered = true;
-      } else out.rendered = true;
+      } else if (item.attr === "") out.rendered = true;
       walk(item.expr, (node) => {
         if (node.type === "Identifier" && node.name === name && inConditionTest(node)) out.condition = true;
       });

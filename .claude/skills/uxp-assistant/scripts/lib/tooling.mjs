@@ -86,7 +86,7 @@ function installedPackages(modulesDir) {
       return;
     }
     for (const entry of entries) {
-      if (entry.name === ".bin" || entry.name === ".package-lock.json" || entry.name === ".cache") continue;
+      if (entry.name === ".bin" || entry.name === ".package-lock.json") continue;
       const full = path.join(dir, entry.name);
       if (entry.name.startsWith("@") && entry.isDirectory()) {
         for (const scoped of fs.readdirSync(full, { withFileTypes: true })) {
@@ -105,8 +105,24 @@ function installedPackages(modulesDir) {
   return found;
 }
 
-function binLinks(modulesDir) {
+function lockBinTargets(skillDirectory) {
+  const lock = readJson(path.join(toolingSource(skillDirectory), "package-lock.json"));
+  const map = new Map();
+  for (const [key, entry] of Object.entries(lock?.packages || {})) {
+    if (!entry || entry.bin == null || !String(key).startsWith("node_modules/")) continue;
+    const bins = typeof entry.bin === "string" ? { [path.posix.basename(key)]: entry.bin } : entry.bin;
+    for (const [name, rel] of Object.entries(bins)) {
+      const target = path.posix.normalize(path.posix.join(key, String(rel)));
+      if (!map.has(name)) map.set(name, new Set());
+      map.get(name).add(target);
+    }
+  }
+  return map;
+}
+
+function binLinks(modulesDir, skillDirectory) {
   const problems = [];
+  const expected = lockBinTargets(skillDirectory);
   const check = (binDir) => {
     let entries = [];
     try {
@@ -116,7 +132,10 @@ function binLinks(modulesDir) {
     }
     for (const entry of entries) {
       const full = path.join(binDir, entry.name);
-      if (!entry.isSymbolicLink()) continue;
+      if (!entry.isSymbolicLink()) {
+        problems.push(`${full} is not a symlink. A .bin entry must be a symlink into the pinned tree`);
+        continue;
+      }
       let target = "";
       try {
         target = fs.realpathSync(full);
@@ -124,7 +143,13 @@ function binLinks(modulesDir) {
         problems.push(`${full} is a broken link`);
         continue;
       }
-      if (!insideRoot(modulesDir, target)) problems.push(`${full} points outside the pinned tooling (${target})`);
+      if (!insideRoot(modulesDir, target)) {
+        problems.push(`${full} points outside the pinned tooling (${target})`);
+        continue;
+      }
+      const rel = `node_modules/${path.relative(modulesDir, target).split(path.sep).join("/")}`;
+      const allowed = expected.get(entry.name);
+      if (expected.size && (!allowed || !allowed.has(rel))) problems.push(`${full} does not match the lock bin map (${rel})`);
     }
   };
   check(path.join(modulesDir, ".bin"));
@@ -184,13 +209,21 @@ export function verifyTree(modulesDir, { skillDirectory = skillRoot, platform = 
   }
   for (const { key, dir } of present) {
     const entry = wanted.get(key);
-    const pkg = readJson(path.join(dir, "package.json"));
+    const pkgFile = path.join(dir, "package.json");
+    let pkgStat;
+    try {
+      pkgStat = fs.lstatSync(pkgFile);
+    } catch (error) {
+      return { ok: false, reason: error.code === "ENOENT" ? `${pkgFile} is missing` : error.message };
+    }
+    if (!pkgStat.isFile()) return { ok: false, reason: `${pkgFile} is not a regular file` };
+    const pkg = readJson(pkgFile);
     if (pkg?.version !== entry.version) return { ok: false, reason: `${key} is ${pkg?.version || "?"}, not the pinned ${entry.version}` };
     const got = packageDigest(dir);
     if (got.error) return { ok: false, reason: got.error };
     if (got.digest !== entry.digest) return { ok: false, reason: `${key}@${entry.version} files do not match the pinned sha256 (${got.digest.slice(0, 12)}… is not ${entry.digest.slice(0, 12)}…). A file was changed.` };
   }
-  const links = binLinks(resolved);
+  const links = binLinks(resolved, skillDirectory);
   if (links.length) return { ok: false, reason: links[0] };
   verified.set(memo, { signature });
   return { ok: true };
@@ -210,6 +243,7 @@ export function npmCommand(execPath = process.execPath) {
   const bin = path.dirname(fs.realpathSync(execPath));
   const candidates = [
     path.join(bin, "..", "lib", "node_modules", "npm", "bin", "npm-cli.js"),
+    path.join(bin, "lib", "node_modules", "npm", "bin", "npm-cli.js"),
     path.join(bin, "node_modules", "npm", "bin", "npm-cli.js"),
     path.join(bin, "..", "node_modules", "npm", "bin", "npm-cli.js")
   ];
@@ -230,6 +264,41 @@ function alive(pid) {
 
 function sleep(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/** Drop staging and old trees left by a killed install. A folder owned by a live process is left alone. */
+function sweepStale(prefix) {
+  const parent = path.dirname(prefix);
+  const base = path.basename(prefix).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`^${base}\\.(?:staging|old)-(\\d+)-\\d+$`);
+  let names = [];
+  try {
+    names = fs.readdirSync(parent);
+  } catch {
+    return;
+  }
+  for (const name of names) {
+    const match = name.match(pattern);
+    if (!match) continue;
+    const pid = Number(match[1]);
+    if (pid !== process.pid && alive(pid)) continue;
+    fs.rmSync(path.join(parent, name), { recursive: true, force: true });
+  }
+}
+
+function npmEnv() {
+  const env = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (/^npm_config_/i.test(key)) continue;
+    env[key] = value;
+  }
+  return env;
+}
+
+function installAdvice(reason, tail) {
+  const text = `${reason}\n${tail}`;
+  if (/\b(?:omit|install-strategy|npm_config_|userconfig|\bos\b|\bcpu\b)\b/i.test(text)) return "npm config from the environment and the user npmrc was ignored. Run again.";
+  return "Check the network and run again.";
 }
 
 /**
@@ -281,6 +350,7 @@ export function installTree(prefix, { skillDirectory = skillRoot, npm, notify = 
   fs.mkdirSync(path.dirname(prefix), { recursive: true });
   const release = acquireLock(lockDir, { onWait: (owner) => notify(`Waiting for another session (pid ${owner?.pid || "?"}) to finish installing the pinned tooling into ${prefix}.`) });
   try {
+    sweepStale(prefix);
     const already = verifyTree(modules, { skillDirectory, fresh: true });
     if (already.ok) return { repaired: false, reused: true };
     const broken = fs.existsSync(prefix) ? already.reason : "";
@@ -291,14 +361,19 @@ export function installTree(prefix, { skillDirectory = skillRoot, npm, notify = 
     fs.copyFileSync(path.join(source, "package.json"), path.join(staging, "package.json"));
     fs.copyFileSync(path.join(source, "package-lock.json"), path.join(staging, "package-lock.json"));
     fs.writeFileSync(path.join(staging, ".gitignore"), "*\n");
+    const userconfig = path.join(staging, "empty-npmrc");
+    fs.writeFileSync(userconfig, "");
     const runner = npm ? { command: npm, args: [] } : npmCommand();
-    const args = [...runner.args, "ci", "--prefix", staging, "--no-audit", "--no-fund", "--ignore-scripts", "--loglevel=error"];
-    const ran = spawnSync(runner.command, args, { cwd: staging, encoding: "utf8", timeout });
+    const args = [...runner.args, "ci", "--prefix", staging, "--userconfig", userconfig, "--no-audit", "--no-fund", "--ignore-scripts", "--loglevel=error"];
+    const ran = spawnSync(runner.command, args, { cwd: staging, encoding: "utf8", timeout, env: npmEnv() });
     const checked = ran.status === 0 ? verifyTree(path.join(staging, "node_modules"), { skillDirectory, fresh: true }) : { ok: false, reason: `npm ci exited ${ran.status ?? ran.error?.message}` };
     if (!checked.ok) {
       fs.rmSync(staging, { recursive: true, force: true });
       const tail = (ran.stderr || ran.stdout || "").slice(-400).trim();
-      throw new Error(`${checked.reason}.${tail ? ` npm said: ${tail}` : ""}${broken ? ` The existing tree at ${prefix} was left in place (${broken}).` : ""} Check the network and run again.`);
+      const reason = String(checked.reason || "").replace(/\.+$/, "");
+      const said = tail ? ` npm said: ${tail.replace(/\.+$/, "")}` : "";
+      const left = broken ? ` The existing tree at ${prefix} was left in place (${String(broken).replace(/\.+$/, "")}).` : "";
+      throw new Error(`${reason}.${said}${left} ${installAdvice(reason, tail)}`);
     }
     const old = `${prefix}.old-${process.pid}-${Date.now()}`;
     if (fs.existsSync(prefix)) fs.renameSync(prefix, old);

@@ -124,6 +124,26 @@ function isFunction(node) {
 }
 
 /** true, false, or undefined when the value is not a constant. */
+function sameRef(left, right) {
+  const a = unwrap(left);
+  const b = unwrap(right);
+  if (!a || !b || a.type !== b.type) return false;
+  if (a.type === "Identifier") return a.name === b.name;
+  if ((a.type === "MemberExpression" || a.type === "OptionalMemberExpression") && !a.computed && !b.computed) {
+    return (a.property?.name || a.property?.value) === (b.property?.name || b.property?.value) && sameRef(a.object, b.object);
+  }
+  return false;
+}
+
+/** `error && !error` is never true, whatever error is. */
+function contradicts(left, right) {
+  const a = unwrap(left);
+  const b = unwrap(right);
+  if (a?.type === "UnaryExpression" && a.operator === "!" && sameRef(a.argument, b)) return true;
+  if (b?.type === "UnaryExpression" && b.operator === "!" && sameRef(a, b.argument)) return true;
+  return false;
+}
+
 /** true, false, or undefined when the truthiness is not constant. `busy && false` is false; `msg || "x"` is true. */
 export function staticTruth(node, consts, depth = 0) {
   const value = unwrap(node);
@@ -133,7 +153,7 @@ export function staticTruth(node, consts, depth = 0) {
     const left = staticTruth(value.left, consts, depth + 1);
     const right = staticTruth(value.right, consts, depth + 1);
     if (value.operator === "&&") {
-      if (left === false || right === false) return false;
+      if (contradicts(value.left, value.right) || left === false || right === false) return false;
       if (left === true && right === true) return true;
       return undefined;
     }
@@ -301,7 +321,8 @@ function testSkipped(info, consts) {
     for (const prop of value.properties) {
       const key = prop.type === "ObjectProperty" && !prop.computed ? (prop.key.name || prop.key.value) : "";
       if (!SKIP_KEYS.has(key)) continue;
-      if (staticTruth(prop.value, consts) !== false) return true;
+      // Only a constant-true skip or todo is a skip. `process.platform === "aix"` still runs here.
+      if (staticTruth(prop.value, consts) === true) return true;
     }
   }
   const callback = [...info.node.arguments].reverse().map(unwrap).find(isFunction);
@@ -349,12 +370,19 @@ function liveFunctions(ast, consts) {
         if (!testSkipped(info, consts)) for (const arg of call.arguments) if (isFunction(unwrap(arg))) add(unwrap(arg));
         continue;
       }
+      const callee = unwrap(call.callee);
+      const method = callee?.type === "MemberExpression" && !callee.computed ? callee.property?.name : (callee?.type === "Identifier" ? callee.name : "");
+      const root = callee?.type === "MemberExpression" ? unwrap(callee.object) : null;
+      const rootName = root?.type === "Identifier" ? root.name : "";
+      const timer = method === "setTimeout" || method === "setInterval" || rootName === "setTimeout" || rootName === "setInterval";
+      const inverted = /^(?:throws|rejects|doesNotThrow|doesNotReject)$/.test(method || "") && (!root || /^assert$/i.test(rootName) || rootName === "strict");
+      const assertRef = root && /^assert$/i.test(rootName) && /^(?:ok|equal|strictEqual|deepEqual|deepStrictEqual|notEqual|notDeepEqual|match|doesNotMatch)$/.test(method || "");
+      if (timer || inverted || assertRef) continue;
       for (const arg of call.arguments || []) {
         const value = unwrap(arg);
         if (isFunction(value)) add(value);
         else if (value?.type === "Identifier" && declared.has(value.name)) add(declared.get(value.name));
       }
-      const callee = unwrap(call.callee);
       if (callee?.type === "Identifier" && declared.has(callee.name)) add(declared.get(callee.name));
       if (isFunction(callee)) add(callee);
     }
@@ -524,8 +552,29 @@ export function strongAssertions(source, testRel, featureRels) {
   };
   walk(ast, (node) => {
     if (!featureCall(node)) return;
+    const markAlias = (name, seen) => {
+      if (!name || seen.has(name) || !declared.has(name)) return;
+      const init = unwrap(declared.get(name));
+      if (!init || (init.type !== "ObjectExpression" && init.type !== "ArrayExpression")) return;
+      seen.add(name);
+      derived.set(name, [...(derived.get(name) || []), node]);
+      walk(init, (item) => {
+        if (item.type !== "Identifier") return;
+        const parent = item.parent;
+        if (parent && (parent.type === "MemberExpression" || parent.type === "OptionalMemberExpression") && parent.property === item && !parent.computed) return;
+        if (parent?.type === "ObjectProperty" && parent.key === item && !parent.computed && !parent.shorthand) return;
+        markAlias(item.name, seen);
+      });
+    };
     for (const arg of node.arguments) {
       if (mockArgument(arg)) derived.set(unwrap(arg).name, [...(derived.get(unwrap(arg).name) || []), node]);
+      walk(arg, (item) => {
+        if (item.type !== "Identifier") return;
+        const parent = item.parent;
+        if (parent && (parent.type === "MemberExpression" || parent.type === "OptionalMemberExpression") && parent.property === item && !parent.computed) return;
+        if (parent?.type === "ObjectProperty" && parent.key === item && !parent.computed && !parent.shorthand) return;
+        markAlias(item.name, new Set());
+      });
       const fn = unwrap(arg);
       if (fn && (fn.type === "ArrowFunctionExpression" || fn.type === "FunctionExpression")) {
         walk(fn.body, (item) => {
