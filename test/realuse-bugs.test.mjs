@@ -164,8 +164,11 @@ test("B13 boilerplate tests resolve their files from any working directory", () 
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   assert.match(result.stdout, /pass /);
   const script = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).scripts.test;
-  assert.match(script, /node --test test/);
-  assert.match(script, /skill-boilerplate/);
+  assert.equal(script, "node scripts/run-tests.mjs");
+  const runner = fs.readFileSync(path.join(root, "scripts/run-tests.mjs"), "utf8");
+  assert.match(runner, /"--test"/);
+  assert.match(runner, /skill-boilerplate/);
+  assert.doesNotMatch(runner, /"--test", "test"/);
 });
 
 test("B14 starting again keeps answers", async () => {

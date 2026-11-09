@@ -6,13 +6,13 @@
   "description": "UXP Assistant plans, scaffolds, and implements a UXP plugin with a loopback dashboard. A build is not a host pass.",
   "license": "MIT",
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "dependencies": {
     "create-bolt-uxp": "1.3.27"
   },
   "scripts": {
-    "test": "node --test test && npm test --prefix skill-boilerplate",
+    "test": "node scripts/run-tests.mjs",
     "assist": "node .claude/skills/uxp-assistant/scripts/assist.mjs",
     "session": "node .claude/skills/uxp-assistant/scripts/session.mjs",
     "dashboard": "node .claude/skills/uxp-assistant/scripts/dashboard.mjs",
