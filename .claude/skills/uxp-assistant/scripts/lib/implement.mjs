@@ -43,7 +43,7 @@ export function readSelection(): ReadOk | ReadErr {
 
 export async function applyPreview(preview: { documentId: number; layers: LayerSnap[]; rows: { id: number; name: string; next: string }[] }) {
   const core = (photoshop as { core?: { executeAsModal?: Function } }).core;
-  const app = hostApp();
+  const app = (photoshop as { app?: { activeDocument?: { id: number; activeLayers?: LayerSnap[] } } }).app;
   if (!app || typeof core?.executeAsModal !== "function") {
     return { ok: false, code: "no-host", message: "executeAsModal is not available. The rename was not applied." };
   }
@@ -74,9 +74,8 @@ export async function applyPreview(preview: { documentId: number; layers: LayerS
         if (executionContext.isCancelled) {
           return { ok: false, code: "cancelled", message: "Photoshop cancelled the rename." };
         }
-        const byId = new Map((doc.activeLayers || []).map((layer) => [layer.id, layer]));
         for (const row of preview.rows) {
-          const layer = byId.get(row.id);
+          const layer = (doc.activeLayers || []).find((item) => item.id === row.id);
           if (!layer) {
             return { ok: false, code: "selection-changed", message: "A previewed layer is no longer in the selection." };
           }

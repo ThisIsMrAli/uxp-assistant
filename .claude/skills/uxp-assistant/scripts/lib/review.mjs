@@ -5,7 +5,8 @@ import { fileURLToPath } from "node:url";
 import { readZip } from "./archive.mjs";
 import { goalWasReplaced } from "./contract.mjs";
 import { readScripts } from "./package-project.mjs";
-import { hostCallFindings, panelRendersState, renameFindings } from "./host-flow.mjs";
+import { hostCallFindings, isReviewedSource, panelRendersState, renameFindings } from "./host-flow.mjs";
+import { strongAssertions } from "./test-strength.mjs";
 
 export const REVIEW_LIMIT = "These checks are bounded automated evidence: a changed file uses a documented API symbol the starter did not already contain, a test imports that module and asserts something other than a tautology, and every new archive contains that symbol. They are not semantic proof. Command success is not feature correctness and not a host pass. Source and behavior review is still pending. The Adobe host was NOT TESTED.";
 
@@ -45,10 +46,10 @@ export function snapshotProject(project) {
       if (entry.name.endsWith(".ccx") || entry.name.endsWith(".zip")) {
         const data = fs.readFileSync(full);
         snap.archives.push({ file: rel, bytes: data.length, sha256: crypto.createHash("sha256").update(data).digest("hex") });
-      } else if (/\.(jsx?|tsx?|mjs|cjs|css|html|json|md)$/.test(entry.name)) {
+      } else if (/\.(jsx?|tsx?|mjs|cjs|css|html|json|md|vue|svelte)$/.test(entry.name)) {
         const text = fs.readFileSync(full, "utf8");
         snap.files[rel] = sha(text);
-        if (/\.(jsx?|tsx?|mjs|cjs)$/.test(entry.name)) {
+        if (/\.(jsx?|tsx?|mjs|cjs|vue|svelte)$/.test(entry.name)) {
           const surface = codeSurface(text);
           surfaces.push(surface);
           snap.fileSurfaces[rel] = surface;
@@ -320,9 +321,10 @@ export function reviewClaim({ contract, files, bodies }) {
   if (goalWasReplaced(contract, featureText)) {
     return { ok: false, say: "The changed files replace the requested goal with the rename fixture." };
   }
-  const outside = renameOutsideModal(contract, feature);
+  const shipped = shippedSources(contract, feature);
+  const outside = renameOutsideModal(contract, shipped);
   if (outside) return { ok: false, say: outside };
-  const missing = undocumentedHostCalls(feature, contract?.docText || "", contract?.projectPath || "");
+  const missing = undocumentedHostCalls(shipped, contract?.docText || "", contract?.projectPath || "");
   if (missing.length) {
     const unresolved = missing.filter((item) => item.includes("needs review"));
     const absent = missing.filter((item) => !item.includes("needs review"));
@@ -333,19 +335,64 @@ export function reviewClaim({ contract, files, bodies }) {
     return { ok: false, say: parts.join(" ") };
   }
   const ui = feature.filter((item) => /\.(tsx|jsx|vue|svelte|html)$/.test(item.rel));
-  if (ui.length && !ui.some((item) => showsHonestUiState(item.body))) {
-    return { ok: false, say: "The changed panel does not wire a state variable into the view, or a disabled control to a handler. Static text that mentions an error is not that state." };
+  if (ui.length && !ui.some((item) => showsHonestUiState(item.body, item.rel))) {
+    return { ok: false, say: "The changed panel does not show an error, busy, or loading state. That needs a state the view renders live that is set in a catch or .catch() path, or a state set to two different values that drives a disabled control or what the view shows. Static text, keywords, a state that is only ever set once, and a status line under a dead branch are not that state." };
   }
-  return { ok: true, changed, feature, hit: usedSymbols, usedSymbols, introducedFiles: introduced.map((item) => item.rel), limits: REVIEW_LIMIT };
+  return { ok: true, changed, feature, reviewed: shipped.map((item) => item.rel), hit: usedSymbols, usedSymbols, introducedFiles: introduced.map((item) => item.rel), limits: REVIEW_LIMIT };
 }
 
-export function showsHonestUiState(source) {
-  return panelRendersState(source);
+export function showsHonestUiState(source, rel = "panel.tsx") {
+  return panelRendersState(source, rel);
 }
 
+const NOT_SHIPPED = /(^|\/)(node_modules|\.git|dist|ccx|public-zip|coverage|\.uxp-tooling)(\/|$)|^scripts\//;
+
+/**
+ * Every source that can end up in the CCX is reviewed, not only the files the agent declared:
+ * the declared feature files plus every other reviewed source in the project (src, webview-ui,
+ * main.tsx, main.vue, …) that is new or changed since the handoff baseline. Tests, root tool
+ * configs, root .mjs/.cjs build scripts, and scripts/ are Node tooling, not shipped, and are left out.
+ */
+export function shippedSources(contract, feature) {
+  const list = [...feature];
+  const project = contract?.projectPath || "";
+  if (!project || !fs.existsSync(project)) return list;
+  const baseline = contract?.baseline?.files || {};
+  const seen = new Set(list.map((item) => item.rel));
+  const walk = (dir) => {
+    let entries = [];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      const rel = path.relative(project, full).split(path.sep).join("/");
+      if (NOT_SHIPPED.test(rel)) continue;
+      if (entry.isDirectory()) {
+        walk(full);
+        continue;
+      }
+      if (seen.has(rel) || isTestPath(rel) || !isReviewedSource(rel)) continue;
+      if (!rel.includes("/") && (/\.config\.[cm]?[jt]s$/.test(rel) || /\.[cm]js$/.test(rel))) continue;
+      let body;
+      try {
+        body = fs.readFileSync(full, "utf8");
+      } catch {
+        continue;
+      }
+      if (baseline[rel] && baseline[rel] === sha(body)) continue;
+      seen.add(rel);
+      list.push({ rel, body, hash: sha(body), undeclared: true });
+    }
+  };
+  walk(project);
+  return list;
+}
+
+/** Name writes to host objects are checked on every claim, whatever words the goal uses. */
 export function renameOutsideModal(contract, feature) {
-  const goal = String(contract?.goal || "");
-  if (!/rename/i.test(goal)) return "";
   const writes = renameFindings(feature, contract?.docText || "", contract?.projectPath || "");
   return writes[0] || "";
 }
@@ -372,111 +419,13 @@ function importStatements(source) {
   return statements;
 }
 
-function bindingsFrom(statement) {
-  const text = String(statement || "").replace(/^[\s;]+/, "");
-  const names = [];
-  const brace = text.match(/\{([^}]+)\}/);
-  if (brace && /^import\b/.test(text)) {
-    for (const part of brace[1].split(",")) {
-      const bits = part.trim().split(/\s+as\s+/);
-      const local = (bits[bits.length - 1] || "").trim();
-      if (/^[A-Za-z_$][\w$]*$/.test(local)) names.push(local);
-    }
-  }
-  const named = text.match(/import\s+([A-Za-z_$][\w$]*)\s*(?:,|from\b)/);
-  if (named) names.push(named[1]);
-  const ns = text.match(/import\s*\*\s*as\s+([A-Za-z_$][\w$]*)/);
-  if (ns) names.push(ns[1]);
-  const required = text.match(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=/);
-  if (required && /require\(/.test(text)) names.push(required[1]);
-  return names;
-}
-
 function resolvesTo(spec, testFile, rel) {
   if (!spec.startsWith(".")) return false;
   const from = path.posix.dirname(testFile.split(path.sep).join("/"));
   const resolved = path.posix.normalize(path.posix.join(from, spec));
   const target = rel.split(path.sep).join("/");
-  const candidates = [resolved, `${resolved}.mjs`, `${resolved}.js`, `${resolved}.cjs`, `${resolved}.tsx`, `${resolved}.ts`, `${resolved}.jsx`];
+  const candidates = [resolved, `${resolved}.mjs`, `${resolved}.js`, `${resolved}.cjs`, `${resolved}.tsx`, `${resolved}.ts`, `${resolved}.jsx`, `${resolved}.vue`, `${resolved}.svelte`];
   return candidates.includes(target);
-}
-
-function splitArgs(list) {
-  const args = [];
-  let current = "";
-  let depth = 0;
-  let quote = "";
-  for (let i = 0; i < list.length; i += 1) {
-    const ch = list[i];
-    if (quote) {
-      current += ch;
-      if (ch === "\\" ) { current += list[i + 1] || ""; i += 1; continue; }
-      if (ch === quote) quote = "";
-      continue;
-    }
-    if (ch === "'" || ch === "\"" || ch === "`") { quote = ch; current += ch; continue; }
-    if (ch === "(" || ch === "[" || ch === "{") depth += 1;
-    else if (ch === ")" || ch === "]" || ch === "}") depth -= 1;
-    else if (ch === "," && depth === 0) { args.push(current.trim()); current = ""; continue; }
-    current += ch;
-  }
-  if (current.trim()) args.push(current.trim());
-  return args;
-}
-
-function balancedCall(code, start) {
-  const open = code.indexOf("(", start);
-  if (open < 0) return "";
-  let depth = 0;
-  let quote = "";
-  for (let i = open; i < code.length; i += 1) {
-    const ch = code[i];
-    if (quote) {
-      if (ch === "\\") { i += 1; continue; }
-      if (ch === quote) quote = "";
-      continue;
-    }
-    if (ch === "'" || ch === "\"" || ch === "`") { quote = ch; continue; }
-    if (ch === "(") depth += 1;
-    else if (ch === ")") {
-      depth -= 1;
-      if (depth === 0) return code.slice(start, i + 1);
-    }
-  }
-  return code.slice(start);
-}
-
-function assertionScore(source) {
-  const code = commentStripped(source);
-  let real = 0;
-  let tautology = 0;
-  const heads = /\b(?:assert\s*\.\s*[A-Za-z]+|expect)\s*\(/g;
-  for (const match of code.matchAll(heads)) {
-    const raw = balancedCall(code, match.index);
-    const open = raw.indexOf("(");
-    const inner = raw.slice(open + 1, -1);
-    const args = splitArgs(inner);
-    const literal = /^(?:true|false|null|undefined|\d+|["'`][^"'`]*["'`])$/;
-    const sameLiteral = args.length >= 2 && args[0] === args[1] && literal.test(args[0]);
-    const okTrue = /assert\s*\.\s*ok\s*\(\s*(?:true|1)\s*\)/.test(raw);
-    const expectLiteral = /expect\s*\(\s*(?:true|false|1|0)\s*\)\s*\.\s*to(?:Be|Equal)\s*\(\s*(?:true|false|1|0)\s*\)/.test(raw);
-    const existence = /typeof\s+[A-Za-z_$][\w$]*\s*===?\s*["']function["']/.test(raw)
-      || /typeof\s+[A-Za-z_$][\w$]*\s*,\s*["']function["']/.test(raw);
-    const arrayOnly = /assert\s*\.\s*ok\s*\(\s*Array\s*\.\s*isArray\s*\(/.test(raw)
-      || /assert\s*\.\s*equal\s*\(\s*Array\s*\.\s*isArray\s*\([\s\S]*\)\s*,\s*true\s*\)/.test(raw);
-    const keysOnly = /assert\s*\.\s*ok\s*\(\s*Object\s*\.\s*keys\s*\([\s\S]*?\)\s*\.length(?:\s*(?:>|>=)\s*0)?\s*\)/.test(raw)
-      || /Object\s*\.\s*keys\s*\([\s\S]*?\)\s*\.length\s*(?:>|>=)\s*0/.test(raw);
-    const instanceOnly = /\binstanceof\b/.test(raw);
-    const expected = (args[1] || "").trim();
-    const actual = args[0] || "";
-    const emptyExpected = /^(?:0|false|null|undefined|""|''|``)$/.test(expected);
-    const nullFixture = /:\s*null\b|\bactiveDocument\s*:\s*null\b|\bname\s*:\s*""\b/.test(actual);
-    const successValue = /["'`][^"'`\n]+["'`]/.test(expected) && !/["'`](?:function|object|string|number|boolean|undefined)["'`]/.test(expected);
-    const nullPath = emptyExpected && nullFixture && !successValue;
-    if (sameLiteral || okTrue || expectLiteral || existence || arrayOnly || keysOnly || instanceOnly || nullPath) tautology += 1;
-    else real += 1;
-  }
-  return { real, tautology };
 }
 
 export function testsCoverFeature(project, changed, usedSymbols, introducedFiles) {
@@ -500,18 +449,17 @@ export function testsCoverFeature(project, changed, usedSymbols, introducedFiles
     }
   };
   walk(project);
+  const weak = [];
   for (const rel of files) {
     const text = fs.readFileSync(path.join(project, rel), "utf8");
-    const code = commentStripped(text);
     const statements = importStatements(text);
     const imported = statements.filter((item) => [...users].some((feature) => resolvesTo(item.spec, rel, feature)));
     if (!imported.length) continue;
-    const withoutImports = statements.reduce((body, item) => body.replace(item.text, " "), code);
-    const usedBinding = imported.some((item) => bindingsFrom(item.text).some((name) => new RegExp(`\\b${name}\\b`).test(withoutImports)));
-    const score = assertionScore(text);
-    if (usedBinding && score.real > 0) return { ok: true, file: rel };
+    const strength = strongAssertions(text, rel, [...users]);
+    if (strength.ok) return { ok: true, file: rel };
+    if (strength.reason) weak.push(`${rel}: ${strength.reason}`);
   }
-  return { ok: false, say: `No test imports a changed module that uses the documented API (${[...users].join(", ")}) and then asserts on that use. Mentioning the file name, a comment-only import, assert.equal(1, 1), or a typeof function check is not that test. Object.keys, instanceof, and a check that only exercises a null or empty path are not that test.` };
+  return { ok: false, weak, say: `No test imports a changed module that uses the documented API (${[...users].join(", ")}) and asserts a value it returns from a non-empty fixture against a stated expected value.${weak.length ? ` ${weak.join(". ")}.` : ""} Mentioning the file name, a comment-only import, assert.equal(1, 1), a typeof function check, Object.keys, instanceof, .length, ok, notEqual, throws, a snapshot of the feature's own output, and a check that only exercises a null or empty path are not that test.` };
 }
 
 function scopeHash(scope) {

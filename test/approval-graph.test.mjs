@@ -91,7 +91,7 @@ function writeFeature(project) {
   fs.mkdirSync(path.join(project, "test"), { recursive: true });
   fs.writeFileSync(path.join(project, "src", "Selection.tsx"), `export function SelectionPanel() {
   const [phase, setPhase] = useState("idle");
-  return <main><h1>Selected layer ids</h1><p className="status">{phase}</p><button type="button" disabled={!phase} onClick={() => setPhase("read")}>Read selection</button><p className="error">{phase === "missing" ? "No document is open." : ""}</p></main>;
+  return <main><h1>Selected layer ids</h1><p className="status">{phase}</p><button type="button" disabled={phase === "reading"} onClick={() => { setPhase("reading"); try { setPhase("read"); } catch (e) { setPhase(String(e)); } }}>Read selection</button><p className="error">{phase === "missing" ? "No document is open." : ""}</p></main>;
 }
 `);
   fs.writeFileSync(path.join(project, "src", "selection-read.mjs"), `export async function readSelection(app) {
@@ -106,6 +106,10 @@ import { test } from "node:test";
 import { readSelection } from "../src/selection-read.mjs";
 test("readSelection reports a missing host", async () => {
   assert.equal((await readSelection(null)).ok, false);
+});
+test("readSelection lists the active layer ids", async () => {
+  const result = await readSelection({ activeDocument: { activeLayers: [{ id: 7, name: "Hero" }] } });
+  assert.deepEqual(result.layers, [{ id: 7, name: "Hero" }]);
 });
 `);
   return ["src/Selection.tsx", "src/selection-read.mjs", "test/selection.test.mjs"];

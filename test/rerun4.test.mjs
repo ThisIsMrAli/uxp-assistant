@@ -169,8 +169,14 @@ test("NT8 static and dead UI text is not rendered state", () => {
   assert.equal(showsHonestUiState(dead), false);
   const honest = `export function Panel(){
     const [msg, setMsg] = useState("");
-    function onRead(){ setMsg("No open document."); }
+    function onRead(){ try { setMsg(read()); } catch (e) { setMsg(String(e)); } }
     return <button onClick={onRead}>{msg || "No open document."}</button>;
   }`;
   assert.equal(showsHonestUiState(honest), true);
+  const anyState = `export function Panel(){
+    const [msg, setMsg] = useState("");
+    function onRead(){ setMsg("No open document."); }
+    return <button onClick={onRead}>{msg || "No open document."}</button>;
+  }`;
+  assert.equal(showsHonestUiState(anyState), false, "NT8: any rendered useState no longer counts");
 });

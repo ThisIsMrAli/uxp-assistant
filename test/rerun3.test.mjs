@@ -427,9 +427,16 @@ test("NR7 static error text is not a live status", () => {
   assert.equal(showsHonestUiState("export function Panel(){ return <sp-body>Error codes are listed in the docs.</sp-body>; }"), false);
   const live = `export function Panel(){
     const [status, setStatus] = useState("Waiting for Photoshop…");
-    return <button disabled={!status} onClick={() => setStatus("Ready")}>{status}</button>;
+    const [busy, setBusy] = useState(false);
+    async function read(){ setBusy(true); try { setStatus(await title()); } catch (e) { setStatus(String(e)); } finally { setBusy(false); } }
+    return <button disabled={busy} onClick={read}>{status}</button>;
   }`;
   assert.equal(showsHonestUiState(live), true);
+  const once = `export function Panel(){
+    const [status, setStatus] = useState("Waiting for Photoshop…");
+    return <button disabled={!status} onClick={() => setStatus("Ready")}>{status}</button>;
+  }`;
+  assert.equal(showsHonestUiState(once), false, "NT8: a disabled binding on a state set once to a constant is not a busy state");
   const claim = reviewClaim({
     contract: { goal: "Show the document title", docText: "activeDocument title string", baseline: { files: {}, surface: "", fileSurfaces: {} } },
     files: ["src/title.ts", "src/Panel.tsx"],
