@@ -1,0 +1,79 @@
+// The rerun4 host corpus: 54 cases with synthetic docs. Shared by host-corpus and host-corpus-rerun5 tests.
+export const DOCS = `
+addNotificationListener
+getActiveProject
+Returns: Promise<Project>
+Project
+getActiveSequence
+Returns: Promise<Sequence>
+Sequence
+getVideoTrack
+Returns: Promise<VideoTrack>
+VideoTrack
+getTrackItems
+executeAsModal
+activeDocument
+activeLayers
+app
+core
+name
+`;
+
+export const hostReexport = { rel: "src/host.ts", body: "export { photoshop } from \"./globals\";\n" };
+
+export const OLD_CASES = [
+  { id: "NT1 optional chain", kind: "call", expect: "fail", body: "export function f(x) { return x?.fake?.(); }\n" },
+  { id: "NT1 variable key", kind: "call", expect: "fail", body: "export function f(x, k) { return x[k](); }\n" },
+  { id: "NT1 template key", kind: "call", expect: "fail", body: "export function f(x) { return x[`fake`](); }\n" },
+  { id: "NT1 concatenated key", kind: "call", expect: "fail", body: "export function f(x) { return x[\"fa\" + \"ke\"](); }\n" },
+  { id: "NT1 Reflect.apply", kind: "call", expect: "fail", body: "export function f(x) { return Reflect.apply(x.fake, x, []); }\n" },
+  { id: "NT1 bind", kind: "call", expect: "fail", body: "export function f(x) { return x.fake.bind(x)(); }\n" },
+  { id: "NT1 apply", kind: "call", expect: "fail", body: "export function f(x) { return x.fake.apply(x, []); }\n" },
+  { id: "NT1 call", kind: "call", expect: "fail", body: "export function f(x) { return x.fake.call(x); }\n" },
+  { id: "NT9 cast label", kind: "call", expect: "fail", body: "export function f(track) { return (track as any).getClips(); }\n", includes: "track.getClips()", excludes: "any" },
+  { id: "NT9 parenthesized cast", kind: "call", expect: "fail", body: "export function f(track) { return ((track as any) as typeof import(\"premierepro\")).getClips(); }\n", includes: "track.getClips()", excludes: "any" },
+  { id: "NT9 satisfies", kind: "call", expect: "fail", body: "export function f(track) { return (track satisfies object).getClips(); }\n", includes: "track.getClips()" },
+  { id: "NT9 non-null", kind: "call", expect: "fail", body: "export function f(track) { return track!.getClips(); }\n", includes: "track.getClips()" },
+  { id: "NT9 alias of cast", kind: "call", expect: "fail", body: "export function f(track) { const clip = (track as any).getClips; return clip.call(track); }\n", includes: "track.getClips()" },
+  { id: "NR4 chained getClips", kind: "call", expect: "fail", body: "export async function list(sequence) { return (await sequence.getVideoTrack(0)).getClips(); }\n", includes: "getClips" },
+  { id: "NR4 invented project method", kind: "call", expect: "fail", body: "export function open(ppro) { return ppro.Project.openActiveProjectNow(); }\n", includes: "openActiveProjectNow" },
+  { id: "NR4 photoshop parameter", kind: "call", expect: "fail", body: "export function listen(photoshop) { return photoshop.action.subscribeToEverything(() => {}); }\n", includes: "subscribeToEverything" },
+  { id: "NS1 bracket call", kind: "call", expect: "fail", body: "export async function list(sequence) { const track = await sequence.getVideoTrack(0); return track[\"getClips\"](0); }\n", includes: "getClips" },
+  { id: "NS1 destructured call", kind: "call", expect: "fail", body: "export function read(track) { const { getClips } = track; return getClips.call(track, 0); }\n", includes: "getClips" },
+  { id: "NS1 globals re-export", kind: "call", expect: "fail", extra: [hostReexport], body: "import { photoshop } from \"./host\";\nexport function listen() { return photoshop.action.subscribeToEverything(() => {}); }\n", includes: "subscribeToEverything" },
+  { id: "spread rest", kind: "call", expect: "fail", body: "export function read(track) { const { ...rest } = track; return rest.getClips(); }\n" },
+  { id: "Reflect.get variable", kind: "call", expect: "fail", body: "export function f(x, k) { return Reflect.get(x, k)(); }\n" },
+  { id: "template with expression", kind: "call", expect: "fail", body: "export function f(x, n) { return x[`get${n}`](); }\n" },
+  { id: "optional documented call", kind: "call", expect: "pass", body: "export async function list(sequence) { const track = await sequence.getVideoTrack(0); return track?.getTrackItems?.(); }\n" },
+  { id: "literal computed documented", kind: "call", expect: "pass", body: "export async function list(sequence) { const track = await sequence.getVideoTrack(0); return track[\"getTrackItems\"](); }\n" },
+  { id: "documented chain", kind: "call", expect: "pass", body: "export async function list(sequence) { const track = await sequence.getVideoTrack(0); return track.getTrackItems(); }\n" },
+  { id: "bolt property read is not a call", kind: "call", expect: "pass", body: "import { uxp, photoshop } from \"./globals\";\nconst id = uxp.entrypoints._pluginInfo.id;\nexport function listen() { return photoshop.action.addNotificationListener([\"open\"], () => {}); }\n" },
+  { id: "premiere documented chain", kind: "call", expect: "pass", body: "import { premierepro } from \"./globals\";\nexport async function clips() {\n  const project = await premierepro.Project.getActiveProject();\n  const sequence = await project.getActiveSequence();\n  const track = await sequence.getVideoTrack(0);\n  return track.getTrackItems();\n}\n" },
+  { id: "local object is not a host", kind: "call", expect: "pass", body: "const photoshop = { action: { subscribeToEverything() { return 1; } } };\nexport function f() { return photoshop.action.subscribeToEverything(); }\n" },
+  { id: "local helper call", kind: "call", expect: "pass", body: "function titleOf(row) { return row.title; }\nexport function f(layer) { return titleOf({ title: layer.name }); }\n" },
+  { id: "NT2 plain row", kind: "rename", expect: "pass", body: "export function list(app) {\n  void app.activeDocument;\n  const layer = app.activeDocument.activeLayers[0];\n  const row = { id: layer.id };\n  row.name = layer.name;\n  return row;\n}\n" },
+  { id: "NT2 any row", kind: "rename", expect: "pass", body: "export function list(layer) {\n  let row: any;\n  row.name = layer.name;\n  return row;\n}\n" },
+  { id: "NT2 helper only inside modal", kind: "rename", expect: "pass", body: "export async function rename(app, core, layer, name) {\n  void app.activeDocument;\n  const setName = (l, n) => { l.name = n; };\n  return core.executeAsModal(async () => { setName(layer, name); });\n}\n" },
+  { id: "NT2 referenced callback", kind: "rename", expect: "pass", body: "import { core } from \"photoshop\";\nasync function doRename(layer, name) { layer.name = name; }\nexport async function rename(layer, name) { return core.executeAsModal(doRename, { commandName: \"Rename\" }); }\n" },
+  { id: "NT2 nested referenced callback", kind: "rename", expect: "pass", body: "import { core } from \"photoshop\";\nexport async function rename(layer, name) {\n  async function doRename() { layer.name = name; }\n  return core.executeAsModal(doRename, { commandName: \"Rename\" });\n}\n" },
+  { id: "real photoshop modal write", kind: "rename", expect: "pass", body: "import { photoshop } from \"./globals\";\nexport async function rename(name) {\n  const layer = photoshop.app.activeDocument.activeLayers[0];\n  return photoshop.core.executeAsModal(async () => { layer.name = name; }, { commandName: \"Rename selected layers\" });\n}\n" },
+  { id: "real photoshop calls", kind: "call", expect: "pass", body: "import { photoshop } from \"./globals\";\nexport async function rename(name) {\n  const layer = photoshop.app.activeDocument.activeLayers[0];\n  return photoshop.core.executeAsModal(async () => { layer.name = name; }, { commandName: \"Rename selected layers\" });\n}\n" },
+  { id: "NT2 helper also called outside", kind: "rename", expect: "fail", body: "export async function rename(app, core, layer, name) {\n  void app.activeDocument;\n  const setName = (l, n) => { l.name = n; };\n  setName(layer, name);\n  return core.executeAsModal(async () => { setName(layer, \"also\"); });\n}\n" },
+  { id: "NT3 variable key write", kind: "rename", expect: "fail", body: "export function rename(layer, k, name) { layer[k] = name; }\n" },
+  { id: "NT3 template name write", kind: "rename", expect: "fail", body: "export function rename(layer, name) { layer[`name`] = name; }\n" },
+  { id: "NT3 destructuring assignment", kind: "rename", expect: "fail", body: "export function rename(layer, name) { [layer.name] = [name]; }\n" },
+  { id: "NT3 object destructuring assignment", kind: "rename", expect: "fail", body: "export function rename(layer, name) { ({ n: layer.name } = { n: name }); }\n" },
+  { id: "NT3 fake executeAsModal", kind: "rename", expect: "fail", body: "export function rename(layer, name) {\n  const fake = { executeAsModal(fn) { return fn(); } };\n  return fake.executeAsModal(() => { layer.name = name; });\n}\n" },
+  { id: "NT3 setTimeout escape", kind: "rename", expect: "fail", body: "import { core } from \"photoshop\";\nexport async function rename(layer, name) {\n  return core.executeAsModal(async () => { setTimeout(() => { layer.name = name; }, 0); });\n}\n" },
+  { id: "NT3 promise then escape", kind: "rename", expect: "fail", body: "import { core } from \"photoshop\";\nexport async function rename(layer, name) {\n  return core.executeAsModal(async () => { Promise.resolve().then(() => { layer.name = name; }); });\n}\n" },
+  { id: "NT3 un-awaited write", kind: "rename", expect: "fail", body: "import { core } from \"photoshop\";\nexport async function rename(layer, name) {\n  return core.executeAsModal(async () => { void (async () => { layer.name = name; })(); });\n}\n" },
+  { id: "NS3 bracket name", kind: "rename", expect: "fail", body: "export function rename(layer, name) { layer['name'] = name; }\n" },
+  { id: "NS3 Reflect.set", kind: "rename", expect: "fail", body: "export function rename(layer, name) { Reflect.set(layer, \"name\", name); }\n" },
+  { id: "NS3 defineProperty", kind: "rename", expect: "fail", body: "export function rename(layer, name) { Object.defineProperty(layer, \"name\", { value: name }); }\n" },
+  { id: "NR5 alias", kind: "rename", expect: "fail", body: "export function rename(layer, name) { const target = layer; target.name = name; }\n" },
+  { id: "NR5 index", kind: "rename", expect: "fail", body: "export function rename(active, name) { active[0].name = name; }\n" },
+  { id: "NR5 Object.assign", kind: "rename", expect: "fail", body: "export function rename(layer, name) { Object.assign(layer, { name }); }\n" },
+  { id: "NR5 local executeAsModal", kind: "rename", expect: "fail", body: "export function rename(layer, name) { const executeAsModal = (fn) => fn(); return executeAsModal(() => { layer.name = name; }); }\n" },
+  { id: "awaited helper stays inside", kind: "rename", expect: "pass", body: "import { core } from \"photoshop\";\nexport async function rename(layer, name) {\n  const setName = async (l, n) => { l.name = n; };\n  return core.executeAsModal(async () => { await setName(layer, name); });\n}\n" },
+  { id: "dynamic key inside modal still needs review", kind: "rename", expect: "fail", body: "import { core } from \"photoshop\";\nexport async function rename(layer, k, name) {\n  return core.executeAsModal(async () => { layer[k] = name; });\n}\n" }
+];

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { childNodes, parseSource, parserCandidates, setParents } from "./parse.mjs";
 import { componentModule, isComponent } from "./sfc.mjs";
-import { docIndex, documentedMember, elementType, hostModuleType, isCollectionType, propertyType, returnType } from "./docs-index.mjs";
+import { docIndex, documentedMember, elementType, hostModuleType, isCollectionType, propertyType, returnType, returnsPromise } from "./docs-index.mjs";
 import { panelRendersState } from "./ui-state.mjs";
 
 export { panelRendersState, parseSource, parserCandidates };
@@ -246,7 +246,7 @@ function runAnalysis(text, rel, options) {
         let type = "";
         if (object.root && !object.label.includes(".")) type = hostModuleType(index, object.root, name);
         if (!type) type = propertyType(index, object.type, name);
-        return { kind: object.kind, label: object.label ? `${object.label}.${name}` : name, method: name, fromMethod: object.fromMethod || "", type: "", ownerType: object.type || "", propType: type, elementType: elementType(index, type) };
+        return { kind: object.kind, label: object.label ? `${object.label}.${name}` : name, method: name, fromMethod: object.fromMethod || "", type: "", ownerType: object.type || "", ownerPromise: Boolean(object.promise), propType: type, elementType: elementType(index, type) };
       }
       case "dynamic":
         return { kind: "dynamic", label: `${object.label}.${name}`, method: "" };
@@ -297,6 +297,7 @@ function runAnalysis(text, rel, options) {
     const method = value.method || "";
     const owner = value.ownerType || "";
     const type = owner || (value.fromMethod ? returnType(index, value.fromMethod) : "");
+    if (value.ownerPromise && (method === "then" || method === "catch" || method === "finally")) return { ok: true, skip: true };
     if (CALL_SKIP.has(method) && (!type || !index.pages.has(type) || isCollectionType(type))) return { ok: true, skip: true };
     const found = documentedMember(index, type, method);
     return { ...found, type };
@@ -331,9 +332,12 @@ function runAnalysis(text, rel, options) {
         if (!verdict.ok) {
           call("call", verdict.owner ? `${label} is not a ${verdict.owner} member in the fetched docs` : label);
         }
-        if (verdict.skip) return { kind: "maybe", label: value.label, method: "", fromMethod: value.fromMethod || "", type: "" };
+        if (verdict.skip) {
+          if (value.ownerPromise) return { kind: "maybe", label: value.label, method: "", fromMethod: "", type: "", promise: true };
+          return { kind: "maybe", label: value.label, method: "", fromMethod: value.fromMethod || "", type: "" };
+        }
         const type = returnType(index, method);
-        return { kind: "maybe", label: value.label, method: "", fromMethod: method, type, elementType: elementType(index, type) };
+        return { kind: "maybe", label: value.label, method: "", fromMethod: method, type, elementType: elementType(index, type), promise: returnsPromise(index, method) };
       }
       default:
         return UNKNOWN;
@@ -616,7 +620,10 @@ function runAnalysis(text, rel, options) {
       if (CALL_SKIP.has(method)) {
         const receiver = evalExpr(callee.object);
         hint = elementOf(receiver);
-        if (method === "then" || method === "catch" || method === "finally") hint = hosty(receiver) ? elementOf(receiver) : UNKNOWN;
+        if (method === "then" || method === "catch" || method === "finally") {
+          if (receiver && receiver.promise && receiver.kind === "maybe") hint = method === "then" ? { kind: "maybe", label: receiver.label, method: "", fromMethod: receiver.fromMethod || "", type: receiver.type || "", elementType: receiver.elementType || "" } : UNKNOWN;
+          else hint = hosty(receiver) ? elementOf(receiver) : UNKNOWN;
+        }
         sync = SYNC_ITER.has(method);
       }
     }
@@ -802,8 +809,10 @@ function runAnalysis(text, rel, options) {
       case "OptionalCallExpression":
       case "NewExpression":
         return evalCall(current);
-      case "AwaitExpression":
-        return evalExpr(current.argument);
+      case "AwaitExpression": {
+        const value = evalExpr(current.argument);
+        return value && value.promise ? { ...value, promise: false } : value;
+      }
       case "YieldExpression": {
         const value = evalExpr(current.argument);
         const info = fnStack.at(-1);
@@ -983,7 +992,7 @@ function runAnalysis(text, rel, options) {
       if (isTypeOnly(item)) continue;
       if (item.type === "ImportNamespaceSpecifier") {
         if (resolved.host) bind(item.local.name, hostRoot(resolved.host));
-        else if (resolved.missing) bind(item.local.name, { kind: "dynamic", label: item.local.name, method: "" });
+        else if (resolved.missing) bind(item.local.name, { kind: "dynamic", label: `${item.local.name} (import "${spec}" did not resolve)`, method: "" });
         else if (resolved.exports) {
           const carries = [...resolved.exports.values()].some(hosty);
           bind(item.local.name, carries ? { kind: "container", label: item.local.name } : PLAIN);
@@ -991,13 +1000,13 @@ function runAnalysis(text, rel, options) {
       } else if (item.type === "ImportDefaultSpecifier") {
         if (resolved.host) bind(item.local.name, hostRoot(resolved.host));
         else if (resolved.exports) bind(item.local.name, resolved.exports.get("default") || UNKNOWN);
-        else if (resolved.missing) bind(item.local.name, { kind: "dynamic", label: item.local.name, method: "" });
+        else if (resolved.missing) bind(item.local.name, { kind: "dynamic", label: `${item.local.name} (import "${spec}" did not resolve)`, method: "" });
         else bind(item.local.name, PLAIN);
       } else if (item.type === "ImportSpecifier") {
         const imported = item.imported.type === "Identifier" ? item.imported.name : item.imported.value;
         if (resolved.host) bind(item.local.name, withType(access(hostRoot(resolved.host), imported)));
         else if (resolved.exports) bind(item.local.name, resolved.exports.get(imported) || UNKNOWN);
-        else if (resolved.missing) bind(item.local.name, { kind: "dynamic", label: item.local.name, method: "" });
+        else if (resolved.missing) bind(item.local.name, { kind: "dynamic", label: `${item.local.name} (import "${spec}" did not resolve)`, method: "" });
         else bind(item.local.name, PLAIN);
       }
     }
