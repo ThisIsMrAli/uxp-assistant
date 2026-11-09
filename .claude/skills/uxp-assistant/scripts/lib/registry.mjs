@@ -25,9 +25,12 @@ export const SHARED_PAGES = [
 
 /**
  * Fetched only when a goal or an existing call needs that host class.
- * These URLs were retrieved on 8 Nov 2026 and are re-fetched on each docs step.
+ * These URLs were retrieved on 8 Nov 2026 (photoshop.app and photoshop.core on 9 Nov 2026) and are re-fetched on each docs step.
+ * photoshop.app (the Photoshop class) and photoshop.core give the owner classes of app.* and core.* calls.
  */
 export const HOST_PAGES = {
+  "photoshop.app": "https://developer.adobe.com/photoshop/uxp/2022/ps-reference/classes/photoshop",
+  "photoshop.core": "https://developer.adobe.com/photoshop/uxp/2022/ps-reference/media/photoshopcore",
   "photoshop.document": "https://developer.adobe.com/photoshop/uxp/2022/ps-reference/classes/document",
   "photoshop.layer": "https://developer.adobe.com/photoshop/uxp/2022/ps-reference/classes/layer",
   "photoshop.executeAsModal": "https://developer.adobe.com/photoshop/uxp/2022/ps-reference/media/executeasmodal",
@@ -49,7 +52,7 @@ export function pagesForRequest({ host, goal = "", behaviors = [] } = {}) {
   const photoshop = host === "phxs" || host === "PS" || /photoshop|\blayer\b|document title|document\.title|activeLayers|executeAsModal/.test(text);
   const premiere = host === "ppro" || host === "premierepro" || /premiere|importfiles/.test(text);
   if (photoshop) {
-    for (const id of ["photoshop.document", "photoshop.layer", "photoshop.executeAsModal", "photoshop.action", "photoshop.changelog"]) {
+    for (const id of ["photoshop.app", "photoshop.core", "photoshop.document", "photoshop.layer", "photoshop.executeAsModal", "photoshop.action", "photoshop.changelog"]) {
       pages.push({ id, url: HOST_PAGES[id], scope: "host" });
     }
   }

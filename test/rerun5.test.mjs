@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { scriptChangeAsk } from "../.claude/skills/uxp-assistant/scripts/lib/ask.mjs";
 import { hostCallFindings, renameFindings } from "../.claude/skills/uxp-assistant/scripts/lib/host-flow.mjs";
 import { commandChangeSet, reviewClaim, reviewCommandProvenance, showsHonestUiState, testsCoverFeature } from "../.claude/skills/uxp-assistant/scripts/lib/review.mjs";
+import { linkTree, repoModules, fakeCiScript } from "./fixtures/tooling-tree.mjs";
 import { INSTALLER_VERSION, ensureInstaller, installerEntry, installerRoots, verifyInstaller } from "../.claude/skills/uxp-assistant/scripts/lib/scaffold.mjs";
 import { answerFromChat, emptySession, publishAsk, readMerged } from "../.claude/skills/uxp-assistant/scripts/lib/session.mjs";
 import { strongAssertions } from "../.claude/skills/uxp-assistant/scripts/lib/test-strength.mjs";
@@ -178,15 +179,8 @@ test("NU10 a planted ancestor create-bolt-uxp is never loaded, and only the pinn
 });
 
 function copyPinned(prefixModules) {
-  const real = path.join(root, "node_modules", "create-bolt-uxp");
-  fs.mkdirSync(path.join(prefixModules, "create-bolt-uxp", "dist"), { recursive: true });
-  fs.copyFileSync(path.join(real, "package.json"), path.join(prefixModules, "create-bolt-uxp", "package.json"));
-  fs.copyFileSync(path.join(real, "dist", "index.js"), path.join(prefixModules, "create-bolt-uxp", "dist", "index.js"));
-  const deps = JSON.parse(fs.readFileSync(path.join(real, "package.json"), "utf8")).dependencies || {};
-  for (const name of Object.keys(deps)) {
-    fs.mkdirSync(path.join(prefixModules, name), { recursive: true });
-    fs.writeFileSync(path.join(prefixModules, name, "package.json"), JSON.stringify({ name, version: "0.0.0-stub" }));
-  }
+  // NQ11: a stub with only create-bolt-uxp no longer counts, so this is a linked copy of the whole verified tree.
+  linkTree(repoModules, prefixModules);
 }
 
 test("NU11 the pinned tooling beside the skill is found from any working directory without a reinstall", () => {
@@ -260,7 +254,8 @@ test("NU13 a stopped script change is not asked again unless record --reask", ()
   fs.writeFileSync(path.join(out, "domain", "record-result.json"), JSON.stringify({ state: "script-change-stopped", say: "You chose stop for this exact script change." }));
   fs.writeFileSync(path.join(out, "session.json"), JSON.stringify({ docs: { ok: true }, asks: [] }));
   const next = specialize({ ok: true, action: "record" }, out);
-  assert.equal(next.action, "record");
+  assert.equal(next.action, "paused");
+  assert.equal(next.command, "");
   assert.match(next.next, /--reask/);
   assert.doesNotMatch(next.next, /dashboard/);
 });
@@ -273,9 +268,7 @@ test("NU14 the automatic create-bolt-uxp install shows a dashboard line before i
   assert.match(lines[0], /Installing create-bolt-uxp@1\.3\.27 into .*\.uxp-tooling/);
   assert.match(lines.at(-1), /failed/);
   const modules = path.join(path.dirname(skill), ".uxp-tooling", "node_modules");
-  const copier = path.join(top, "copy.mjs");
-  fs.writeFileSync(copier, `import fs from "node:fs";\nimport path from "node:path";\nconst real = ${JSON.stringify(path.join(root, "node_modules", "create-bolt-uxp"))};\nconst modules = ${JSON.stringify(modules)};\nfs.mkdirSync(path.join(modules, "create-bolt-uxp", "dist"), { recursive: true });\nfs.copyFileSync(path.join(real, "package.json"), path.join(modules, "create-bolt-uxp", "package.json"));\nfs.copyFileSync(path.join(real, "dist", "index.js"), path.join(modules, "create-bolt-uxp", "dist", "index.js"));\nfor (const name of Object.keys(JSON.parse(fs.readFileSync(path.join(real, "package.json"), "utf8")).dependencies || {})) { fs.mkdirSync(path.join(modules, name), { recursive: true }); fs.writeFileSync(path.join(modules, name, "package.json"), "{}"); }\n`);
-  const working = fakeNpm(top, `"${process.execPath}" "${copier}"`);
+  const working = fakeCiScript(top);
   lines.length = 0;
   const entry = ensureInstaller({ skillDirectory: skill, npm: working, notify: (text) => lines.push(text) });
   assert.equal(entry, path.join(modules, "create-bolt-uxp", "dist", "index.js"));

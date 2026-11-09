@@ -23,13 +23,39 @@ function scriptParts(body) {
   return { scripts, ts };
 }
 
-function stripDeadVue(html) {
+const NEVER = () => false;
+const LITERAL_FALSE = (code) => /^\s*(?:false|0|null|undefined)\s*$/.test(String(code));
+
+/** An element the panel never shows: a constant-false v-if or v-show, a hidden attribute, or display:none / visibility:hidden. */
+function hiddenTag(tagText, deadCondition, hidden) {
+  for (const match of tagText.matchAll(/\sv-(?:if|show)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) if (deadCondition(match[1] ?? match[2] ?? "")) return true;
+  if (!hidden) return false;
+  if (/\shidden(?:\s|=|\/?>)/.test(tagText) && !/\s:hidden\s*=/.test(tagText)) {
+    const value = tagText.match(/\shidden\s*=\s*(?:"([^"]*)"|'([^']*)'|\{([^}]*)\})/);
+    if (!value || /^\s*(?:true|hidden|)\s*$/.test(value[1] ?? value[2] ?? value[3] ?? "")) return true;
+  }
+  const style = tagText.match(/\sstyle\s*=\s*(?:"([^"]*)"|'([^']*)')/);
+  if (style && /(?:display\s*:\s*none|visibility\s*:\s*hidden)/i.test(style[1] ?? style[2] ?? "")) return true;
+  return false;
+}
+
+function stripDeadVue(html, deadCondition = LITERAL_FALSE, hidden = false) {
   let text = html;
-  for (let guard = 0; guard < 50; guard += 1) {
-    const open = text.match(/<([A-Za-z][\w-]*)\b[^>]*\sv-(?:if|show)\s*=\s*["']\s*(?:false|0|null|undefined)\s*["'][^>]*>/);
+  let from = 0;
+  for (let guard = 0; guard < 200; guard += 1) {
+    const opener = /<([A-Za-z][\w-]*)\b(?:[^>"']|"[^"]*"|'[^']*')*>/g;
+    opener.lastIndex = from;
+    let open = null;
+    for (let match = opener.exec(text); match; match = opener.exec(text)) {
+      if (hiddenTag(match[0], deadCondition, hidden)) {
+        open = match;
+        break;
+      }
+    }
     if (!open) break;
     const tag = open[1];
     const start = open.index;
+    from = start;
     let depth = 0;
     let end = text.length;
     const re = new RegExp(`<\\/?${tag}\\b[^>]*>`, "g");
@@ -47,13 +73,56 @@ function stripDeadVue(html) {
   return text;
 }
 
-function stripDeadSvelte(html) {
-  return html.replace(/\{#if\s+(?:false|0|null|undefined)\s*\}[\s\S]*?\{\/if\}/g, " ");
+/** Removes {#if cond}…{/if} blocks whose condition is constant false, with nested blocks matched, then hidden elements. */
+function stripDeadSvelte(html, deadCondition = LITERAL_FALSE, hidden = false) {
+  let text = html;
+  for (let guard = 0; guard < 100; guard += 1) {
+    const re = /\{#if\s+([^}]*)\}/g;
+    let found = null;
+    for (let match = re.exec(text); match; match = re.exec(text)) {
+      if (deadCondition(match[1])) {
+        found = match;
+        break;
+      }
+    }
+    if (!found) break;
+    const tokens = /\{#if\b[^}]*\}|\{\/if\}|\{:else(?:\s+if\b[^}]*)?\}/g;
+    tokens.lastIndex = found.index + found[0].length;
+    let depth = 1;
+    let elseAt = -1;
+    let elseToken = "";
+    let close = -1;
+    let closeEnd = text.length;
+    for (let token = tokens.exec(text); token; token = tokens.exec(text)) {
+      if (token[0].startsWith("{#if")) depth += 1;
+      else if (token[0] === "{/if}") {
+        depth -= 1;
+        if (depth === 0) {
+          close = token.index;
+          closeEnd = token.index + token[0].length;
+          break;
+        }
+      } else if (depth === 1 && elseAt < 0) {
+        elseAt = token.index;
+        elseToken = token[0];
+      }
+    }
+    if (close < 0) close = text.length;
+    let kept = "";
+    if (elseAt >= 0) {
+      const branch = text.slice(elseAt + elseToken.length, close);
+      const cond = elseToken.match(/^\{:else\s+if\s+([^}]*)\}$/);
+      kept = cond ? `{#if ${cond[1]}}${branch}{/if}` : branch;
+    }
+    // The dead branch is removed. An {:else} branch is kept: it is what renders.
+    text = `${text.slice(0, found.index)} ${kept}${text.slice(closeEnd)}`;
+  }
+  return stripDeadVue(text, deadCondition, hidden);
 }
 
-function markup(body, svelte = false) {
+function markup(body, svelte = false, deadCondition = NEVER, hidden = false) {
   const html = String(body || "").replace(SCRIPT, " ").replace(STYLE, " ").replace(/<!--[\s\S]*?-->/g, " ");
-  return svelte ? stripDeadSvelte(html) : stripDeadVue(html);
+  return svelte ? stripDeadSvelte(html, deadCondition, hidden) : stripDeadVue(html, deadCondition, hidden);
 }
 
 function decodeAttr(text) {
@@ -61,8 +130,8 @@ function decodeAttr(text) {
 }
 
 /** Vue: {{ expr }}, v-*, :prop and @event attribute values. */
-export function vueExpressions(body) {
-  const html = markup(body, false);
+export function vueExpressions(body, deadCondition, hidden = false) {
+  const html = markup(body, false, deadCondition, hidden);
   const out = [];
   for (const match of html.matchAll(/\{\{([\s\S]*?)\}\}/g)) out.push({ kind: "expr", code: match[1], attr: "" });
   const attr = /\s((?:v-[\w-]+(?::[\w.\-[\]]+)?(?:\.[\w.]+)*)|(?::[\w.\-[\]]+)|(?:@[\w.\-:]+)|(?:#[\w-]+))\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
@@ -124,9 +193,9 @@ function braceBlocks(text) {
 }
 
 /** Svelte: {expr}, {#if expr}, {:else if expr}, {#each expr as x}, {#await expr}, {@html expr}, on:x={...}, bind:x={...}. */
-export function svelteExpressions(body) {
+export function svelteExpressions(body, deadCondition, hidden = false) {
   const out = [];
-  for (const item of braceBlocks(markup(body, true))) {
+  for (const item of braceBlocks(markup(body, true, deadCondition, hidden))) {
     const block = item.code.trim();
     const attrMatch = item.before.match(/([\w:|-]+)\s*=\s*$/);
     let attr = attrMatch ? attrMatch[1].replace(/^bind:/, "") : "";
@@ -157,10 +226,14 @@ export function svelteExpressions(body) {
  * One parseable module for a component.
  * Template code is placed in a function that is never called, so a write there is never inside a modal.
  */
-export function componentModule(rel, body) {
+export function componentModule(rel, body, options = {}) {
   const { scripts, ts } = scriptParts(body);
   const svelte = /\.svelte$/i.test(String(rel || ""));
-  const expressions = svelte ? svelteExpressions(body) : vueExpressions(body);
+  // The host checker reads every template expression (a v-show or hidden element still evaluates).
+  // The UI-state rule passes deadCondition and hidden so a branch the panel never shows does not count.
+  const dead = options.deadCondition || NEVER;
+  const hidden = Boolean(options.hidden);
+  const expressions = svelte ? svelteExpressions(body, dead, hidden) : vueExpressions(body, dead, hidden);
   const lines = expressions.map((item) => (item.kind === "handler" ? `  (() => { ${item.code}\n  });` : `  void (${item.code}\n  );`));
   const template = lines.length ? `\nexport function ${TEMPLATE_FN}() {\n${lines.join("\n")}\n}\n` : "";
   return {

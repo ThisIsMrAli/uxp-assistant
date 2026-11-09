@@ -37,7 +37,11 @@ export async function launch({ width = 320, height = 800, scale = 2, chrome = fi
     "about:blank"
   ];
   if (process.platform === "linux" && typeof process.getuid === "function" && process.getuid() === 0) args.unshift("--no-sandbox");
-  const child = spawn(chrome, args, { stdio: "ignore", detached: process.platform !== "win32" });
+  // NQ10: Chrome's own scratch dirs (scoped_dir, .org.chromium.*) go inside the profile, so removing the profile removes them.
+  const scratch = path.join(profile, "tmp");
+  fs.mkdirSync(scratch, { recursive: true });
+  const env = { ...process.env, TMPDIR: scratch, TMP: scratch, TEMP: scratch };
+  const child = spawn(chrome, args, { stdio: "ignore", detached: process.platform !== "win32", env });
   child.unref();
 
   const killChrome = () => {
@@ -48,13 +52,20 @@ export async function launch({ width = 320, height = 800, scale = 2, chrome = fi
       try { child.kill("SIGKILL"); } catch { /* already gone */ }
     }
   };
-  // However this process ends (an error, Ctrl-C, a timeout that stops the agent), its Chrome goes with it.
-  process.once("exit", killChrome);
+  const removeProfile = () => {
+    try { fs.rmSync(profile, { recursive: true, force: true, maxRetries: 3 }); } catch { /* best effort */ }
+  };
+  // However this process ends (an error, Ctrl-C, a timeout that stops the agent), its Chrome and profile go with it.
+  const onExit = () => {
+    killChrome();
+    removeProfile();
+  };
+  process.once("exit", onExit);
   const cleanup = () => {
-    process.removeListener("exit", killChrome);
     killChrome();
     setTimeout(() => {
-      fs.rmSync(profile, { recursive: true, force: true });
+      process.removeListener("exit", onExit);
+      removeProfile();
       releaseTemps();
     }, 400).unref();
   };

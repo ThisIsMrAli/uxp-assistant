@@ -3,20 +3,17 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 import { launch } from "../.claude/skills/uxp-assistant/scripts/lib/cdp.mjs";
 import { findChrome } from "../.claude/skills/uxp-assistant/scripts/lib/chrome.mjs";
 import { assetsDir } from "../.claude/skills/uxp-assistant/scripts/lib/paths.mjs";
-import { pagesForRequest } from "../.claude/skills/uxp-assistant/scripts/lib/registry.mjs";
 import { createDashboardServer } from "../.claude/skills/uxp-assistant/scripts/lib/server.mjs";
 import { answerFromChat, finish } from "../.claude/skills/uxp-assistant/scripts/lib/session.mjs";
 import { recordImplementation, runWorkflow } from "../.claude/skills/uxp-assistant/scripts/lib/workflow.mjs";
 
-const SHOW = "Show each selected layer id and name in the panel.";
-const catalog = pagesForRequest({ host: "phxs", goal: "layer" });
-const byUrl = new Map(catalog.map((page) => [page.url, page.id]));
+import { SHOW, answers, fetchImpl, scaffoldImpl, writeShow } from "./fixtures/dashboard-session.mjs";
 
 test("the dashboard shows the outcome and does not call a skipped feature finished", { timeout: 60_000 }, async (t) => {
   const chrome = findChrome();
@@ -24,7 +21,12 @@ test("the dashboard shows the outcome and does not call a skipped feature finish
     t.skip("No Chrome, Edge, or Chromium is installed.");
     return;
   }
+  // NQ10: every temp dir, server and browser is released in finally, also when an assertion fails.
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "uxp-dashboard-"));
+  let unknownDash;
+  let doneDash;
+  let page;
+  try {
   const unknownOut = path.join(root, "unknown");
   const doneOut = path.join(root, "done");
   await runWorkflow({ out: unknownOut, kind: "empty", answers: answers("Export a hologram with app.fluxCapacitor()."), fetchImpl, scaffoldImpl });
@@ -33,12 +35,11 @@ test("the dashboard shows the outcome and does not call a skipped feature finish
   recordImplementation(doneOut, { goal: SHOW, files: ["src/Selection.tsx", "src/selection-read.mjs"] });
   finish(doneOut, "Commands finished. The Adobe host was NOT TESTED.");
 
-  const unknownDash = createDashboardServer({ out: unknownOut, assets: assetsDir, token: "token" });
-  const doneDash = createDashboardServer({ out: doneOut, assets: assetsDir, token: "token" });
+  unknownDash = createDashboardServer({ out: unknownOut, assets: assetsDir, token: "token" });
+  doneDash = createDashboardServer({ out: doneOut, assets: assetsDir, token: "token" });
   const unknownInfo = await unknownDash.listen(0);
   const doneInfo = await doneDash.listen(0);
-  const page = await launch({ width: 1280, height: 900, chrome });
-  try {
+  page = await launch({ width: 1280, height: 900, chrome });
     await page.goto(unknownInfo.url);
     await page.eval("new Promise((resolve) => setTimeout(resolve, 400))");
     const unknownText = await page.eval("document.body.innerText");
@@ -65,9 +66,10 @@ test("the dashboard shows the outcome and does not call a skipped feature finish
     fs.mkdirSync(dashDir, { recursive: true });
     await page.screenshot(path.join(dashDir, "commands-finished.png"), { x: 0, y: 0, width: 390, height: 844, scale: 1 });
   } finally {
-    await page.close();
-    await unknownDash.close();
-    await doneDash.close();
+    await page?.close().catch(() => {});
+    await unknownDash?.close().catch(() => {});
+    await doneDash?.close().catch(() => {});
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });
 
@@ -98,12 +100,14 @@ test("the dashboard shows each staged choice before the session continues", { ti
     ["design", "uxp-constraints", /Design source/],
     ["validation", "commands", /What validation can record/]
   ];
-  const dash = createDashboardServer({ out, assets: assetsDir, token: "token" });
-  const info = await dash.listen(0);
-  const page = await launch({ width: 1100, height: 800, chrome });
-  const dashDir = path.join(repoRoot, "evidence/dashboard");
-  fs.mkdirSync(dashDir, { recursive: true });
+  let dash;
+  let page;
   try {
+    dash = createDashboardServer({ out, assets: assetsDir, token: "token" });
+    const info = await dash.listen(0);
+    page = await launch({ width: 1100, height: 800, chrome });
+    const dashDir = path.join(repoRoot, "evidence/dashboard");
+    fs.mkdirSync(dashDir, { recursive: true });
     for (const [id, option, title] of steps) {
       const result = await runWorkflow({ out, kind: "empty", answers: base, fetchImpl, scaffoldImpl });
       assert.equal(result.blocked, id, result.say);
@@ -128,68 +132,8 @@ test("the dashboard shows each staged choice before the session continues", { ti
     assert.match(waiting, /awaiting-agent-implementation|Implement|Waiting/);
     await page.screenshot(path.join(dashDir, "awaiting-implementation.png"), { x: 0, y: 0, width: 1100, height: 800, scale: 1 });
   } finally {
-    await page.close();
-    await dash.close();
+    await page?.close().catch(() => {});
+    await dash?.close().catch(() => {});
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });
-
-function answers(goal) {
-  return {
-    mode: "dashboard",
-    framework: "react",
-    host: "phxs",
-    os: "linux",
-    context: "panel",
-    name: "Selection Panel",
-    id: "com.example.selection",
-    consequential: "proceed",
-    "narrow-permissions": "narrow",
-    feasibility: "continue",
-    runtime: "native",
-    design: "uxp-constraints",
-    validation: "commands",
-    "context-evidence": "keep-unverified",
-    goal
-  };
-}
-
-async function fetchImpl(url) {
-  const id = byUrl.get(url);
-  const text = id === "photoshop.layer"
-    ? "name string R W 22.5 Name of the layer.\n"
-    : id === "photoshop.document"
-      ? "activeLayers\n\nLayers\n\nR W\n\n22.5\n\nThe selected layers in the document. (26.9)\n"
-      : id === "photoshop.executeAsModal"
-        ? "commandName string required 23.0 shown above the progress bar.\n"
-        : `shared ${id || "page"}\n`;
-  return { ok: true, async text() { return text; } };
-}
-
-async function scaffoldImpl(parent) {
-  const folder = path.join(parent, "plugin");
-  fs.mkdirSync(path.join(folder, "src"), { recursive: true });
-  const mod = pathToFileURL(path.resolve(".claude/skills/uxp-assistant/scripts/lib/archive.mjs")).href;
-  fs.writeFileSync(path.join(folder, "pack.mjs"), `import fs from "node:fs";
-import { writeStoredZip } from ${JSON.stringify(mod)};
-const entries = ["src/Selection.tsx", "src/selection-read.mjs"].filter((name) => fs.existsSync(name)).map((name) => ({ name, data: fs.readFileSync(name) }));
-writeStoredZip("out.ccx", entries);
-`);
-  fs.writeFileSync(path.join(folder, "package.json"), `${JSON.stringify({
-    name: "plugin",
-    scripts: {
-      test: "node --test",
-      build: "node -e \"process.exit(0)\"",
-      ccx: "node pack.mjs"
-    }
-  }, null, 2)}\n`);
-  fs.writeFileSync(path.join(folder, "uxp.config.ts"), "export const manifest = { requiredPermissions: {} };\n");
-  fs.writeFileSync(path.join(folder, "src", "main.tsx"), "export const App = () => null;\n");
-  return { folder, installer: "test-double" };
-}
-
-function writeShow(project) {
-  fs.mkdirSync(path.join(project, "test"), { recursive: true });
-  fs.writeFileSync(path.join(project, "src", "Selection.tsx"), "export function SelectionPanel(){ const [phase, setPhase] = useState(\"idle\"); return <section><h1>Selected layer ids</h1><p>{phase}</p><button type=\"button\" disabled={phase === \"reading\"} onClick={() => { setPhase(\"reading\"); try { setPhase(\"read\"); } catch (e) { setPhase(String(e)); } }}>Read selection</button></section>; }\n");
-  fs.writeFileSync(path.join(project, "src", "selection-read.mjs"), "export function readSelection(app){ const layers = app?.activeDocument?.activeLayers || []; return { status: layers.length ? \"Read outside executeAsModal.\" : \"No selected layer.\" }; }\n");
-  fs.writeFileSync(path.join(project, "test", "selection.test.mjs"), "import assert from \"node:assert/strict\"; import { test } from \"node:test\"; import { readSelection } from \"../src/selection-read.mjs\"; test(\"missing host\", () => { assert.match(readSelection(null).status, /selected layer/); });\n");
-}

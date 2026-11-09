@@ -1,0 +1,7 @@
+{
+  "name": "uxp-assistant-tooling",
+  "private": true,
+  "dependencies": {
+    "create-bolt-uxp": "1.3.27"
+  }
+}

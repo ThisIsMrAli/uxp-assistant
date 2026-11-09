@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { childNodes, parseSource, parserCandidates, setParents } from "./parse.mjs";
 import { componentModule, isComponent } from "./sfc.mjs";
-import { docIndex, documentedMember, elementType, hostModuleType, isCollectionType, propertyType, returnType, returnsPromise } from "./docs-index.mjs";
+import { calledOn, docIndex, documentedMember, elementType, hostModuleType, isCollectionType, propertyType, returnType, returnsPromise } from "./docs-index.mjs";
 import { panelRendersState } from "./ui-state.mjs";
 
 export { panelRendersState, parseSource, parserCandidates };
@@ -94,8 +94,24 @@ function awaited(node) {
   return false;
 }
 
+/** A then/catch/finally call whose chain is awaited or returned by the enclosing function. */
+function chainAwaited(node) {
+  let current = node;
+  for (let guard = 0; guard < 50; guard += 1) {
+    let parent = current.parent;
+    while (parent && (parent.type === "ParenthesizedExpression" || parent.type === "TSAsExpression" || parent.type === "TSNonNullExpression" || parent.type === "ChainExpression")) parent = parent.parent;
+    const grand = parent?.parent;
+    if (parent && (parent.type === "MemberExpression" || parent.type === "OptionalMemberExpression") && !parent.computed && ["then", "catch", "finally"].includes(parent.property?.name) && grand && (grand.type === "CallExpression" || grand.type === "OptionalCallExpression") && grand.callee === parent) {
+      current = grand;
+      continue;
+    }
+    break;
+  }
+  return awaited(current);
+}
+
 function hostRoot(name) {
-  return { kind: "host", label: name, method: "", fromMethod: "", root: name, type: "" };
+  return { kind: "host", label: name, method: "", fromMethod: "", root: name, type: "", lineage: true, seg: name };
 }
 
 function copyValue(value) {
@@ -115,9 +131,9 @@ function mergeValues(left, right) {
 
 function elementOf(value, label = "") {
   if (!value) return UNKNOWN;
-  if (value.kind === "host" || value.kind === "maybe") return { kind: "maybe", label: label || value.label, method: "", fromMethod: "", type: value.elementType || "" };
+  if (value.kind === "host" || value.kind === "maybe") return { kind: "maybe", label: label || value.label, method: "", fromMethod: "", type: value.elementType || "", lineage: Boolean(value.lineage), seg: "" };
   if (value.kind === "container" || value.kind === "laundered") return { kind: "laundered", label: label || `${value.label} item`, method: "", ...(value.opaque ? { opaque: true } : {}) };
-  if (value.kind === "dynamic") return { kind: "dynamic", label: label || value.label, method: "" };
+  if (value.kind === "dynamic") return { kind: "dynamic", label: label || value.label, method: "", why: value.why };
   return UNKNOWN;
 }
 
@@ -147,6 +163,8 @@ function runAnalysis(text, rel, options) {
   const cache = options.cache || new Map();
   const loading = options.loading || new Set();
   const summaries = options.summaries || new Map();
+  if (!summaries.flows) summaries.flows = new Map();
+  const flows = summaries.flows;
   let source = text;
   let parseName = rel;
   if (isComponent(rel)) {
@@ -246,10 +264,10 @@ function runAnalysis(text, rel, options) {
         let type = "";
         if (object.root && !object.label.includes(".")) type = hostModuleType(index, object.root, name);
         if (!type) type = propertyType(index, object.type, name);
-        return { kind: object.kind, label: object.label ? `${object.label}.${name}` : name, method: name, fromMethod: object.fromMethod || "", type: "", ownerType: object.type || "", ownerPromise: Boolean(object.promise), propType: type, elementType: elementType(index, type) };
+        return { kind: object.kind, label: object.label ? `${object.label}.${name}` : name, method: name, fromMethod: object.fromMethod || "", type: "", ownerType: object.type || "", ownerPromise: Boolean(object.promise), ownerSeg: object.seg || "", propType: type, elementType: elementType(index, type), lineage: Boolean(object.lineage), seg: name };
       }
       case "dynamic":
-        return { kind: "dynamic", label: `${object.label}.${name}`, method: "" };
+        return { kind: "dynamic", label: `${object.label}.${name}`, method: "", why: object.why };
       case "evil":
         return object;
       case "container":
@@ -296,9 +314,16 @@ function runAnalysis(text, rel, options) {
   const documentedCall = (value) => {
     const method = value.method || "";
     const owner = value.ownerType || "";
-    const type = owner || (value.fromMethod ? returnType(index, value.fromMethod) : "");
+    const type = owner || (value.fromMethod && !value.lineage ? returnType(index, value.fromMethod) : "");
     if (value.ownerPromise && (method === "then" || method === "catch" || method === "finally")) return { ok: true, skip: true };
     if (CALL_SKIP.has(method) && (!type || !index.pages.has(type) || isCollectionType(type))) return { ok: true, skip: true };
+    if (value.lineage) {
+      // A value read from the imported host binding is matched against its owner class only.
+      // An owner whose type did not resolve to a fetched page needs review. It never falls back to "documented on any page".
+      if (type && index.pages.has(type)) return { ...documentedMember(index, type, method), type };
+      if (calledOn(index, value.ownerSeg, method)) return { ok: true, type, sample: `${value.ownerSeg}.${method}(` };
+      return { ok: false, unresolved: true, type };
+    }
     const found = documentedMember(index, type, method);
     return { ...found, type };
   };
@@ -310,7 +335,8 @@ function runAnalysis(text, rel, options) {
         call("call", `${value.label}() needs review. eval, new Function, a computed require, and globalThis or window.require are outside the accepted subset`);
         return { kind: "dynamic", label: `${value.label}()`, method: "" };
       case "dynamic":
-        call("call", `${value.label || "host value"} needs review`);
+        // NQ15: always say why.
+        call("call", `${value.label || "host value"} needs review: ${value.why || "the host value reaches this call through a path the checker does not follow (a dynamic import or require, a computed key, or an unresolved value), so the called member is not a resolved, documented name"}`);
         return { kind: "dynamic", label: value.label, method: "" };
       case "laundered": {
         if (value.method && CALL_SKIP.has(value.method)) return { kind: "laundered", label: value.label, method: "" };
@@ -324,20 +350,25 @@ function runAnalysis(text, rel, options) {
       case "maybe": {
         const method = value.method || "";
         if (!method) {
-          if (value.kind === "host") call("call", `${value.label || "host value"}() needs review`);
-          return { kind: "maybe", label: value.label, method: "", fromMethod: "" };
+          if (value.kind === "host") call("call", `${value.label || "host value"}() needs review: a host module or object is called directly, not one of its documented methods`);
+          return { kind: "maybe", label: value.label, method: "", fromMethod: "", lineage: Boolean(value.lineage), seg: "" };
         }
         const verdict = documentedCall(value);
         const label = `${value.label}()`;
         if (!verdict.ok) {
-          call("call", verdict.owner ? `${label} is not a ${verdict.owner} member in the fetched docs` : label);
+          if (verdict.unresolved) {
+            call("call", `${label} needs review: the receiver ${value.ownerSeg ? `${value.label.slice(0, -(method.length + 1))} ` : ""}has ${verdict.type ? `type ${verdict.type}, and no ${verdict.type} page was fetched` : "no resolved host type in the fetched docs"}, so ${method} cannot be matched to its owner class. A method documented for another class does not count`);
+          } else {
+            call("call", verdict.owner ? `${label} is not a ${verdict.owner} member in the fetched docs` : `${label} needs review: ${method} is not a documented member in the fetched docs`);
+          }
         }
         if (verdict.skip) {
-          if (value.ownerPromise) return { kind: "maybe", label: value.label, method: "", fromMethod: "", type: "", promise: true };
-          return { kind: "maybe", label: value.label, method: "", fromMethod: value.fromMethod || "", type: "" };
+          if (value.ownerPromise) return { kind: "maybe", label: value.label, method: "", fromMethod: "", type: "", promise: true, lineage: Boolean(value.lineage), seg: "" };
+          return { kind: "maybe", label: value.label, method: "", fromMethod: value.fromMethod || "", type: "", lineage: Boolean(value.lineage), seg: "" };
         }
-        const type = returnType(index, method);
-        return { kind: "maybe", label: value.label, method: "", fromMethod: method, type, elementType: elementType(index, type), promise: returnsPromise(index, method) };
+        const owner = verdict.type || "";
+        const type = value.lineage ? returnType(index, method, owner) : returnType(index, method);
+        return { kind: "maybe", label: value.label, method: "", fromMethod: method, type, elementType: elementType(index, type), promise: returnsPromise(index, method), lineage: Boolean(value.lineage), seg: "" };
       }
       default:
         return UNKNOWN;
@@ -401,10 +432,15 @@ function runAnalysis(text, rel, options) {
     scopes.push(new Map());
     if (node.type !== "ArrowFunctionExpression") thisStack.push(node._self || UNKNOWN);
     const hint = node._hint;
+    const flowed = flows.get(info.id);
     (node.params || []).forEach((param, position) => {
       if (hint && position === 1 && node._indexHint) bindPattern(param, NUMERIC);
       else if (hint) bindPattern(param, hint);
-      else bindPattern(param, (name) => ({ kind: "maybe", label: name, method: "", fromMethod: "" }));
+      else if (flowed && flowed[position] && !options.collect) {
+        // A local function called with a host value is checked as that host value, with its owner type.
+        const value = flowed[position];
+        bindPattern(param, param.type === "Identifier" ? { ...value, label: param.name } : value);
+      } else bindPattern(param, (name) => ({ kind: "maybe", label: name, method: "", fromMethod: "" }));
     });
     if (node.body?.type === "BlockStatement") hoist(node.body.body);
     fnStack.push(info);
@@ -520,6 +556,25 @@ function runAnalysis(text, rel, options) {
     return values;
   };
 
+  /**
+   * A dynamic import() or require() of a local module that exports a host value is outside the accepted subset.
+   * Only a static `import { photoshop } from "./globals"` binding is tracked as the host.
+   */
+  const localModuleCall = (how, spec) => {
+    if (!String(spec).startsWith(".")) return UNKNOWN;
+    const resolved = moduleExports(spec, rel);
+    if (resolved.external) return UNKNOWN;
+    if (resolved.missing) {
+      call("call", `${how}("${spec}") needs review: the module did not resolve inside the project, so what it exports is unknown. Use a static import`);
+      return { kind: "dynamic", label: `${how}("${spec}")`, method: "", why: `it comes from a dynamic ${how}("${spec}") that did not resolve` };
+    }
+    if (resolved.exports && [...resolved.exports.values()].some(hosty)) {
+      call("call", `${how}("${spec}") needs review: the module exports a host value, and a dynamic ${how}() of it is not tracked. Use a static import { photoshop } from "${spec}" so each host call is checked`);
+      return { kind: "dynamic", label: `${how}("${spec}")`, method: "", why: `it comes from a dynamic ${how}("${spec}") of a module that exports a host value, which is not tracked. Use a static import` };
+    }
+    return UNKNOWN;
+  };
+
   const evalCall = (node) => {
     const args = node.arguments || [];
     const callee = unwrap(node.callee);
@@ -533,7 +588,8 @@ function runAnalysis(text, rel, options) {
           return { kind: "dynamic", label: "require()", method: "" };
         }
         const rootName = String(spec).split("/")[0];
-        return HOST_MODULES.has(rootName) ? hostRoot(rootName) : UNKNOWN;
+        if (HOST_MODULES.has(rootName)) return hostRoot(rootName);
+        return localModuleCall("require", spec);
       }
       if (callee.name === "eval" || callee.name === "Function") {
         evalArgs(args);
@@ -550,11 +606,12 @@ function runAnalysis(text, rel, options) {
       const spec = literalString(args[0]);
       if (spec === null) {
         evalArgs(args);
-        call("call", "import() with a computed name needs review");
+        call("call", "import() with a computed name needs review: the module is not a literal, so what it loads is unknown. Only a literal import of photoshop, premierepro, uxp, or a project file is accepted");
         return { kind: "dynamic", label: "import()", method: "" };
       }
       const rootName = String(spec).split("/")[0];
-      return HOST_MODULES.has(rootName) ? hostRoot(rootName) : UNKNOWN;
+      if (HOST_MODULES.has(rootName)) return hostRoot(rootName);
+      return localModuleCall("import", spec);
     }
     const named = calleeName(callee);
     if ((callee?.type === "MemberExpression" || callee?.type === "OptionalMemberExpression") && !callee.computed && callee.property?.type === "Identifier") {
@@ -621,16 +678,34 @@ function runAnalysis(text, rel, options) {
         const receiver = evalExpr(callee.object);
         hint = elementOf(receiver);
         if (method === "then" || method === "catch" || method === "finally") {
-          if (receiver && receiver.promise && receiver.kind === "maybe") hint = method === "then" ? { kind: "maybe", label: receiver.label, method: "", fromMethod: receiver.fromMethod || "", type: receiver.type || "", elementType: receiver.elementType || "" } : UNKNOWN;
+          if (receiver && receiver.promise && receiver.kind === "maybe") hint = method === "then" ? { kind: "maybe", label: receiver.label, method: "", fromMethod: receiver.fromMethod || "", type: receiver.type || "", elementType: receiver.elementType || "", lineage: Boolean(receiver.lineage), seg: "" } : UNKNOWN;
           else hint = hosty(receiver) ? elementOf(receiver) : UNKNOWN;
         }
         sync = SYNC_ITER.has(method);
       }
     }
     const evaluated = evalArgs(args, hint, sync);
+    if (!sync && (callee?.type === "MemberExpression" || callee?.type === "OptionalMemberExpression") && !callee.computed && ["then", "catch", "finally"].includes(callee.property?.name) && chainAwaited(node)) {
+      // A then/catch/finally callback on a chain the enclosing function returns or awaits runs before that function finishes.
+      args.forEach((arg, position) => {
+        const target = unwrap(arg);
+        const value = evaluated[position];
+        const info = target && isFunctionNode(target) ? infoFor(target) : (value?.kind === "fn" ? value.info : null);
+        if (info) callSites.push({ calleeId: info.id, inside: fnStack.at(-1)?.id || null, confers: true });
+      });
+    }
     if (fn?.kind === "fn") {
       const info = fn.info || functions.get(fn.id);
       if (info) callSites.push({ calleeId: info.id, inside: fnStack.at(-1)?.id || null, confers: !info.async || awaited(node) });
+      if (info && options.collect) {
+        evaluated.forEach((value, position) => {
+          if (!value || !value.lineage || (value.kind !== "host" && value.kind !== "maybe")) return;
+          const list = flows.get(info.id) || [];
+          const before = list[position];
+          list[position] = before && (before.type !== value.type || before.ownerType !== value.ownerType) ? { ...value, type: "", ownerType: "", elementType: "", seg: "" } : copyValue(value);
+          flows.set(info.id, list);
+        });
+      }
       if (fn.cls && isNew) return { kind: "instance", cls: fn.cls, label: fn.label };
       return info ? returnValue(info, fn.label || "function") : UNKNOWN;
     }
@@ -696,6 +771,14 @@ function runAnalysis(text, rel, options) {
     if (node.id && node.type === "ClassDeclaration") bind(node.id.name, value);
     if (node.superClass) evalExpr(node.superClass);
     const body = node.body?.body || [];
+    const decorate = (list) => {
+      for (const decorator of list || []) {
+        const applied = evalExpr(decorator.expression);
+        if (applied && (applied.kind === "host" || applied.kind === "maybe") && applied.method) noteCall(applied);
+        else if (applied && (applied.kind === "laundered" || applied.kind === "dynamic" || applied.kind === "evil")) noteCall(applied);
+      }
+    };
+    decorate(node.decorators);
     for (const member of body) {
       if ((member.type === "ClassMethod" || member.type === "ClassPrivateMethod") && member.kind !== "constructor") {
         const name = member.key?.name || member.key?.id?.name || literalString(member.key) || "";
@@ -717,6 +800,14 @@ function runAnalysis(text, rel, options) {
       }
     }
     thisStack.pop();
+    // A decorator receives the class or method and may call it from anywhere, so a decorated method is never
+    // proven to run inside executeAsModal.
+    for (const member of body) {
+      if (member.decorators?.length) decorate(member.decorators);
+      if ((member.type === "ClassMethod" || member.type === "ClassPrivateMethod") && (member.decorators?.length || node.decorators?.length)) {
+        callSites.push({ calleeId: infoFor(member).id, inside: null, confers: false });
+      }
+    }
     const ordered = [...body.filter((m) => m.type === "ClassMethod" && m.kind === "constructor"), ...body.filter((m) => !(m.type === "ClassMethod" && m.kind === "constructor"))];
     for (const member of ordered) {
       if (member.type === "ClassMethod" || member.type === "ClassPrivateMethod") enterFunction(member);
@@ -757,10 +848,12 @@ function runAnalysis(text, rel, options) {
       case "TemplateLiteral":
         for (const expr of current.expressions) evalExpr(expr);
         return PLAIN;
-      case "TaggedTemplateExpression":
-        evalExpr(current.tag);
-        for (const expr of current.quasi.expressions) evalExpr(expr);
-        return UNKNOWN;
+      case "TaggedTemplateExpression": {
+        // A tagged template calls its tag with the strings and the substitutions. It is checked as that call.
+        const strings = { type: "ArrayExpression", elements: [], start: current.quasi.start, end: current.quasi.end, parent: current };
+        const synthetic = { type: "CallExpression", callee: current.tag, arguments: [strings, ...current.quasi.expressions], start: current.start, end: current.end, parent: current.parent, tagged: true };
+        return evalCall(synthetic);
+      }
       case "ObjectExpression":
         return objectValue(current);
       case "ArrayExpression": {
@@ -791,7 +884,7 @@ function runAnalysis(text, rel, options) {
         if (key.index) {
           if (object && (object.kind === "host" || object.kind === "maybe")) {
             const type = object.elementType || elementType(index, object.type);
-            return { ...object, kind: "maybe", method: "", fromMethod: "", type, ownerType: "", elementType: "" };
+            return { ...object, kind: "maybe", method: "", fromMethod: "", type, ownerType: "", elementType: "", seg: "" };
           }
           if (object && (object.kind === "container" || object.kind === "laundered")) return { kind: "laundered", label: `${object.label}[${key.name}]`, method: "" };
           if (object?.kind === "dynamic") return object;

@@ -1,0 +1,1037 @@
+photoshopCore
+
+photoshopCore
+
+The
+core
+ module allows access to specialized commands within the application. Various application state properties can be modified or queried here.
+
+Some of these commands can be considered experimental. Some will be integrated into the DOM at a later date. The use of which will then be easier, for example, removing the need to specify the document ID as an argument.
+
+const {core} = require('photoshop');
+
+Properties
+
+Name
+
+Type
+
+Min Version
+
+Description
+
+apiVersion
+
+number
+
+22.5
+
+API Version declared by the plugin's manifest.json under `host.data.apiVersion` field.
+
+Functions
+
+addNotificationListener
+
+23.3
+
+async
+ :
+Promise
+
+Attach a listener to a Photoshop core event. A callback in the form of
+(eventName: string, descriptor: ActionDescriptor) => void
+ will be performed.
+
+A
+table of events is available
+.
+
+For example: using group '
+UI
+' and event '
+userIdle
+'
+
+Invoked after the Photoshop user idles for a specified number of seconds. See
+setUserIdleTime
+.
+
+Invoked a second time with the descriptor
+{idleEnd: true}
+ if the user is no longer idle. This signal can be used to finish up tasks being performed during the idle time.
+
+await core.addNotificationListener('UI', ['userIdle'], onUserIdle);
+
+Parameters
+
+Name
+
+Type
+
+group
+
+string
+
+events
+
+string
+[]
+
+callback
+
+NotificationListener
+
+calculateDialogSize
+
+22.5
+
+async
+ :
+Promise
+
+height
+:
+number
+ ;
+width
+:
+number
+ }>
+
+Returns the effective size of a dialog.
+
+const idealSize = { width: 200, height: 500 };
+const { width, height } = await core.calculateDialogSize(idealSize);
+
+Parameters
+
+Name
+
+Type
+
+preferredSize
+
+object
+
+preferredSize.height
+
+number
+
+preferredSize.width
+
+number
+
+identifier?
+
+string
+
+minimumSize?
+
+object
+
+minimumSize.height
+
+number
+
+minimumSize.width
+
+number
+
+convertColor
+
+23.0
+
+ RGBColorDescriptor | RGB32ColorDescriptor
+
+Converts the given color (in descriptor form) to RGB, returning the color descriptor.
+
+This is an internal API that is used for
+SolidColor
+ and all the other color classes.
+
+Currently, this API uses the application color settings for conversion (Edit > Color Settings...). ' In the future, we will provide color conversion based on embedded color profiles.
+
+Parameters
+
+Name
+
+Type
+
+sourceColor
+
+ColorDescriptor
+
+targetModel
+
+ColorConversionModel.RGB
+
+LabColorDescriptor
+
+Convert to Lab
+
+Parameters
+
+Name
+
+Type
+
+sourceColor
+
+ColorDescriptor
+
+targetModel
+
+ColorConversionModel.Lab
+
+HSBColorDescriptor
+
+Convert to HSB
+
+Parameters
+
+Name
+
+Type
+
+sourceColor
+
+ColorDescriptor
+
+targetModel
+
+ColorConversionModel.HSB
+
+GrayscaleColorDescriptor
+
+Convert to Grayscale
+
+Parameters
+
+Name
+
+Type
+
+sourceColor
+
+ColorDescriptor
+
+targetModel
+
+ColorConversionModel.Gray
+
+CMYKColorDescriptor
+
+Convert to CMYK
+
+Parameters
+
+Name
+
+Type
+
+sourceColor
+
+ColorDescriptor
+
+targetModel
+
+ColorConversionModel.CMYK
+
+convertGlobalToLocal
+
+26.0
+
+async
+ :
+Promise
+
+x
+:
+number
+ ;
+y
+:
+number
+ }>
+
+Given the (x,y) coordinates of a position in global (display) space, we convert to coordinates with the origin based at the top left corner of the given panel. A plugin can only make calls against panels that are defined in its manifest, so the given
+target
+ must be defined there.
+
+In the example manifest on the documentation page for
+UXP manifest v5
+, the identifier is "panelName".
+
+Note: global coordinates differ between macOS and Windows. On macOS global coordinates are expressed as points while on Windows the unit is pixels. See
+getDisplayConfiguration
+ for more information on global coordinates.
+
+const target = 'panelName';
+const location = { x: 200, y: 500 };
+const { x, y } = await core.convertGlobalToLocal(target, location);
+
+Parameters
+
+Name
+
+Type
+
+Description
+
+target
+
+string
+
+The
+id
+ of the panel to use as the origin.
+
+location
+
+object
+
+Point coordinates in the form {x, y}.
+
+location.x
+
+number
+
+-
+
+location.y
+
+number
+
+-
+
+createTemporaryDocument
+
+23.0
+
+object
+
+Create a temporary duplicate document for background processing. This document does not appear in the UI, and there are limitations with some editing features.
+
+await core.createTemporaryDocument({ documentID: 123 });
+
+Parameters
+
+Name
+
+Type
+
+Description
+
+options
+
+object
+
+Object containing the id the document to duplicate under property
+documentID
+.
+
+options.documentID
+
+number
+
+-
+
+deleteTemporaryDocument
+
+23.0
+
+void
+
+Remove a temporary document.
+
+await core.deleteTemporaryDocument({ documentID: 146 });
+
+Parameters
+
+Name
+
+Type
+
+Description
+
+options
+
+object
+
+Object containing key of
+documentID
+ for the document to delete.
+
+options.documentID
+
+number
+
+-
+
+endModalToolState
+
+22.5
+
+async
+ :
+Promise
+
+End the current modal tool editing state.
+
+// close the modal dialog, cancelling changes
+await core.endModalToolState(false);
+
+Parameters
+
+Name
+
+Type
+
+commit
+
+boolean
+
+executeAsModal
+
+22.5
+
+async
+ :
+Promise
+
+ExecuteAsModal is needed when a plugin wants to make modifications to the Photoshop state. This includes scenarios where the plugin wants to create or modify documents, or the plugin wants to update UI or preference state.
+
+ExecuteAsModal is only available to plugin that is using apiVersion 2 or higher.
+
+See
+Modal Execution
+ for details
+
+Parameters
+
+Name
+
+Type
+
+targetFunction
+
+(
+executionContext
+:
+
+ExecutionContext
+
+,
+descriptor?
+:
+object
+) =>
+Promise
+
+options
+
+ExecuteAsModalOptions
+
+getActiveTool
+
+22.5
+
+async
+ :
+Promise
+
+classID
+:
+string
+ ;
+isModal
+:
+boolean
+ ;
+key
+:
+string
+ ;
+title
+:
+string
+ }>
+
+Returns information about the active Photoshop tool.
+
+const { title } = await core.getActiveTool();
+
+getCPUInfo
+
+23.1
+
+CPUInfo
+
+Returns information about the host CPU.
+
+const { logicalCores, frequencyMhz, vendor } = core.getCPUInfo();
+const isAMD = vendor === 'AMD';
+const isARM = vendor === 'ARM';
+
+getDisplayConfiguration
+
+23.0
+
+Promise
+
+DisplayConfiguration
+
+]>
+
+Returns the current display configuration as an array with an entry for each display.
+
+Note: returned units differ by platform.
+
+Mac uses logical units, points.
+
+Windows uses physical units, pixels. Further discussion of the units may be found on
+Display Units
+
+core.getDisplayConfiguration({ physicalResolution: true });
+
+Parameters
+
+Name
+
+Type
+
+Default value
+
+Description
+
+options
+
+DisplayConfigurationOptions
+
+{}
+
+Additional properties to include, e.g.,
+physicalResolution
+.
+
+getGPUInfo
+
+23.1
+
+GPUInfo
+
+Returns OpenGL and OpenCL information about the available graphics processor.
+
+const { gpuInfoList, clgpuInfoList } = core.getGPUInfo();
+console.log(JSON.stringify(gpuInfoList));
+// > [{"version":"2.1 ATI-4.5.14","memoryMB":8192,"name":"16915464", ...}]
+console.log(JSON.stringify(clgpuInfoList));
+// > [{"version":"OpenCL 1.2 ","memoryMB":8589,"name":"AMD Radeon Pro 580X Compute Engine", ...}]
+
+getLayerGroupContents
+
+23.1
+
+Promise
+
+list
+: LayerTreeInfo[] }>
+
+Returns a list of the layers contained by the specified layer group.
+
+await core.getLayerGroupContents({ documentID: 123, layerID: 9 });
+
+Parameters
+
+Name
+
+Type
+
+options
+
+object
+
+options.documentID
+
+number
+
+options.layerID
+
+number
+
+getLayerGroupContentsSync
+
+23.1
+
+object
+
+Returns a list of the layers contained by the specified layer group.
+
+core.getLayerGroupContentsSync({ documentID: 123, layerID: 9 });
+
+Parameters
+
+Name
+
+Type
+
+options
+
+object
+
+options.documentID
+
+number
+
+options.layerID
+
+number
+
+getLayerTree
+
+23.1
+
+async
+ :
+Promise
+
+list
+: LayerTreeInfo[] }>
+
+Returns the full hierarchy of the layer stack in nested "lists".
+
+await core.getLayerTree({ documentID: 123 });
+
+Parameters
+
+Name
+
+Type
+
+Description
+
+options
+
+object
+
+Object containing key of
+documentID
+ for the target document.
+
+options.documentID
+
+number
+
+-
+
+getLayerTreeSync
+
+23.1
+
+object
+
+Returns the full hierarchy of the layer stack in nested "lists".
+
+core.getLayerTreeSync({ documentID: 123 });
+
+Parameters
+
+Name
+
+Type
+
+Description
+
+options
+
+object
+
+Object containing key of
+documentID
+ for the target document.
+
+options.documentID
+
+number
+
+-
+
+getMenuCommandState
+
+22.5
+
+async
+ :
+Promise
+
+Returns whether a command menu item is available for invoking.
+
+// can a Fill be performed?
+const canFill = await core.getMenuCommandState({ commandID: 1042 });
+
+Parameters
+
+Name
+
+Type
+
+options
+
+object
+
+options.commandID
+
+number
+
+getMenuCommandTitle
+
+22.5
+
+async
+ :
+Promise
+
+Returns the localized menu title of the menu command item.
+
+const renameLayerStr = await core.getMenuCommandTitle({ commandID: 2983 });
+
+Parameters
+
+Name
+
+Type
+
+options
+
+object
+
+options.commandID?
+
+number
+
+options.menuID?
+
+number
+
+getPluginInfo
+
+23.2
+
+async
+ :
+Promise
+
+Return information about the execution of the plugin. This method is intended for developing plugins. Shipping code should not use this method.
+
+The returned information include the following properties:
+
+numberOfPendingMainThreadTasks
+: Number of pending promises.
+
+batchPlayCount
+: Number of
+batchPlay
+ calls since the plugin was loaded.
+
+mainThreadTimeOutCount
+: Number of JavaScript calls that have timed out. This is typically caused by executing commands while Photoshop is modal without using
+executeAsModal
+.
+
+v8HeapSize
+: V8 heap allocated for the plugin. This number is only accurate when loading plugins through the UXP Developer Tool.
+
+await core.getPluginInfo();
+
+getUserIdleTime
+
+23.3
+
+Promise
+
+Return the current number of seconds for user idle time. See also:
+setUserIdleTime
+
+await core.getUserIdleTime();
+
+historySuspended
+
+23.1
+
+Promise
+
+Returns true if the history is in a suspended state. See
+Document.suspendHistory
+.
+
+await core.historySuspended( {documentID: 123} );
+
+Parameters
+
+Name
+
+Type
+
+Description
+
+options
+
+object
+
+Object containing key of
+documentID
+ for the target document.
+
+options.documentID
+
+number
+
+-
+
+isModal
+
+23.1
+
+boolean
+
+Returns true if the plugin is currently in a modal state using
+executeAsModal
+.
+
+performMenuCommand
+
+22.5
+
+async
+ :
+Promise
+
+Invokes the menu command via its
+commandID
+. Returns false on failure, or if the command is not available. Record Action Notifications via the Plugins > Development menu can be used to capture the command IDs.
+
+// menu item Select > All
+await core.performMenuCommand({ commandID: 1017 });
+
+Parameters
+
+Name
+
+Type
+
+Description
+
+options
+
+object
+
+Object containing key of
+commandID
+ for the menu item.
+
+options.commandID
+
+number
+
+-
+
+redrawDocument
+
+24.1
+
+async
+ :
+Promise
+
+Request that Photoshop redraws (updates) a document immediately. This method can be used to ensure that the document is updated immediately while a user is interacting with a UI element (such as a slider). This can provide a more responsive interaction. Updating a document can be time consuming, and will often happen at a lower frequency than UI events are received. Plugins may therefore want to implement a throttle between UI events and calls to redrawDocument. A throttle could be implemented by using a timer, or by avoiding to call redrawDocument for a small amount of time after a previous request completes. redrawDocument returns the time that it took Photoshop to update the target document in seconds. This number can be used to refine the throttle. redrawDocument is only available to a plugin that is using apiVersion 2 or higher.
+
+await core.redrawDocument({ documentID: 123 });
+
+Parameters
+
+Name
+
+Type
+
+options
+
+object
+
+options.documentID
+
+number
+
+removeNotificationListener
+
+23.0
+
+Promise
+
+Detaches a listener from a Photoshop event. See
+addNotificationListener
+
+await core.addNotificationListener('UI', ['userIdle'], onUserIdle);
+
+Parameters
+
+Name
+
+Type
+
+Description
+
+group
+
+string
+
+Notification group.
+
+events
+
+string
+[]
+
+Array of event names.
+
+listener
+
+NotificationListener
+
+-
+
+setExecutionMode
+
+23.2
+
+async
+ :
+Promise
+
+The execution mode can be used while debugging a plugin. It is only available when the developer mode is enabled.
+
+The following example illustrate how to enable stacktraces for batchPlay commands that fail. When stacktraces are enabled, then an error result descriptor from a batchPlay request will include a stacktrace property. The property can be used when reporting bugs to Adobe.
+
+await core.setExecutionMode({ enableErrorStacktraces: true });
+
+The following illustrates how to enable console warnings when a promise is rejected:
+
+await core.setExecutionMode({ logRejections: true });
+
+Parameters
+
+Name
+
+Type
+
+options
+
+object
+
+options.enableErrorStacktraces?
+
+boolean
+
+options.logRejections?
+
+boolean
+
+setUserIdleTime
+
+23.3
+
+async
+ :
+Promise
+
+Specifies the number of seconds a user must be idle on Photoshop before invoking the userIdle event handler defined with
+addNotificationListener
+. An idleTime of 0 turns off idle notifications.
+
+await core.setUserIdleTime(3);
+
+Parameters
+
+Name
+
+Type
+
+idleTime
+
+number
+
+showAlert
+
+22.5
+
+async
+ :
+Promise
+
+Show a generic alert box to the user. 'OK' to dismiss.
+
+// script has completed.
+await core.showAlert({ message: 'Operation successful' });
+
+Parameters
+
+Name
+
+Type
+
+options
+
+object
+
+options.message
+
+string
+
+suppressResizeGripper
+
+23.1
+
+Promise
+
+The "resize gripper", a small square in the botton-right corner of a panel, may be hidden by this function. This square will appear above the contents the panel itself including scrollbars. While many panels over the years have simply left space at the bottom to accomodate the gripper, this option removes it.
+
+await core.suppressResizeGripper({ type: 'panel', target: 'panel's ID', value: true });
+
+The value for
+target
+ above will be the id attached to the panel's entry under
+entrypoints
+ in the plugin manifest.
+
+Parameters
+
+Name
+
+Type
+
+Description
+
+options
+
+any
+
+Object containing type, target, and value.
+
+translateUIString
+
+22.5
+
+string
+
+Given a Photoshop ZString (of format
+"$$$/slash/separated/key=english default value"
+), will return the translated string for the current UI language
+
+Parameters
+
+Name
+
+Type
+
+zstring
+
+string
