@@ -1,0 +1,6 @@
+{
+  "algorithm": "sha256 of sorted lines `type<TAB>relative-path<TAB>sha256`, UTF-8, with a trailing newline. Paths use `/` and sort by raw UTF-8 bytes. A file hashes its bytes. A symlink hashes its target string and is not followed. Entries named .git, node_modules, or .env are omitted.",
+  "contentHash": "6a5b75fa2dd1f6964519816a97b7a4d5ceab283da777988dfc897aff3a276dad",
+  "sourceCommit": null,
+  "sourceRepo": "ThisIsMrAli/skill-boilerplate"
+}

@@ -6,6 +6,14 @@ It is derived from express-addon-review 0.4.0. The MIT notice in `LICENSE` is th
 
 The repository <https://github.com/ThisIsMrAli/skill-boilerplate> is private. This tree does not push to it. The owner moves this folder there separately.
 
+## Upgrading the boilerplate
+
+Consumers vendor this folder so agent loaders see real files. They do not use an npm git dependency or a submodule, because this repository is private and those installs would fail for other people.
+
+The consumer's `BOILERPLATE.lock` records `ThisIsMrAli/skill-boilerplate`, `sourceCommit`, and `contentHash`. `sourceCommit` stays null until a checkout sha is filled in. `contentHash` is SHA-256 over the sorted lines `type`, relative path, and SHA-256. File lines hash bytes. Symlink lines hash the target string and are not followed. `.git`, `node_modules`, and `.env` are omitted.
+
+The consumer replaces this folder with its sync script, which refuses `.git`, `node_modules`, `.env`, absolute symlinks, symlink targets that contain `..`, and symlinks that escape the checkout, then rewrites the lock. A drift test fails if the vendored bytes change any other way. The only import is `api.mjs`.
+
 ## Public entry
 
 Other projects import `api.mjs` and nothing else:

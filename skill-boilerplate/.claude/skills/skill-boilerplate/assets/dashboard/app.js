@@ -6,9 +6,10 @@ const root = document.getElementById("app");
 const NS = "http://www.w3.org/2000/svg";
 
 const ui = { tab: "", tabPinned: false, filter: "all", shotTheme: "all", pickedShot: null, choice: {}, secret: {}, error: {}, sending: {}, conn: "live", skew: 0, copied: "", theme: "auto" };
+const THEME_KEY = "skill-boilerplate-theme";
 const fromHash = location.hash.slice(1);
 if (["findings", "panel", "listing", "activity"].includes(fromHash)) { ui.tab = fromHash; ui.tabPinned = true; }
-try { ui.theme = localStorage.getItem("session-theme") || localStorage.getItem("review-theme") || "auto"; } catch { /* storage off */ }
+try { ui.theme = storedTheme(); } catch { /* storage off */ }
 let state = null;
 let downTimer = null;
 let loading = false;
@@ -290,9 +291,18 @@ function chooseTab() {
 
 // ---- top bar ------------------------------------------------------------------------------
 
+/** Read the boilerplate theme. A saved review-theme or session-theme value is copied once. */
+function storedTheme() {
+  const current = localStorage.getItem(THEME_KEY);
+  if (current) return current;
+  const older = localStorage.getItem("review-theme") || localStorage.getItem("session-theme");
+  if (older) localStorage.setItem(THEME_KEY, older);
+  return older || "auto";
+}
+
 function cycleTheme() {
   ui.theme = ui.theme === "auto" ? "light" : ui.theme === "light" ? "dark" : "auto";
-  try { localStorage.setItem("session-theme", ui.theme); } catch { /* storage off */ }
+  try { localStorage.setItem(THEME_KEY, ui.theme); } catch { /* storage off */ }
   if (ui.theme === "auto") delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = ui.theme;
   painted.delete(el.facts);
@@ -528,6 +538,8 @@ function paintSheet() {
   if (pending && s.mode === "dashboard") el.sheet.querySelector("input")?.focus({ preventScroll: true });
 }
 
+const DASHBOARD_CARD_HINT = "The agent carries on the moment you confirm.";
+
 function turn(ask) {
   if (ask.input === "text") return textTurn(ask);
   const k = `${ask.id}:${ask.nonce}`;
@@ -572,7 +584,7 @@ function turn(ask) {
     sync();
     await load();
   } }, list, secretBox,
-  h("div", { class: "actions" }, submit, h("span", { class: "hint", text: "The agent carries on the moment you confirm. You can also answer in chat." })), status);
+  h("div", { class: "actions" }, submit, h("span", { class: "hint", text: DASHBOARD_CARD_HINT })), status);
 
   const s = session();
   const shots = (ask.images || []).map((id) => s.shots.find((shot) => shot.id === id)).filter(Boolean);

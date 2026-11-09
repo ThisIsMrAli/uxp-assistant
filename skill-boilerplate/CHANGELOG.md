@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2
+
+- The dashboard question card no longer says to answer in chat. Chat mode and a stopped dashboard still say so.
+- The theme key is `skill-boilerplate-theme`. A saved `review-theme` or `session-theme` value is copied once.
+
 ## 0.1.1
 
 - `questionsAfterDocs(session, out)` receives the session folder, so a skill can read `out/docs`.
