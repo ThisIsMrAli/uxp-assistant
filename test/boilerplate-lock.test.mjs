@@ -7,7 +7,7 @@ import { agentInstallRoots, hashTree, syncBoilerplate } from "../scripts/sync-bo
 
 const root = path.resolve("skill-boilerplate");
 const lockPath = path.resolve("BOILERPLATE.lock");
-const sourceCommit = "4bd730203f98aa55b354cfeaf1b9ecd81fd81bc9";
+const sourceCommit = "5cc08412d0bdf2a3df1320984c7d2f3b25dc7f40";
 
 test("the vendored boilerplate matches BOILERPLATE.lock", () => {
   const lock = JSON.parse(fs.readFileSync(lockPath, "utf8"));
