@@ -309,7 +309,7 @@ a.pill:hover, button.pill:hover { border-color: var(--line-strong); color: var(-
 .turn header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 11px; border-radius: 999px; background: var(--primary); color: #fff; font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
 .turn h2 { font-size: 20px; letter-spacing: -0.015em; }
-.turn .prompt { margin-top: 10px; color: var(--muted); max-width: 72ch; text-wrap: pretty; }
+.turn .prompt { margin-top: 10px; color: var(--muted); max-width: 72ch; text-wrap: pretty; white-space: pre-line; }
 .choices { margin: 16px 0 0; padding: 0; border: 0; display: grid; gap: 10px; }
 .choice { display: grid; grid-template-columns: 22px 1fr; gap: 12px; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line-strong); background: var(--surface); cursor: pointer; transition: border-color 0.15s, background 0.15s; }
 .choice:hover { border-color: var(--primary-text); }
@@ -469,3 +469,18 @@ dialog.lightbox::backdrop { background: rgba(5, 8, 20, 0.7); backdrop-filter: bl
 .text-answer input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 4px var(--primary-soft); }
 .text-answer .actions { margin-top: 6px; display: flex; align-items: center; gap: 12px; }
 .text-answer .error:empty { display: none; }
+
+/* The try card: words and screenshots with the choice */
+.report { margin-top: 16px; display: grid; gap: 10px; max-width: 720px; }
+.report label { font-weight: 650; font-size: 14px; }
+.report textarea { width: 100%; box-sizing: border-box; min-height: 120px; padding: 12px 14px; font: inherit; line-height: 1.5; border-radius: 12px; border: 1.5px solid var(--line-strong); background: var(--surface); color: inherit; resize: vertical; }
+.report textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 4px var(--primary-soft); }
+.drop { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px; border-radius: 12px; border: 1.5px dashed var(--line-strong); background: var(--surface-2); transition: border-color 0.15s, background 0.15s; }
+.drop[data-over="true"] { border-color: var(--primary); background: var(--primary-soft); }
+.attached { display: grid; gap: 8px; padding: 0; margin: 0; list-style: none; }
+.attached:empty { display: none; }
+.attached li { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); }
+.attached img { height: 56px; width: 96px; object-fit: cover; object-position: top; border-radius: 6px; border: 1px solid var(--line); }
+.attached .meta { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12.5px; }
+.thumbs { display: grid; gap: 8px; align-self: start; }
+.bug .text { white-space: pre-wrap; }

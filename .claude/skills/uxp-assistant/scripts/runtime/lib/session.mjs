@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { imageSize } from "./images.mjs";
+import { imageSize, sniffImage } from "./images.mjs";
 
 /**
  * One review session lives in one folder:
@@ -48,6 +48,18 @@ export function readServer(out) {
   return readJson(files.server(out));
 }
 
+/** True while the dashboard process for this session is alive. */
+export function dashboardUp(out) {
+  const info = readServer(out);
+  if (!info) return false;
+  try {
+    process.kill(info.pid, 0);
+    return true;
+  } catch (error) {
+    return error.code === "EPERM";
+  }
+}
+
 export function readAnswers(out) {
   let raw = "";
   try {
@@ -90,6 +102,8 @@ export function readMerged(out) {
       via: answer.via,
       answeredAt: answer.at,
       hasSecret: Boolean(answer.secret),
+      ...(answer.text ? { answerText: answer.text } : {}),
+      ...(answer.images?.length ? { answerImages: answer.images } : {}),
       deliveredAt: delivered?.at || null
     };
   });
@@ -127,7 +141,7 @@ export function emptySession(steps = DEFAULT_STEPS) {
     updatedAt: now(),
     addon: {},
     baseline: [],
-    steps: steps.map((step) => ({ id: step.id, label: step.label, optional: Boolean(step.optional), hint: step.hint || "", status: "pending", detail: "", doing: "", progress: null, startedAt: null, endedAt: null })),
+    steps: steps.map((step) => ({ id: step.id, label: step.label, optional: Boolean(step.optional), hint: step.hint || "", command: step.command || "", say: step.say || "", status: "pending", detail: "", doing: "", progress: null, startedAt: null, endedAt: null })),
     askSteps: {},
     notes: [],
     asks: [],
@@ -207,7 +221,7 @@ export function parseProgress(value) {
   throw new Error('Progress looks like 3/12 or 40%.');
 }
 
-export function addNote(out, { text, screen, shot, id, severity, rule, theme, themes, source, selector, key, auto }) {
+export function addNote(out, { text, screen, shot, shots, id, severity, rule, theme, themes, source, selector, key, auto }) {
   return mutate(out, (draft) => {
     if (id) {
       const existing = draft.notes.find((note) => note.id === id);
@@ -215,6 +229,7 @@ export function addNote(out, { text, screen, shot, id, severity, rule, theme, th
         if (text) existing.text = text;
         if (screen) existing.screen = screen;
         if (shot) existing.shot = shot;
+        if (shots?.length) existing.shots = shots;
         return;
       }
     }
@@ -223,6 +238,7 @@ export function addNote(out, { text, screen, shot, id, severity, rule, theme, th
       text,
       screen: screen || "",
       shot: shot || "",
+      ...(shots?.length ? { shots } : {}),
       status: "open",
       at: now(),
       ...(severity ? { severity } : {}),
@@ -307,11 +323,18 @@ export function publishAsk(out, ask) {
     prompt: ask.prompt,
     input: ask.input || "",
     maxLength: ask.maxLength || 500,
+    // `attach` makes the card take typed words and screenshots with the choice.
+    ...(ask.attach ? { attach: true } : {}),
+    ...(ask.round ? { round: ask.round } : {}),
     options: (ask.options || []).map((option) => ({
       id: option.id,
       label: option.label,
       detail: option.detail || "",
-      secret: option.secret || ""
+      secret: option.secret || "",
+      ...(option.ends ? { ends: true } : {}),
+      // `repeat` means this answer opens another round, so the step stays open. `then` is what the agent does next.
+      ...(option.repeat ? { repeat: true } : {}),
+      ...(option.then ? { then: option.then } : {})
     })),
     affects: ask.affects || [],
     images: ask.images || [],
@@ -358,7 +381,7 @@ export function answerFields(ask, value, via, extra = {}) {
   };
 }
 
-export function answerFromChat(out, id, value) {
+export function answerFromChat(out, id, value, extra = {}) {
   const session = readSession(out);
   const ask = session?.asks.find((item) => item.id === id);
   if (!ask) throw new Error(`No question named ${id}. Publish it with the ask command first.`);
@@ -370,7 +393,8 @@ export function answerFromChat(out, id, value) {
   }
   const option = matchOption(ask, value);
   if (!option) throw new Error(`"${value}" is not one of: ${ask.options.map((item) => item.id).join(", ")}.`);
-  appendAnswerLine(out, answerFields(ask, option.id, "chat"));
+  const attached = ask.attach ? attachmentFields(out, ask, option, extra) : {};
+  appendAnswerLine(out, answerFields(ask, option.id, "chat", attached));
   mutate(out, (draft) => {
     const step = stepForAsk(id, draft);
     if (step) setStepIn(draft, step, "running", `You chose: ${plainLabel(option.label)}`);
@@ -378,6 +402,53 @@ export function answerFromChat(out, id, value) {
     settleStep(out, draft, step);
   });
   return option;
+}
+
+export const ATTACH_LIMITS = { images: 6, imageBytes: 5 * 1024 * 1024, text: 4000 };
+
+/** Words and screenshots that travel with a choice. The choice that opens another round needs at least one of them. */
+function attachmentFields(out, ask, option, { text = "", images = [] } = {}) {
+  const words = String(text || "").trim();
+  if (words.length > ATTACH_LIMITS.text) throw new Error(`Keep the text under ${ATTACH_LIMITS.text} characters.`);
+  if (images.length > ATTACH_LIMITS.images) throw new Error(`Send at most ${ATTACH_LIMITS.images} screenshots.`);
+  if (option.repeat && !words && !images.length) throw new Error("Say what is wrong in words, or add a screenshot.");
+  const saved = saveFeedbackImages(out, ask, images.map((file) => (Buffer.isBuffer(file) ? file : fs.readFileSync(path.resolve(file)))));
+  return { ...(words ? { text: words } : {}), ...(saved.length ? { images: saved } : {}) };
+}
+
+/** Write each image under shots/ with a name the dashboard may serve. Returns the session-relative paths. */
+export function saveFeedbackImages(out, ask, buffers) {
+  const dir = path.join(out, "shots");
+  fs.mkdirSync(dir, { recursive: true });
+  return buffers.map((buf, index) => {
+    if (buf.length > ATTACH_LIMITS.imageBytes) throw new Error(`Screenshot ${index + 1} is over ${ATTACH_LIMITS.imageBytes / 1024 / 1024} MB.`);
+    const kind = sniffImage(buf);
+    if (!kind) throw new Error(`Screenshot ${index + 1} is not a PNG, JPEG, or WebP image.`);
+    const name = `fb-${ask.nonce}-${index + 1}.${kind.ext}`;
+    fs.writeFileSync(path.join(dir, name), buf);
+    return `shots/${name}`;
+  });
+}
+
+/**
+ * A report from the developer becomes a note, so it shows in the Notes tab and the agent closes it when fixed.
+ * Safe to call twice. The same round updates the same note.
+ */
+export function noteFeedback(out, id) {
+  const ask = readMerged(out)?.asks.find((item) => item.id === id && item.status === "answered");
+  if (!ask?.attach) return null;
+  const option = ask.options.find((item) => item.id === ask.answer);
+  if (!option?.repeat || (!ask.answerText && !ask.answerImages?.length)) return null;
+  const noteId = `fb${ask.round || 1}`;
+  addNote(out, {
+    id: noteId,
+    text: ask.answerText || "Screenshot only. Read it and find what is wrong.",
+    screen: `Your report, round ${ask.round || 1}`,
+    shot: ask.answerImages?.[0] || "",
+    shots: ask.answerImages || [],
+    severity: "error"
+  });
+  return noteId;
 }
 
 /**
@@ -405,6 +476,12 @@ function settleStep(out, draft, stepId) {
   const lines = readAnswers(out);
   const open = published.some((ask) => !lines.some((line) => line.type === "answer" && line.askId === ask.id && line.nonce === ask.nonce));
   if (open) return;
+  // An answer that opens another round keeps the step going until a round ends without one.
+  const again = published.some((ask) => {
+    const line = lines.find((item) => item.type === "answer" && item.askId === ask.id && item.nonce === ask.nonce);
+    return ask.options.find((item) => item.id === line?.value)?.repeat;
+  });
+  if (again) return;
   const detail = draft.steps.find((step) => step.id === stepId)?.detail || "";
   setStepIn(draft, stepId, "done", detail);
 }
@@ -416,11 +493,11 @@ export function matchOption(ask, value) {
   return ask.options.find((item) => item.id.toLowerCase() === wanted) || ask.options.find((item) => item.label.toLowerCase().replace(/\s*\(recommended\)$/, "") === wanted);
 }
 
-export function finish(out, summary) {
+export function finish(out, summary, { stopped = false } = {}) {
   const current = readSession(out);
   const docs = current?.steps?.find((step) => step.id === "docs");
-  if (docs && docs.status !== "done") {
-    throw new Error("Docs were never fetched. Run refresh before done.");
+  if (!stopped && docs && docs.status !== "done" && docs.status !== "skipped") {
+    throw new Error("The docs were never saved. Run the docs command before done.");
   }
   return mutate(out, (draft) => {
     draft.summary = summary || null;
@@ -449,7 +526,7 @@ export function recordDocs(out, summary) {
     };
     draft.addon.docsSha = summary.sha || draft.addon.docsSha || "";
     draft.addon.fetchedAt = summary.retrievedAt || "";
-    const detail = `fresh ${summary.fresh.length}, stale ${summary.stale.length}, failed ${summary.failed.length}`;
+    const detail = `Adobe docs saved: ${summary.fresh.length + summary.stale.length} pages (${summary.fresh.length} fresh, ${summary.stale.length} stale, ${summary.failed.length} failed)`;
     if (draft.steps.some((step) => step.id === "docs")) {
       setStepIn(draft, "docs", "done", detail, { doing: detail, progress: { done: summary.pages.length, total: summary.pages.length } });
     }

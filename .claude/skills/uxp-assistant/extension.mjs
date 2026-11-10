@@ -1,115 +1,100 @@
-import fs from "node:fs";
-import path from "node:path";
-import { consequentialAsk, contextEvidenceAsk, designAsk, docsRetryAsk, feasibilityAsk, frameworkAsk, hostAsk, narrowAsk, runtimeAsk, validationAsk } from "./scripts/lib/ask.mjs";
-import { resolveCapability } from "./scripts/lib/capability.mjs";
-import { discoverDesignSkills } from "./scripts/lib/design-skill.mjs";
-import { pagesForRequest } from "./scripts/lib/registry.mjs";
-import { contextEvidence, runtimeOffer } from "./scripts/lib/runtime.mjs";
-import { skillRoot } from "./scripts/lib/paths.mjs";
+import { planSummary } from "./scripts/lib/flow.mjs";
+import { makePlan } from "./scripts/lib/intent.mjs";
+import { BOLT_APPS } from "./scripts/lib/stack.mjs";
 
 /**
  * UXP Assistant's extension. scripts/runtime owns the session and the dashboard.
- * This file adds the UXP links, questions, and the handoff that runs after them.
+ * This file says what the steps are, what runs in each, and the one card the developer sees.
+ *
+ * mode -> (host, only when the request names no Adobe app) -> plan -> (tweak, only when they ask to change something)
+ * then docs, build, implement, check run without asking anything.
+ * After check the developer tries the plugin in the Adobe app and sends bugs (words and screenshots) until there are none.
  */
 export default {
   id: "uxp-assistant",
   title: "UXP Assistant",
   homeDirName: ".uxp-assistant",
   steps: [
-    { id: "prepare", label: "Prepare", hint: "Session only. No docs yet." },
-    { id: "intake", label: "Intake" },
-    { id: "docs", label: "Official docs", hint: "Fetched in parallel after the dashboard is up." },
-    { id: "decide", label: "Decide" },
+    { id: "prepare", label: "Prepare", hint: "Reads your request. No network." },
+    { id: "plan", label: "Plan", hint: "One card. It shows what was read from your request." },
+    {
+      id: "docs",
+      label: "Adobe docs",
+      hint: "Every page Adobe lists for your app, saved on this computer.",
+      command: "node scripts/skill.mjs docs",
+      say: "Save Adobe's current docs for the plan's app. It takes about ten seconds and needs no question."
+    },
+    {
+      id: "build",
+      label: "Project",
+      hint: "Creates the project and narrows its permissions.",
+      command: "node scripts/skill.mjs build",
+      say: "Create the project. The first run installs the pinned scaffold tool, about twenty seconds."
+    },
+    {
+      id: "implement",
+      label: "Write the plugin",
+      hint: "The assistant writes the code from the brief.",
+      say: "Read {out}/BRIEF.md, then write the whole plugin in {project}/src. Use `node scripts/skill.mjs find <words>` before every host API call. Do not ask the developer anything. When the code is written, run `{check}`."
+    },
+    {
+      id: "check",
+      label: "Build and check",
+      hint: "Builds, packages, and reads the code against the saved docs.",
+      command: "node scripts/skill.mjs check",
+      say: "Build, package, and check the plugin. Fix every error it lists, then run it again until it says ok."
+    },
+    {
+      id: "try",
+      label: "Try it",
+      hint: "You load it in the Adobe app and send what is wrong, with words and screenshots. The assistant fixes it and asks again until you say no more bugs.",
+      command: "node scripts/skill.mjs feedback",
+      say: "Publish the try card for the developer. Then wait for the answer. If no person is there (a background or cloud run), run it with --skip."
+    },
     { id: "done", label: "Wrap up" }
   ],
-  askSteps: {
-    goal: "intake",
-    host: "intake",
-    framework: "intake",
-    context: "intake",
-    name: "intake",
-    id: "intake",
-    permissions: "intake",
-    feasibility: "decide",
-    "docs-retry": "decide",
-    "context-evidence": "decide",
-    runtime: "decide",
-    design: "decide",
-    validation: "decide",
-    "narrow-permissions": "decide",
-    consequential: "decide",
-    "script-change": "decide"
-  },
-  docs: { everyInvocation: true, parallel: true, pageTimeoutMs: 8000, budgetMs: 25000 },
-  prepare({ input, kind }) {
-    return { name: "UXP Assistant", path: input || "", kind: kind || "empty", findings: [] };
+  askSteps: { host: "plan", plan: "plan", tweak: "plan", feedback: "try" },
+  prepare({ input, kind, project, goal, host, framework, name, id, runtime }) {
+    const plan = makePlan({ goal, kind, input, project, flags: { host, framework, name, id, runtime } });
+    return {
+      name: plan.name,
+      path: kind === "existing" ? project || input || "" : input || "",
+      kind,
+      plan,
+      findings: [],
+      files: { "plan.json": plan }
+    };
   },
   questions(prepared) {
-    const existing = prepared?.kind === "existing";
-    const questions = [
-      text("goal", "Goal", "What should the plugin do? The words are kept as you type them.", 400),
-      hostAsk()
-    ];
-    if (!existing) {
-      questions.push(frameworkAsk(), {
-        id: "context",
-        title: "Context",
-        prompt: "Which entrypoint context should the fresh pages be checked against?",
-        options: [
-          { id: "panel", label: "Panel (Recommended)", detail: "A panel entrypoint." },
-          { id: "command", label: "Command", detail: "A command entrypoint." },
-          { id: "dialog", label: "Dialog", detail: "A dialog entrypoint." }
-        ]
-      }, text("name", "Display name", "Display name for an empty-folder starter.", 80), text("id", "Plugin id", "Plugin id, such as com.example.panel.", 80));
+    const plan = prepared.plan;
+    const questions = [];
+    if (!plan.host) {
+      questions.push({
+        id: "host",
+        title: "Adobe app",
+        prompt: "Which Adobe app is this plugin for? The request names none, or more than one.",
+        options: BOLT_APPS.map((app, index) => ({ id: app.id, label: `${app.label.replace(/\s*\(Beta\)$/, "")}${index === 0 ? " (Recommended)" : ""}`, detail: app.beta ? "Beta in the scaffold tool." : "" }))
+      });
     }
     questions.push({
-      id: "permissions",
-      title: "Requested permissions",
-      prompt: "Which permission does this request already name? Detect from the request reads the goal. An unnamed key is not added.",
+      id: "plan",
+      title: "Plan",
+      prompt: planSummary(plan),
       options: [
-        { id: "auto", label: "Detect from the request (Recommended)", detail: "Reads the goal and keeps local files, network, or clipboard only when the request names that access. A request that names none of them adds no extra key." },
-        { id: "none", label: "None", detail: "Adds no local files, network, or clipboard key. A native panel gets an empty requiredPermissions object. A WebView that does not communicate keeps the local keys with the message bridge off." },
-        { id: "localFileSystem", label: "Local files", detail: "The request names local file access." },
-        { id: "network", label: "Network", detail: "The request names network access." },
-        { id: "clipboard", label: "Clipboard", detail: "The request names the clipboard." }
+        { id: "build", label: "Build it (Recommended)", detail: "Saves the docs, builds the plugin, then asks you to try it in the Adobe app." },
+        { id: "change", label: "Change something", detail: "Say what to change: name, Adobe app, framework, permissions, or folder." },
+        { id: "stop", label: "Stop", detail: "Ends the session. Nothing is created.", ends: true }
       ]
     });
-    return questions;
-  },
-  sources(session) {
-    const answers = answered(session);
-    return pagesForRequest({ host: answers.host || "", goal: answers.goal || "" });
-  },
-  questionsAfterDocs(session, out) {
-    const answers = answered(session);
-    const pages = pagesForRequest({ host: answers.host || "", goal: answers.goal || "" }).map((page) => {
-      const recorded = (session.docs?.pages || []).find((item) => item.id === page.id);
-      let text = "";
-      try {
-        text = fs.readFileSync(path.join(out, "docs", `${page.id}.txt`), "utf8");
-      } catch {
-        text = "";
-      }
-      return { ...page, text, freshness: recorded?.freshness || "failed" };
+    questions.push({
+      id: "tweak",
+      title: "What to change",
+      prompt: "What should be different? Plain words are fine, for example: use Photoshop, name it Fast QR, use Vue, needs network, put it in /Users/me/plugins.",
+      input: "text",
+      maxLength: 300,
+      options: [],
+      when: { plan: "change" }
     });
-    const capability = resolveCapability({ goal: answers.goal || "", pages });
-    const context = contextEvidence(pages, answers.context || "");
-    const offer = runtimeOffer({ pages, behaviors: [], goal: answers.goal || "", cepHybrid: false });
-    const discovery = discoverDesignSkills([path.resolve(skillRoot, "..")], { skip: [skillRoot] });
-    if (pages.some((page) => page.freshness !== "fresh")) return [docsRetryAsk()];
-    const later = [feasibilityAsk(capability)];
-    if (!context.confirmed) later.push(contextEvidenceAsk(context));
-    later.push(runtimeAsk(offer), designAsk(discovery), validationAsk(), narrowAsk(), consequentialAsk());
-    return later;
+    return questions;
   }
 };
-
-function text(id, title, prompt, maxLength) {
-  return { id, title, prompt, input: "text", maxLength, options: [] };
-}
-
-function answered(session) {
-  const values = {};
-  for (const ask of session?.asks || []) if (ask.status === "answered") values[ask.id] = ask.answer;
-  return values;
-}

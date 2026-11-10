@@ -6,7 +6,6 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { refreshSkill } from "./refresh.mjs";
 import { sessionCommand } from "./session.mjs";
 import { adoptAsk as adoptAskImpl } from "./lib/session.mjs";
 import { startSkill } from "./start.mjs";
@@ -25,11 +24,6 @@ export async function session(argv, options = {}) {
 
 export function adoptAsk(out, ask) {
   return adoptAskImpl(out, ask);
-}
-
-export async function refresh(options) {
-  applyEnv(options);
-  return refreshSkill(options);
 }
 
 /** Start, stop, or status. Returns the dashboard JSON. Does not fetch docs. */
@@ -61,5 +55,4 @@ function applyEnv(options = {}) {
   if (options.out) process.env.SKILL_OUT = options.out;
   if (options.sessionBin) process.env.SKILL_SESSION_BIN = options.sessionBin;
   if (options.dashboardBin) process.env.SKILL_DASHBOARD_BIN = options.dashboardBin;
-  if (options.refreshBin) process.env.SKILL_REFRESH_BIN = options.refreshBin;
 }

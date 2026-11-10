@@ -5,7 +5,7 @@ const token = document.body.dataset.token;
 const root = document.getElementById("app");
 const NS = "http://www.w3.org/2000/svg";
 
-const ui = { tab: "", tabPinned: false, filter: "all", shotTheme: "all", pickedShot: null, choice: {}, secret: {}, error: {}, sending: {}, conn: "live", skew: 0, copied: "", theme: "auto" };
+const ui = { tab: "", tabPinned: false, filter: "all", shotTheme: "all", pickedShot: null, choice: {}, secret: {}, error: {}, sending: {}, attach: {}, addFiles: null, conn: "live", skew: 0, copied: "", theme: "auto" };
 const THEME_KEY = "skill-boilerplate-theme";
 const fromHash = location.hash.slice(1);
 if (["findings", "panel", "listing", "activity"].includes(fromHash)) { ui.tab = fromHash; ui.tabPinned = true; }
@@ -285,7 +285,7 @@ function chooseTab() {
   const ids = visibleTabIds();
   if (ui.tabPinned && ids.includes(ui.tab)) return;
   const running = steps().find((step) => step.status === "running" || step.status === "waiting");
-  const preferred = running?.id === "panel" ? "panel" : running?.id === "listing" ? "listing" : "activity";
+  const preferred = running?.id === "panel" || running?.id === "try" ? "panel" : running?.id === "listing" ? "listing" : "activity";
   ui.tab = ids.includes(preferred) ? preferred : "activity";
 }
 
@@ -555,7 +555,9 @@ function paintSheet() {
 const DASHBOARD_CARD_HINT = "The agent carries on the moment you confirm.";
 
 function turn(ask) {
+  ui.addFiles = null;
   if (ask.input === "text") return textTurn(ask);
+  if (ask.attach) return feedbackTurn(ask);
   const k = `${ask.id}:${ask.nonce}`;
   const status = h("span", { class: "error", role: "alert" });
   const submit = h("button", { class: "btn primary", type: "submit", disabled: true, text: "Confirm choice" });
@@ -613,6 +615,135 @@ function turn(ask) {
   return sheet;
 }
 
+// ---- the try card: choose, then words and screenshots --------------------------------------
+
+const MAX_SHOTS = 6;
+const MAX_EDGE = 1800;
+const MAX_SHOT_BYTES = 4.5 * 1024 * 1024;
+
+const readDataUrl = (blob) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(String(reader.result));
+  reader.onerror = () => reject(new Error("That file could not be read."));
+  reader.readAsDataURL(blob);
+});
+
+/** Keep a screenshot small enough to send. A large one is scaled down and sent as JPEG. */
+async function prepareShot(file) {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+  const plain = scale === 1 && file.size <= MAX_SHOT_BYTES && /^image\/(png|jpeg|webp)$/.test(file.type);
+  const name = file.name || "screenshot";
+  if (plain) return { name, dataUrl: await readDataUrl(file), width: bitmap.width, height: bitmap.height };
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  const context = canvas.getContext("2d");
+  context.fillStyle = "#fff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.88));
+  if (!blob || blob.size > MAX_SHOT_BYTES) throw new Error("That screenshot is too large. Crop it or use a smaller one.");
+  return { name: name.replace(/\.[a-z]+$/i, "") + ".jpg", dataUrl: await readDataUrl(blob), width: canvas.width, height: canvas.height };
+}
+
+function feedbackTurn(ask) {
+  const k = `${ask.id}:${ask.nonce}`;
+  const draft = ui.attach[k] || (ui.attach[k] = { text: "", images: [] });
+  const status = h("span", { class: "error", role: "alert" });
+  const submit = h("button", { class: "btn primary", type: "submit" });
+  const list = h("ul", { class: "attached", "aria-label": "Screenshots that will be sent" });
+  const text = h("textarea", {
+    id: `report-${k}`, rows: "5", maxlength: String(ask.maxLength || 4000), spellcheck: "true",
+    placeholder: "What did you see, and what did you expect? For example: Save does nothing, the QR code looks blurry, the panel says undefined.",
+    oninput: (event) => { draft.text = event.target.value; sync(); }
+  });
+  text.value = draft.text;
+  const chooser = h("input", { type: "file", accept: "image/png,image/jpeg,image/webp", multiple: true, class: "sr", tabindex: "-1", "aria-label": "Choose screenshots" });
+  const drop = h("div", { class: "drop" },
+    h("button", { class: "btn small", type: "button", onclick: () => chooser.click(), text: "Add screenshots" }),
+    h("span", { class: "hint", text: "or drop images here, or paste one with Ctrl+V (Cmd+V on a Mac). Up to 6." }));
+  const report = h("div", { class: "report", hidden: true },
+    h("label", { for: `report-${k}`, text: "What is wrong" }), text, drop, chooser, list);
+
+  async function addFiles(files) {
+    const images = [...files].filter((file) => /^image\//.test(file.type));
+    if (!images.length) { ui.error[k] = "Only images can be added."; sync(); return; }
+    for (const file of images) {
+      if (draft.images.length >= MAX_SHOTS) { ui.error[k] = `At most ${MAX_SHOTS} screenshots.`; break; }
+      try {
+        draft.images.push(await prepareShot(file));
+        ui.error[k] = "";
+      } catch (error) {
+        ui.error[k] = error.message;
+      }
+    }
+    paintList();
+    sync();
+  }
+  ui.addFiles = addFiles;
+  chooser.addEventListener("change", () => { addFiles(chooser.files); chooser.value = ""; });
+  drop.addEventListener("dragover", (event) => { event.preventDefault(); drop.dataset.over = "true"; });
+  drop.addEventListener("dragleave", () => { delete drop.dataset.over; });
+  drop.addEventListener("drop", (event) => { event.preventDefault(); delete drop.dataset.over; addFiles(event.dataTransfer?.files || []); });
+
+  function paintList() {
+    fill(list, draft.images.map((image, index) => h("li", null,
+      h("img", { src: image.dataUrl, alt: `Screenshot ${index + 1}: ${image.name}`, width: "96" }),
+      h("span", { class: "meta", text: `${image.name}, ${image.width} by ${image.height}` }),
+      h("button", { class: "btn small", type: "button", "aria-label": `Remove screenshot ${index + 1}`, onclick: () => { draft.images.splice(index, 1); paintList(); sync(); }, text: "Remove" }))));
+  }
+
+  const choose = (id) => { ui.choice[k] = id; sync(); };
+  const choices = h("fieldset", { class: "choices" }, h("legend", { class: "sr", text: "Choose one option" }),
+    ask.options.map((option) => h("label", { class: "choice" },
+      h("input", { type: "radio", name: `choice-${k}`, value: option.id, checked: ui.choice[k] === option.id, onchange: () => choose(option.id) }),
+      h("span", null,
+        h("span", { class: "label", text: clean(option.label) }),
+        option.detail ? h("span", { class: "what", text: option.detail }) : null))));
+
+  function sync() {
+    const option = ask.options.find((item) => item.id === ui.choice[k]);
+    report.hidden = !option?.repeat;
+    const empty = !draft.text.trim() && !draft.images.length;
+    submit.disabled = !option || (option.repeat && empty) || Boolean(ui.sending[k]);
+    submit.textContent = ui.sending[k] ? "Sending" : option?.repeat ? "Send to the assistant" : "Confirm: no more bugs";
+    status.textContent = ui.error[k] || "";
+  }
+
+  const form = h("form", { onsubmit: async (event) => {
+    event.preventDefault();
+    ui.sending[k] = true;
+    ui.error[k] = "";
+    sync();
+    try {
+      const body = { id: ask.id, value: ui.choice[k], text: draft.text.trim(), images: draft.images.map((image) => ({ name: image.name, data: image.dataUrl })) };
+      const res = await fetch(api("/api/answer"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      if (!res.ok) ui.error[k] = (await res.json().catch(() => ({}))).error || "That did not go through.";
+      else delete ui.attach[k];
+    } catch {
+      ui.error[k] = "The agent's dashboard stopped answering. Reply in chat instead.";
+    }
+    ui.sending[k] = false;
+    sync();
+    await load();
+  } }, choices, report, h("div", { class: "actions" }, submit, h("span", { class: "hint", text: DASHBOARD_CARD_HINT })), status);
+
+  paintList();
+  sync();
+  return h("section", { class: "turn", "aria-labelledby": `turn-title-${k}` },
+    h("header", null, h("span", { class: "badge" }, icon("hand", 2.6), "Your turn"), h("h2", { id: `turn-title-${k}`, text: ask.title || ask.id })),
+    h("p", { class: "prompt", text: ask.prompt }),
+    form);
+}
+
+document.addEventListener("paste", (event) => {
+  const files = [...(event.clipboardData?.files || [])].filter((file) => /^image\//.test(file.type));
+  if (!files.length || !ui.addFiles) return;
+  event.preventDefault();
+  ui.addFiles(files);
+});
+
 function textTurn(ask) {
   const k = `${ask.id}:${ask.nonce}`;
   const status = h("span", { class: "error", role: "alert" });
@@ -659,7 +790,7 @@ function settled(ask) {
         : "The agent has the answer.";
   return h("div", { class: "settled", role: "status", "data-state": state },
     state === "ok" ? icon("check", 3) : state === "warn" ? icon("alert", 3) : h("span", { class: "spin" }),
-    h("strong", { text: `You chose: ${clean(ask.answerLabel)}` }),
+    h("strong", { text: `You chose: ${clean(ask.answerLabel)}${ask.answerImages?.length ? `, with ${ask.answerImages.length} ${plural(ask.answerImages.length, "screenshot")}` : ""}` }),
     h("span", { text: `${ask.title || ask.id}. ${note}` }));
 }
 
@@ -750,12 +881,14 @@ function panelPane() {
 
 const rankNote = (note) => (note.status === "open" ? (note.severity === "error" ? 0 : 1) : note.status === "fixed" ? 2 : 3);
 
+const pictures = (note) => [...new Set([note.shot, ...(note.shots || [])].filter(Boolean))];
+
 function bugCard(note) {
   const [message, fix] = String(note.text).split(" Fix: ");
   const where = note.source ? `${note.source.file}:${note.source.line}` : "";
   const first = note.status === "open"
     ? note.severity === "error" ? badge("error", "Bug") : note.severity === "warn" ? badge("warn", "Warning") : badge("open", "Open")
-    : note.status === "fixed" ? badge("fixed", "Confirmed fixed") : badge("open", "Skipped");
+    : note.status === "fixed" ? badge("fixed", note.fixedBy === "developer" ? "Confirmed by you" : /^fb\d/.test(note.id) ? "Fixed. Check it again" : "Confirmed fixed") : badge("open", "Skipped");
   return h("li", { class: "bug", "data-status": note.status },
     h("div", null,
       h("div", { class: "bug-top" },
@@ -766,7 +899,7 @@ function bugCard(note) {
       h("p", { class: "text", text: message }),
       fix ? h("p", { class: "how" }, h("b", { text: "Fix: " }), fix) : null,
       where ? h("div", { class: "src" }, h("span", { text: where }), h("button", { type: "button", "data-fid": `copy-${note.id}`, onclick: () => copyText(where, note.id) }, ui.copied === note.id ? "Copied" : "Copy")) : null),
-    note.shot ? h("button", { class: "thumb", type: "button", "aria-label": `Open the capture for ${note.screen || "this problem"}`, onclick: () => openBox(note.shot, note.screen || "Capture") }, h("img", { src: fileUrl(note.shot), alt: "" }), h("span", { class: "zoom" }, icon("zoom", 2.4))) : null);
+    pictures(note).length ? h("div", { class: "thumbs" }, pictures(note).map((file) => h("button", { class: "thumb", type: "button", "aria-label": `Open the capture for ${note.screen || "this problem"}`, onclick: () => openBox(file, note.screen || "Capture") }, h("img", { src: fileUrl(file), alt: "" }), h("span", { class: "zoom" }, icon("zoom", 2.4))))) : null);
 }
 
 function listingPane() {

@@ -1,94 +1,103 @@
 ---
 name: uxp-assistant
 description: >-
-  Plan and hand off a UXP feature for an empty folder or an existing project.
-  The session, dashboard, and questions run from this folder. This skill
-  adds the UXP links, the permission rules, and the implementation handoff.
+  Builds a UXP plugin for an Adobe app (Premiere Pro, Photoshop, InDesign,
+  Media Encoder, Illustrator, After Effects) from one sentence, or adds a feature
+  to an existing plugin. It saves Adobe's current UXP and host API docs on this
+  computer, reads the app, name, framework, and permissions from the request,
+  asks one confirm card, then scaffolds, writes, builds, packages, and checks the
+  plugin against the saved docs. Then the developer tries it in the Adobe app and
+  sends bugs as words and screenshots; it fixes them and asks again until they say
+  there are none. It runs to the end without stopping. Use when
+  the user says UXP Assistant, or asks for a UXP plugin, a Premiere Pro,
+  Photoshop, or InDesign panel or plugin, an Adobe UXP feature, or a .ccx.
 license: MIT
-compatibility: Requires Node.js 20 or newer. The dashboard needs a browser on the same computer and falls back to chat when it cannot start.
+compatibility: Requires Node.js 20 or newer (22.18 or newer to run the generated TypeScript tests) and the network once for Adobe's docs and the pinned scaffold tool. The dashboard needs a browser on the same computer and falls back to chat when it cannot start. The Adobe app is never launched.
 ---
 
 # UXP Assistant
 
-Plan one UXP feature and hand it to the invoking assistant. Change a project only for what this page says to change.
+Turn one request into a built UXP plugin. The skill saves the docs, plans, scaffolds, checks, and packages. You write the plugin.
 
-The skill root is the directory that contains this file. Run `node scripts/skill.mjs` from there. That file is the door into the session runtime in this folder. Sessions are written outside the skill. The Adobe host was NOT TESTED unless you actually launched it.
+The skill root is the directory that contains this file. Run `node scripts/skill.mjs` from there. Sessions are written outside the skill and outside the plugin, in `~/.uxp-assistant/sessions/`. Every `next` line already carries `--out`.
 
 ## The one rule: do not stop
 
-A session ends at `node scripts/skill.mjs session done`. Until then you are in the middle of a task.
+A session ends at `session done`. Until then you are in the middle of a task.
 
 - Every command prints a `next` line. Do what it says.
 - Never end your turn with a message while the session is open. A message with no command after it ends your turn.
-- Between `ask` and `wait`, write nothing to the user. The question is already on the dashboard.
-- Before each file you change for the handoff, report it: `node scripts/skill.mjs session step --id decide --status running --doing "Editing main.tsx (2 of 5)" --progress 2/5`.
+- Ask the developer only what `next` tells you to ask: the mode, the plan card, then after `check` the try card. Nothing else, ever. Not the name, the app, the framework, the permissions, or whether to proceed. If something is unclear, take the simplest reading, say so in the summary, and keep going.
+- Between `ask` and `wait` (dashboard mode), write nothing to the user.
+- Long commands (`docs`, `build`, `check`) take up to a minute. Wait for them. Do not report on them.
 - If you lose your place, or the user types "continue", run `node scripts/skill.mjs session next`.
 
-Do not read every reference up front. Read the one for the step you are on.
-
-## Where a session can happen
-
-The user picks once.
-
-- **Dashboard.** A page on this computer. You publish a decision with `skill.mjs session ask` and run `skill.mjs session wait` until they click. You do not also call AskQuestion for it.
-- **Chat.** Nothing opens. You call AskQuestion for each decision and record the click with `skill.mjs session answer`.
-
-If you run on another machine than the user's (a cloud agent, SSH, a container), skip the question. Start with `--remote`, or run `node scripts/skill.mjs session mode --set chat`, and continue in chat. The user's browser cannot reach this computer's `127.0.0.1`.
-
-If the user types an answer in chat while the dashboard is waiting, record it with `answer` and stop waiting.
-
-## Workflow
-
-1. **Start.** This creates the session and prints the mode question. It does not fetch docs.
+## Start
 
 ```bash
-node scripts/skill.mjs start --empty /absolute/path/to/parent --out /absolute/path/to/session
+node scripts/skill.mjs start --goal "<the developer's request, word for word>" --empty "<the workspace folder>"
 ```
 
-   An existing project uses `--project /absolute/path/to/plugin` instead of `--empty`. The empty-folder scaffold is created inside the `--empty` folder. It is not created under the session.
+Use `--project "<folder>"` instead of `--empty` when the developer already has a plugin. Pass the folder the developer is working in, not the skill's folder. It reads the Adobe app, the name, the id, the framework, and the permissions from the request, so you pass nothing else. It prints the plan and a `next` line.
 
-   Install with the line in `skill.json`, exactly:
+- Add `--mode chat` when the developer already said no dashboard, or when you are not on their computer.
+- Add `--yes` when the developer said not to ask, or when nobody is there to answer (a background or cloud run). It picks chat, answers the plan card with "Build it", skips the try step (nobody is there to load it), and goes straight to the docs. It still asks for the Adobe app when the request names none.
 
-```bash
-npx skills add ThisIsMrAli/uxp-assistant --skill uxp-assistant -a cursor
-```
+## The flow
 
-   That copy is this folder, so `start` loads `scripts/runtime` from the skill. If `create-bolt-uxp` is not already installed, `domain` installs exact `create-bolt-uxp@1.3.27` (`--save-exact`, not a range) into `.uxp-tooling` beside the skill directory, and writes a `.gitignore` there. It does not install into the project root. The new project still needs its own `npm install`. From this repo, `node scripts/skill.mjs install --into <folder>` copies the same skill and links `node_modules`. Then run `node scripts/skill.mjs` from the copied skill.
+Each command's `next` line names the command that follows it. Do what it says.
 
-2. **Ask where to follow.** On the user's computer, call AskQuestion with `mode`. Pass `prompt` and each option's `id` and `label` through unchanged.
+| Step | What it does | Questions |
+| --- | --- | --- |
+| mode | Dashboard (a page on this computer) or chat | one |
+| plan | One card: app, name, id, stack, permissions, folder. Build it, change something, or stop | one (a text answer only if they change something) |
+| docs | `docs` saves every page Adobe lists for the app, plus the host's TypeScript types, in about ten seconds | none |
+| build | `build` creates the project, narrows its permissions, installs, builds the empty starter, writes `BRIEF.md` | none |
+| implement | You write the plugin from `BRIEF.md` | none |
+| check | `check` builds, packages the `.ccx`, type checks your files, runs the tests, and reads your code against the saved docs | none |
+| try | `feedback` shows how to load it. The developer uses it in the Adobe app and sends what is wrong (words, screenshots), or says there are no more bugs. You fix and ask again | one card, repeated until they say no more bugs |
+| done | `session done --summary "..."` | none |
 
-   - `dashboard`: `node scripts/skill.mjs session mode --set dashboard`, then `node scripts/skill.mjs dashboard start`. It prints `{ ok, url }` within seconds, before any docs fetch. Say the link once, in one line, and carry on in the same turn. If `ok` is false, say the reason in one sentence, run `session mode --set chat`, and continue in chat.
-   - `chat`: `node scripts/skill.mjs session mode --set chat`.
+If the request names no Adobe app, a host question comes first. If the developer picks "Change something", the plan command reads their words (app, name, framework, permissions, folder) and the next steps use them.
 
-3. **Intake and later decisions.** Ask the objects in `questions.json` one at a time. Dashboard: `session ask`, then `session wait`. While `status` is `pending`, run `wait` again. Chat: AskQuestion, then `session answer`. If `wait` prints `server-down`, run `dashboard start --no-open` once. If that fails, `mode --set chat` and ask the same question with AskQuestion. That is the only dashboard path that uses chat. Pause leaves the session unfinished. Stop ends it. A stop reply does not say to keep the turn open.
+## Writing the plugin
 
-   The goal text is kept as typed. The Bolt starter's `requiredPermissions` is not approval. `narrow` writes the least set: `{}` for a native panel that requested no permission, and the documented local WebView keys (`allow` `"yes"`, `domains` `[]`, `allowLocalRendering` `"yes"`, `enableMessageBridge` `"no"`) when the runtime loads `plugin:/` content and does not communicate. A goal that needs `postMessage` gets `enableMessageBridge` `"localOnly"` instead. `keep` leaves an existing project's manifest unchanged. Any other permission answer pauses and writes nothing. A `network` key and `enableMessageBridge` `"localOnly"` are grants. An unknown permission name is not added. When the bridge is `"no"`, the host shell still creates and appends the webview and does not call `postMessage` or `document.theme.onUpdated`.
+`BRIEF.md` in the session folder is your task. Read it first. It lists the plan, the saved pages worth reading for this goal, and the limits Adobe documents.
 
-   Every choice has a `(Recommended)` option. Permissions are choices. The recommended permissions answer is `auto`: it reads the goal and keeps `localFileSystem`, `network`, or `clipboard` only when the request names that access. `none` adds none of those keys. A named choice keeps that one key. An unknown name is not added. There is no OS question. An existing project does not ask the empty-folder name, id, framework, or context questions. Those come from the project.
+- Every host API name comes from the docs. Before you call one, run `node scripts/skill.mjs find <words>` and read the hit. The Premiere types file is `docs/api/premierepro.d.ts`; grep it. `check` fails on a name that is not in it, and on a TypeScript error in a file you wrote.
+- `docs/` holds every page Adobe lists for the app, as markdown. `docs/INDEX.md` lists them. `docs/LIMITS.md` is what UXP cannot do. A limit that is not there is not a limit; do not invent one.
+- Keep the starter's files. Write the plugin under `src/`. Put logic that needs no host (math, parsing, encoding) in its own module with a test, so it is checked without the app.
+- Declare the narrowest `requiredPermissions` the code needs, in `uxp.config.ts`. `check` fails when the code uses a picker, the network, or the clipboard without it.
+- Make the panel good: a clear layout at the panel's minimum size, a label on every control, a visible result, and an error message that says what to do.
+- Report progress while you edit, so a dashboard user sees it: `node scripts/skill.mjs session step --id implement --status running --doing "Writing the encoder" --progress 2/6 --out <session>` (`2/6` is step 2 of your own six; pick any total).
 
-   Pause leaves the session unfinished. Resume it by running `node scripts/skill.mjs session ask --id <the paused question> --out <session>` and answering that new question. `session next` does not continue a pause: the first pause response names the resume command, and a later `session next` stays on that command instead of looping. Stop ends the session. A script-change answer of stop closes that question only. The next record publishes a new script-change question. Approving the new question is what allows the changed commands. Answering the closed question again is rejected and is not recorded.
+## Check, fix, repeat
 
-4. **Docs.** `node scripts/skill.mjs refresh --out <session>` fetches the official pages for the answered host and goal, in parallel, with a per-page timeout and an overall budget. Each page is fresh, stale, or failed. Stale is not fresh. The docs step finishes as done, and its detail is the fresh, stale, and failed counts. A failed or stale page does not open an implementation handoff. The dashboard shows the step, a timer, and each page's label while this runs. Do this only after the dashboard is up when the mode is dashboard. Pass `--out` on this command. The current manifest page is https://developer.adobe.com/uxp/guides/explanation/concepts/manifest/ and says current UXP hosts use manifest version 5. Premiere's introduction is https://developer.adobe.com/premiere-pro/uxp/introduction/ and says Premiere (version 25.6). Generated manifests use version 5, `uniqueIds` false, and Premiere `minVersion` `25.6.0`. Photoshop keeps starter `minVersion` `24.2.0`.    The visible title is the display name, not Bolt UXP. After three fetches the next action is `offline`. That response names the pause command, the stop command, and a manual refresh. A manual refresh is allowed: answer `refresh` on a new docs-retry question, then run `node scripts/skill.mjs refresh --out <session>`. That choice is not an automatic loop, and offline is not a finished docs step.
+`node scripts/skill.mjs check` prints `errors` and `warnings`, each with a fix line, and `next`. Fix every error, run it again, and repeat until `ok` is true. It refuses to pass while `src/` is the starter.
 
-5. **Domain handoff.** `node scripts/skill.mjs domain --out <session>` runs the handoff in `<session>/domain` so it does not overwrite the dashboard session, and it does not move the session pointer. The scaffold is created in the `--empty` folder. Running it again does not delete a project that is already there. It keeps the no-write gates, the provenance checker, the permission narrowing, and the package checks. Follow `design-constraints.md`. When that file names Spectrum UXP tags from fresh widget pages, use those tags and do not import Spectrum Web Components. A browser approximation is not part of the package. This skill does not replace an arbitrary goal with a canned panel. A `script-change` answer is bound to the question by its nonce. The dashboard stores the scope with that answer.
+## Try, report, fix, repeat
 
-   Write the feature yourself. Use the documented API in code. Add a test that imports that module, calls the feature, and asserts on the result. A typeof check, instanceof, Object.keys, or a test that only exercises a null or empty path is not that test. A panel state is a useState or useReducer value the code sets and renders. Static error or loading text, and a value rendered only from a constant-false branch, is not that state. Do not record a stock file. Leave the handoff `build` and `ccx` commands unchanged. A changed command or a changed script body is not run until `script-change` is answered for those exact commands and file hashes. The command checker refuses `eval(`, `new Function(`, `vm.run`, and the named `child_process` helpers in a hashed file. `globalThis["eval"]` is not one of those shapes. That list is not a sandbox.
+Nothing here can open the Adobe app, so the developer does. After `check` is ok, `next` says to run `node scripts/skill.mjs feedback`. It publishes one card: how to load the build, a box for words and screenshots, and two choices, "Something is wrong, or I want a change" and "No more bugs, finish". Wait for it like any other question.
 
-6. **Record.** Add a `"test"` script. The Bolt starter does not ship one. Run `npm install` in the project before test, build, or package. A WebView project also needs `npm install` inside `webview-ui`. A WebView `npm run build` that exits 0 and writes no output is a failure. Then write `<session>/agent-result.json` in this one format:
+When the answer is the first choice, `wait` prints their `text` and the file path of each screenshot in `images`. Then:
 
-```json
-{ "goal": "the same goal text", "files": [{ "path": "src/main.tsx", "sha256": "<64 hex characters>" }] }
-```
+1. Read the words and open every screenshot (you can view images). Say to yourself what is wrong and what they expected.
+2. The report is already note `fb1`. For more than one problem, add a note each: `node scripts/skill.mjs session note --id fb1-1 --text "..."`.
+3. Fix the code. Change only what the report names. Never remove a feature to make a problem go away. A request for a change or a new feature is handled the same way.
+4. Run `check` until it says ok, mark each fixed note with `session note --id <id> --status fixed`, and ask again: `node scripts/skill.mjs feedback --changed "<one line: what you changed>"`.
 
-   `path` is relative to the project. `sha256` is the file's bytes. Then run `node scripts/skill.mjs record --out <session>`. That is the only record command. It checks the goal and the hashes, then runs the validator: the test, the build, and the package. Their exits are recorded by that command. If it prints `script-change`, the approval is on the dashboard. Answer it there, then run the same record command again. If it prints `script-change-stopped`, the user chose stop for that exact change: it is not asked again. Revert the change, or add `--reask` only when the user wants to reconsider. When the commands finish, the next line is: Commands finished. The Adobe host was NOT TESTED. That line is command evidence. It is not feature correctness, and source and behavior review is still pending. Do not run `assist.mjs record`.
+The card comes back with what changed. The loop ends only when the developer chooses "No more bugs". You never decide that. If their words already name what is wrong and what they expected, fix that. Put a question in `--changed` only when you cannot tell the expected result from the words or the screenshot; do not guess and do not ask in chat. In chat mode the answer arrives as their reply: record it with `session answer --id feedback --value bugs --text "<their words and what each screenshot shows>"` (`--image <file>` copies a file you have). If no person is there, `feedback --skip`. Details: [references/feedback.md](references/feedback.md).
 
-Every command prints a `next` line. Do that line next. Do not mark tests, package, or the host done because a next line mentioned them.
+## Finish
 
-## Read next
+Run `node scripts/skill.mjs session done --summary "..."`. Then, if the dashboard is up, `node scripts/skill.mjs dashboard stop`. Your last message says what was built, where, and how to load it (`check` prints the load line). Say whether they tried it: after "No more bugs" say they loaded it and chose that (this process still did not launch the Adobe app); with `--yes` or `--skip` say it was built and packaged but not run in the Adobe app, because nothing here can open the app. Do not claim host behavior you did not see. Name anything you could not verify. [references/human-checks.md](references/human-checks.md) lists what still needs a person.
 
-- [references/coverage.md](references/coverage.md) for the permission floor and what was not tested
-- [references/dashboard.md](references/dashboard.md) and [references/session.md](references/session.md) for the wait contract
+## Other commands
 
-## Limits
+- `node scripts/skill.mjs find <words> [--host ppro]` searches the saved docs.
+- `node scripts/skill.mjs docs --skip` only after two failed `docs` runs. Say so in the summary.
+- `node scripts/skill.mjs build --name "X" --id com.acme.x --host phxs --framework vue` overrides the plan before the project exists.
+- `node scripts/skill.mjs session show` lists steps and answers.
+- `node scripts/skill.mjs session note --text "<what is wrong>" [--id x] [--screen "<where>"] [--shot <image>]` records a problem. `--id x --status open|fixed|skipped` closes it.
 
-`npm test`, `npm run build`, a CCX file, and the dashboard do not execute Photoshop or Premiere. Host unavailable is NOT TESTED. Do not claim a host pass. Do not claim the implementation is correct because a command exited 0.
+References, only when you need them: [references/feedback.md](references/feedback.md), [references/dashboard.md](references/dashboard.md), [references/session.md](references/session.md), [references/human-checks.md](references/human-checks.md).

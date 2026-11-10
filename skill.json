@@ -1,11 +1,17 @@
 {
   "name": "uxp-assistant",
   "displayName": "UXP Assistant",
-  "description": "Builds a project-aware UXP plugin from an empty folder or an existing project. It fetches official docs, classifies host behavior, scaffolds with create-bolt-uxp, and follows along on a loopback dashboard or in chat.",
-  "version": "0.1.0",
+  "description": "Turns one sentence into a built UXP plugin for Photoshop, Premiere Pro, InDesign, or Media Encoder. It saves Adobe's current docs, scaffolds with create-bolt-uxp, writes the plugin, and checks it against the docs. Follow along in chat or on a loopback dashboard.",
+  "version": "0.2.0",
   "author": "uxp-assistant",
   "license": "MIT",
-  "keywords": ["adobe", "uxp", "photoshop", "premiere", "bolt-uxp"],
+  "keywords": [
+    "adobe",
+    "uxp",
+    "photoshop",
+    "premiere",
+    "bolt-uxp"
+  ],
   "platforms": [
     "claude",
     "cursor",

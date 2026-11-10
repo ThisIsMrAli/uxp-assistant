@@ -1,9 +1,9 @@
 {
   "name": "uxp-assistant",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "UXP Assistant plans, scaffolds, and implements a UXP plugin with a loopback dashboard. A build is not a host pass.",
+  "description": "UXP Assistant turns one sentence into a built UXP plugin for an Adobe app. It saves Adobe's docs, scaffolds, and checks the code. A build is not a host pass.",
   "license": "MIT",
   "engines": {
     "node": ">=20"
@@ -13,11 +13,7 @@
   },
   "scripts": {
     "test": "node scripts/run-tests.mjs",
-    "assist": "node .claude/skills/uxp-assistant/scripts/assist.mjs",
-    "session": "node .claude/skills/uxp-assistant/scripts/session.mjs",
-    "dashboard": "node .claude/skills/uxp-assistant/scripts/dashboard.mjs",
-    "refresh": "node .claude/skills/uxp-assistant/scripts/refresh-docs.mjs",
-    "link-agents": "node install-agents.mjs",
-    "acceptance": "UXP_ASSISTANT_ACCEPTANCE=1 node --test test/acceptance.test.mjs"
+    "skill": "node .claude/skills/uxp-assistant/scripts/skill.mjs",
+    "link-agents": "node install-agents.mjs"
   }
 }

@@ -55,7 +55,3 @@ export function sessionBin() {
 export function dashboardBin() {
   return process.env.SKILL_DASHBOARD_BIN || "node scripts/dashboard.mjs";
 }
-
-export function refreshBin() {
-  return process.env.SKILL_REFRESH_BIN || "node scripts/refresh.mjs";
-}

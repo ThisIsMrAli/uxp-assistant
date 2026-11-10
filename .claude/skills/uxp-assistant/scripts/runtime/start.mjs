@@ -9,10 +9,10 @@ import { pathToFileURL } from "node:url";
 /**
  * Create the session and ask mode. This does not fetch docs.
  */
-export async function startSkill({ extensionPath, out, input = "", kind = "empty", remote = false }) {
+export async function startSkill({ extensionPath, out, input = "", kind = "empty", remote = false, extra = {} }) {
   const ext = await loadExtension(extensionPath);
   if (process.env.SKILL_HOME_NAME == null && ext.homeDirName) process.env.SKILL_HOME_NAME = ext.homeDirName;
-  const prepared = ext.prepare ? await ext.prepare({ input, kind }) : {};
+  const prepared = ext.prepare ? await ext.prepare({ input, kind, ...extra }) : {};
   const answersFile = path.join(out, "answers.jsonl");
   const sessionFile = path.join(out, "session.json");
   if (fs.existsSync(sessionFile) && fs.existsSync(answersFile) && fs.readFileSync(answersFile, "utf8").trim()) {
@@ -25,9 +25,12 @@ export async function startSkill({ extensionPath, out, input = "", kind = "empty
       next: `Session already has answers. They were kept. Run session next --out ${out}.`
     };
   }
-  const extra = ext.questions ? await ext.questions(prepared) : [];
-  const questions = planAll(extra || []);
+  const asked = ext.questions ? await ext.questions(prepared) : [];
+  const questions = planAll(asked || []);
   fs.mkdirSync(out, { recursive: true });
+  for (const [name, body] of Object.entries(prepared.files || {})) {
+    fs.writeFileSync(path.join(out, path.basename(name)), typeof body === "string" ? body : `${JSON.stringify(body, null, 2)}\n`);
+  }
   const report = {
     addon: prepared.name || ext.title || ext.id,
     addonPath: prepared.path || input || "",
@@ -74,7 +77,8 @@ if (ranDirectly) {
     out: args.out,
     input: args.input || "",
     kind: args.kind || "empty",
-    remote: Boolean(args.remote)
+    remote: Boolean(args.remote),
+    extra: args
   }).then((result) => {
     process.stdout.write(`${JSON.stringify(result)}\n`);
   }).catch((error) => {

@@ -5,12 +5,10 @@ export default {
   homeDirName: ".skill-boilerplate",
   steps: [
     { id: "prepare", label: "Prepare", hint: "No network." },
-    { id: "docs", label: "Docs", hint: "Fetched after the dashboard is up." },
     { id: "decide", label: "Decide" },
     { id: "done", label: "Wrap up" }
   ],
   askSteps: { sample: "decide", goal: "decide" },
-  docs: { everyInvocation: true, parallel: true, pageTimeoutMs: 8000, budgetMs: 20000 },
   prepare() {
     return { name: "Blank", path: "", findings: [] };
   },
@@ -34,8 +32,5 @@ export default {
         ]
       }
     ];
-  },
-  sources() {
-    return [{ id: "example", url: "https://example.com/" }];
   }
 };

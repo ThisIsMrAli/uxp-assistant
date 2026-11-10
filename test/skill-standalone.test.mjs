@@ -37,7 +37,7 @@ test("a copied skill folder resolves its scripts inside itself", () => {
   const empty = fs.mkdtempSync(path.join(os.tmpdir(), "uxp-skill-empty-"));
   const env = { ...process.env, HOME: home, SKILL_TEST_HOME: home };
   for (const key of Object.keys(env)) if (key.startsWith("NODE_TEST") || key === "NODE_CHANNEL_FD") delete env[key];
-  const started = spawnSync(process.execPath, ["scripts/skill.mjs", "start", "--empty", empty, "--out", out], {
+  const started = spawnSync(process.execPath, ["scripts/skill.mjs", "start", "--goal", "create a plugin that creates qr codes in premiere", "--empty", empty, "--out", out], {
     cwd: copy,
     encoding: "utf8",
     env
@@ -61,10 +61,11 @@ test("UXP dashboard start is under three seconds and mode comes before the netwo
     if (at >= 0) json = JSON.parse(raw.slice(at));
     return { status: result.status, json, stdout: result.stdout, stderr: result.stderr };
   };
-  const started = run(["start", "--out", out]);
+  const started = run(["start", "--goal", "create a plugin that creates qr codes in premiere", "--out", out]);
   assert.equal(started.status, 0, started.stdout + started.stderr);
   assert.equal(started.json.network, false);
   assert.equal(started.json.questions[0], "mode");
+  assert.equal(started.json.plan.host, "ppro");
   assert.equal(fs.existsSync(path.join(out, "docs")), false);
   run(["session", "mode", "--set", "dashboard", "--out", out]);
   const began = Date.now();
