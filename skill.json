@@ -18,5 +18,5 @@
     "agents"
   ],
   "skillPath": ".claude/skills/uxp-assistant",
-  "install": "npx skills add <owner>/uxp-assistant --skill uxp-assistant -a {{platform}}"
+  "install": "npx skills add ThisIsMrAli/uxp-assistant --skill uxp-assistant -a {{platform}}"
 }

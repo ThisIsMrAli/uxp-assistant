@@ -8,7 +8,7 @@ import { contextEvidence, runtimeOffer } from "./scripts/lib/runtime.mjs";
 import { skillRoot } from "./scripts/lib/paths.mjs";
 
 /**
- * UXP Assistant's extension. The boilerplate owns the session and the dashboard.
+ * UXP Assistant's extension. scripts/runtime owns the session and the dashboard.
  * This file adds the UXP links, questions, and the handoff that runs after them.
  */
 export default {

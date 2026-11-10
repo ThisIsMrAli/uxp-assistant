@@ -21,9 +21,9 @@ import { stageDecision } from "../.claude/skills/uxp-assistant/scripts/lib/stage
 import { snapshotTemps, sweepOwnedTemps } from "../.claude/skills/uxp-assistant/scripts/lib/temps.mjs";
 import { applyDocsRefresh, run } from "../.claude/skills/uxp-assistant/scripts/skill.mjs";
 import { scriptChangeAsk } from "../.claude/skills/uxp-assistant/scripts/lib/ask.mjs";
-import { refreshExitCode } from "../skill-boilerplate/.claude/skills/skill-boilerplate/scripts/refresh.mjs";
-import { refreshSources } from "../skill-boilerplate/.claude/skills/skill-boilerplate/scripts/lib/refresh.mjs";
-import { start } from "../skill-boilerplate/api.mjs";
+import { refreshExitCode } from "../.claude/skills/uxp-assistant/scripts/runtime/refresh.mjs";
+import { refreshSources } from "../.claude/skills/uxp-assistant/scripts/runtime/lib/refresh.mjs";
+import { start } from "../.claude/skills/uxp-assistant/scripts/runtime/api.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DOCS = `
@@ -333,9 +333,9 @@ test("NS12 a boilerplate refresh with one failed page exits 0 and names the page
   };
   try {
     await start({ extensionPath: ext, out, input: "/tmp/ns12", ...bins });
-    const { refresh, session } = await import("../skill-boilerplate/api.mjs");
+    const { refresh, session } = await import("../.claude/skills/uxp-assistant/scripts/runtime/api.mjs");
     await session(["mode", "--set", "chat", "--out", out], { extensionPath: ext, out, ...bins });
-    const script = path.join(root, "skill-boilerplate/.claude/skills/skill-boilerplate/scripts/refresh.mjs");
+    const script = path.join(root, ".claude/skills/uxp-assistant/scripts/runtime/refresh.mjs");
     const child = spawnSync(process.execPath, [script, "--out", out, "--extension", ext], { encoding: "utf8", timeout: 20000 });
     assert.equal(child.status, 0, child.stdout + child.stderr);
     const body = JSON.parse(child.stdout);

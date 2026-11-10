@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
  */
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const args = new Set(process.argv.slice(2));
-const files = ["test/guards.test.mjs", "test/authoring.test.mjs", "test/stages.test.mjs", "test/approval-graph.test.mjs", "test/boilerplate-boundary.test.mjs", "test/dashboard-walk.test.mjs", "test/boilerplate-lock.test.mjs", "test/realuse-bugs.test.mjs", "test/follow-next.test.mjs", "test/rerun-fixes.test.mjs", "test/rerun2.test.mjs", "test/rerun3.test.mjs", "test/host-corpus.test.mjs", "test/rerun4.test.mjs", "test/host-corpus-rerun5.test.mjs", "test/rerun5.test.mjs", "test/rerun6.test.mjs", "test/rerun7.test.mjs", "test/dashboard-session.test.mjs", "test/tooling-manifest.test.mjs"];
+const files = ["test/guards.test.mjs", "test/authoring.test.mjs", "test/stages.test.mjs", "test/approval-graph.test.mjs", "test/skill-standalone.test.mjs", "test/runtime-parity.test.mjs", "test/dashboard-walk.test.mjs", "test/realuse-bugs.test.mjs", "test/follow-next.test.mjs", "test/rerun-fixes.test.mjs", "test/rerun2.test.mjs", "test/rerun3.test.mjs", "test/host-corpus.test.mjs", "test/rerun4.test.mjs", "test/host-corpus-rerun5.test.mjs", "test/rerun5.test.mjs", "test/rerun6.test.mjs", "test/rerun7.test.mjs", "test/dashboard-session.test.mjs", "test/tooling-manifest.test.mjs"];
 if (args.has("--acceptance")) files.push("test/acceptance.test.mjs");
 if (args.has("--stacks")) {
   console.log("--stacks installs Vue, Svelte, and the WebView document and runs their package scripts. It is not a browser and not a host pass.");
@@ -28,7 +28,5 @@ if (!args.has("--preview") && !args.has("--dashboard")) {
   console.log("Browser checks are not in the default set. Pass --preview or --dashboard on this machine to run them here.");
 }
 
-const boilerplate = spawnSync("npm", ["test"], { cwd: path.join(root, "skill-boilerplate"), stdio: "inherit" });
-if (boilerplate.status !== 0) process.exit(boilerplate.status === null ? 1 : boilerplate.status);
 const result = spawnSync(process.execPath, ["--import", "./test/preload.mjs", "--test", ...files], { cwd: root, stdio: "inherit" });
 process.exit(result.status === null ? 1 : result.status);

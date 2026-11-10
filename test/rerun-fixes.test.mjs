@@ -13,13 +13,12 @@ import { runPackage } from "../.claude/skills/uxp-assistant/scripts/lib/package-
 import { pagesForRequest } from "../.claude/skills/uxp-assistant/scripts/lib/registry.mjs";
 import { reviewClaim, showsHonestUiState, undocumentedHostCalls } from "../.claude/skills/uxp-assistant/scripts/lib/review.mjs";
 import { runtimeOffer } from "../.claude/skills/uxp-assistant/scripts/lib/runtime.mjs";
-import { hashTree } from "../scripts/sync-boilerplate.mjs";
 import { run } from "../.claude/skills/uxp-assistant/scripts/skill.mjs";
-import { nextAction } from "../skill-boilerplate/.claude/skills/skill-boilerplate/scripts/lib/next.mjs";
-import { adoptAsk, readMerged, setMode, startSession } from "../skill-boilerplate/.claude/skills/skill-boilerplate/scripts/lib/session.mjs";
+import { nextAction } from "../.claude/skills/uxp-assistant/scripts/runtime/lib/next.mjs";
+import { adoptAsk, readMerged, setMode, startSession } from "../.claude/skills/uxp-assistant/scripts/runtime/lib/session.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const blank = path.join(root, "skill-boilerplate/examples/blank/extension.mjs");
+const blank = path.join(root, "test/fixtures/blank-extension.mjs");
 
 function temp(name) {
   return fs.mkdtempSync(path.join(os.tmpdir(), name));
@@ -169,7 +168,7 @@ test("N9 a handoff evidence quote is one short sentence", () => {
 
 test("B6 and N2 document one record command and one file format", () => {
   const page = fs.readFileSync(path.join(root, ".claude/skills/uxp-assistant/SKILL.md"), "utf8");
-  assert.match(page, /npx skills add <owner>\/uxp-assistant --skill uxp-assistant -a cursor/);
+  assert.match(page, /npx skills add ThisIsMrAli\/uxp-assistant --skill uxp-assistant -a cursor/);
   assert.match(page, /\{ "path": "src\/main\.tsx", "sha256": "<64 hex characters>" \}/);
   assert.match(page, /node scripts\/skill\.mjs record --out <session>/);
   assert.match(page, /Do not run `assist\.mjs record`/);
@@ -220,11 +219,11 @@ test("N3 an adopted script-change question is the dashboard's next step", () => 
 
 test("NB1 the printed refresh command does not ask for the extension file again", () => {
   const out = temp("uxp-nb1-");
-  const start = runNode(path.join(root, "skill-boilerplate/.claude/skills/skill-boilerplate/scripts/start.mjs"), ["--extension", blank, "--out", out]);
+  const start = runNode(path.join(root, ".claude/skills/uxp-assistant/scripts/runtime/start.mjs"), ["--extension", blank, "--out", out]);
   assert.equal(start.status, 0, start.stdout + start.stderr);
-  const mode = runNode(path.join(root, "skill-boilerplate/.claude/skills/skill-boilerplate/scripts/session.mjs"), ["mode", "--set", "chat", "--out", out]);
+  const mode = runNode(path.join(root, ".claude/skills/uxp-assistant/scripts/runtime/session.mjs"), ["mode", "--set", "chat", "--out", out]);
   assert.equal(mode.status, 0, mode.stdout + mode.stderr);
-  const refreshed = runNode(path.join(root, "skill-boilerplate/.claude/skills/skill-boilerplate/scripts/refresh.mjs"), ["--out", out]);
+  const refreshed = runNode(path.join(root, ".claude/skills/uxp-assistant/scripts/runtime/refresh.mjs"), ["--out", out]);
   const text = `${refreshed.stdout}\n${refreshed.stderr}`;
   assert.notEqual(refreshed.status, null, text);
   assert.equal(text.includes("Pass the extension file."), false, text);
@@ -232,10 +231,10 @@ test("NB1 the printed refresh command does not ask for the extension file again"
 
 test("NB2 done is refused when docs were never fetched", () => {
   const out = temp("uxp-nb2-");
-  const start = runNode(path.join(root, "skill-boilerplate/.claude/skills/skill-boilerplate/scripts/start.mjs"), ["--extension", blank, "--out", out]);
+  const start = runNode(path.join(root, ".claude/skills/uxp-assistant/scripts/runtime/start.mjs"), ["--extension", blank, "--out", out]);
   assert.equal(start.status, 0, start.stdout + start.stderr);
-  runNode(path.join(root, "skill-boilerplate/.claude/skills/skill-boilerplate/scripts/session.mjs"), ["mode", "--set", "chat", "--out", out]);
-  const done = runNode(path.join(root, "skill-boilerplate/.claude/skills/skill-boilerplate/scripts/session.mjs"), ["done", "--summary", "too early", "--out", out]);
+  runNode(path.join(root, ".claude/skills/uxp-assistant/scripts/runtime/session.mjs"), ["mode", "--set", "chat", "--out", out]);
+  const done = runNode(path.join(root, ".claude/skills/uxp-assistant/scripts/runtime/session.mjs"), ["done", "--summary", "too early", "--out", out]);
   assert.notEqual(done.status, 0);
   assert.match(`${done.stdout}\n${done.stderr}`, /Docs were never fetched/);
   const session = JSON.parse(fs.readFileSync(path.join(out, "session.json"), "utf8"));
@@ -258,11 +257,11 @@ test("N12 refresh exits while the proxy accepts and never answers", async () => 
     sources() { return [{ id: "example", url: "https://example.com/" }]; }
   };\n`);
   const out = temp("uxp-n12-");
-  runNode(path.join(root, "skill-boilerplate/.claude/skills/skill-boilerplate/scripts/start.mjs"), ["--extension", extension, "--out", out]);
-  runNode(path.join(root, "skill-boilerplate/.claude/skills/skill-boilerplate/scripts/session.mjs"), ["mode", "--set", "chat", "--out", out]);
+  runNode(path.join(root, ".claude/skills/uxp-assistant/scripts/runtime/start.mjs"), ["--extension", extension, "--out", out]);
+  runNode(path.join(root, ".claude/skills/uxp-assistant/scripts/runtime/session.mjs"), ["mode", "--set", "chat", "--out", out]);
   const began = Date.now();
   const refreshed = runNode(
-    path.join(root, "skill-boilerplate/.claude/skills/skill-boilerplate/scripts/refresh.mjs"),
+    path.join(root, ".claude/skills/uxp-assistant/scripts/runtime/refresh.mjs"),
     ["--out", out],
     { NODE_USE_ENV_PROXY: "1", HTTPS_PROXY: `http://127.0.0.1:${port}`, NO_PROXY: "127.0.0.1,localhost" }
   );
@@ -274,25 +273,25 @@ test("N12 refresh exits while the proxy accepts and never answers", async () => 
 });
 
 test("B7 the advertised skills install can start", () => {
-  const embedded = path.join(root, ".claude/skills/uxp-assistant/skill-boilerplate");
-  assert.equal(fs.existsSync(path.join(embedded, "api.mjs")), true);
-  assert.equal(fs.lstatSync(path.join(embedded, "api.mjs")).isSymbolicLink(), false);
-  assert.equal(hashTree(embedded), hashTree(path.join(root, "skill-boilerplate")));
+  const skill = path.join(root, ".claude/skills/uxp-assistant");
+  assert.equal(fs.existsSync(path.join(skill, "SKILL.md")), true);
+  assert.equal(fs.existsSync(path.join(skill, "scripts/runtime/api.mjs")), true);
   const into = temp("uxp-b7-");
   const added = spawnSync("npx", ["--yes", "skills", "add", root, "--skill", "uxp-assistant", "-a", "cursor", "-y"], {
     cwd: into,
     encoding: "utf8",
-    timeout: 60000
+    timeout: 120000
   });
   assert.equal(added.status, 0, added.stdout + added.stderr);
-  const installed = path.join(into, ".agents/skills/uxp-assistant/skill-boilerplate/api.mjs");
-  assert.equal(fs.existsSync(installed), true, added.stdout);
+  const installed = path.join(into, ".agents/skills/uxp-assistant");
+  assert.equal(fs.existsSync(path.join(installed, "SKILL.md")), true, added.stdout);
+  assert.equal(fs.existsSync(path.join(installed, "skill-boilerplate")), false, added.stdout);
   const home = temp("uxp-b7-home-");
   const session = temp("uxp-b7-session-");
-  const started = runNode(path.join(into, ".agents/skills/uxp-assistant/scripts/skill.mjs"), ["start", "--empty", temp("uxp-b7-empty-"), "--out", session], {
+  const started = runNode(path.join(installed, "scripts/skill.mjs"), ["start", "--empty", temp("uxp-b7-empty-"), "--out", session], {
     HOME: home,
     SKILL_TEST_HOME: home
-  }, path.join(into, ".agents/skills/uxp-assistant"));
+  }, installed);
   assert.equal(started.status, 0, started.stdout + started.stderr);
   assert.equal(`${started.stdout}\n${started.stderr}`.includes("Cannot find"), false, started.stdout + started.stderr);
   const body = JSON.parse(started.stdout.trim().split("\n").filter(Boolean).at(-1));

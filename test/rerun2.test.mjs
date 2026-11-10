@@ -11,7 +11,7 @@ import { pagesForRequest } from "../.claude/skills/uxp-assistant/scripts/lib/reg
 import { reviewClaim, showsHonestUiState, testsCoverFeature, undocumentedHostCalls } from "../.claude/skills/uxp-assistant/scripts/lib/review.mjs";
 import { run } from "../.claude/skills/uxp-assistant/scripts/skill.mjs";
 import extension from "../.claude/skills/uxp-assistant/extension.mjs";
-import { nextAction } from "../skill-boilerplate/.claude/skills/skill-boilerplate/scripts/lib/next.mjs";
+import { nextAction } from "../.claude/skills/uxp-assistant/scripts/runtime/lib/next.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DOCS = `

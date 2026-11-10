@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * UXP Assistant's only door into the skill boilerplate.
- * start, session, dashboard, and refresh are the boilerplate.
+ * UXP Assistant's door into the session runtime in scripts/runtime.
+ * start, session, dashboard, and refresh live in this skill folder.
  * domain runs the existing handoff after those questions, in a nested folder,
  * so it does not overwrite the dashboard session.
  */
@@ -9,8 +9,8 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { findBoilerplateApi, loadBoilerplate } from "./boilerplate-boundary.mjs";
 import { docsRetryAsk } from "./lib/ask.mjs";
+import * as api from "./runtime/api.mjs";
 
 const here = path.dirname(pathToFileURL(process.argv[1] || "").pathname || "");
 const extensionPath = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../extension.mjs");
@@ -45,7 +45,6 @@ export async function run(argv) {
   const [command, ...rest] = argv;
   const args = parse(rest);
   const out = args.out ? path.resolve(args.out) : "";
-  const api = await loadBoilerplate();
   const common = { extensionPath, out, homeDirName: ".uxp-assistant", ...bins };
   if (command === "start") {
     if (!out) throw new Error("Pass --out.");
@@ -103,7 +102,7 @@ export async function run(argv) {
 
 /**
  * NU14: long domain work such as the one-time create-bolt-uxp install shows on the dashboard as the
- * running step's detail and doing line. The boilerplate's step command writes the session file
+ * running step's detail and doing line. The session step command writes the session file
  * synchronously, so the line is there before a blocking install starts.
  */
 export function dashboardActivity(out, api, text) {
@@ -524,14 +523,9 @@ async function recordResult(out, api, options = {}) {
 function installInto(dest) {
   if (!dest || dest === true) throw new Error("Pass --into <folder>.");
   const skillDir = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
-  const api = findBoilerplateApi(path.join(skillDir, "scripts"));
-  const bpName = ["skill", "boilerplate"].join("-");
-  if (!api) throw new Error(`Cannot find ${bpName}/api.mjs to install beside the skill.`);
   const into = path.resolve(dest);
   const skillDest = path.join(into, ".agents", "skills", "uxp-assistant");
-  const bpDest = path.join(into, ".agents", "skills", bpName);
-  fs.cpSync(skillDir, skillDest, { recursive: true });
-  fs.cpSync(path.dirname(api), bpDest, {
+  fs.cpSync(skillDir, skillDest, {
     recursive: true,
     filter: (source) => !source.split(path.sep).includes("node_modules")
   });

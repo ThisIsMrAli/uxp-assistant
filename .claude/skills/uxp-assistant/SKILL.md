@@ -2,7 +2,7 @@
 name: uxp-assistant
 description: >-
   Plan and hand off a UXP feature for an empty folder or an existing project.
-  The session, dashboard, and questions are the skill boilerplate. This skill
+  The session, dashboard, and questions run from this folder. This skill
   adds the UXP links, the permission rules, and the implementation handoff.
 license: MIT
 compatibility: Requires Node.js 20 or newer. The dashboard needs a browser on the same computer and falls back to chat when it cannot start.
@@ -12,7 +12,7 @@ compatibility: Requires Node.js 20 or newer. The dashboard needs a browser on th
 
 Plan one UXP feature and hand it to the invoking assistant. Change a project only for what this page says to change.
 
-The skill root is the directory that contains this file. Run `node scripts/skill.mjs` from there. That file is the only door into the skill boilerplate. Sessions are written outside the skill. The Adobe host was NOT TESTED unless you actually launched it.
+The skill root is the directory that contains this file. Run `node scripts/skill.mjs` from there. That file is the door into the session runtime in this folder. Sessions are written outside the skill. The Adobe host was NOT TESTED unless you actually launched it.
 
 ## The one rule: do not stop
 
@@ -50,10 +50,10 @@ node scripts/skill.mjs start --empty /absolute/path/to/parent --out /absolute/pa
    Install with the line in `skill.json`, exactly:
 
 ```bash
-npx skills add <owner>/uxp-assistant --skill uxp-assistant -a cursor
+npx skills add ThisIsMrAli/uxp-assistant --skill uxp-assistant -a cursor
 ```
 
-   That copy includes the boilerplate inside the skill, so `start` can load it. If `create-bolt-uxp` is not already installed, `domain` installs exact `create-bolt-uxp@1.3.27` (`--save-exact`, not a range) into `.uxp-tooling` beside the skill directory, and writes a `.gitignore` there. It does not install into the project root. The new project still needs its own `npm install`. From this repo, `node scripts/skill.mjs install --into <folder>` copies the same skill and links `node_modules`. Then run `node scripts/skill.mjs` from the copied skill.
+   That copy is this folder, so `start` loads `scripts/runtime` from the skill. If `create-bolt-uxp` is not already installed, `domain` installs exact `create-bolt-uxp@1.3.27` (`--save-exact`, not a range) into `.uxp-tooling` beside the skill directory, and writes a `.gitignore` there. It does not install into the project root. The new project still needs its own `npm install`. From this repo, `node scripts/skill.mjs install --into <folder>` copies the same skill and links `node_modules`. Then run `node scripts/skill.mjs` from the copied skill.
 
 2. **Ask where to follow.** On the user's computer, call AskQuestion with `mode`. Pass `prompt` and each option's `id` and `label` through unchanged.
 
@@ -87,7 +87,7 @@ Every command prints a `next` line. Do that line next. Do not mark tests, packag
 ## Read next
 
 - [references/coverage.md](references/coverage.md) for the permission floor and what was not tested
-- The skill boilerplate's `references/dashboard.md` and `references/session.md` for the wait contract
+- [references/dashboard.md](references/dashboard.md) and [references/session.md](references/session.md) for the wait contract
 
 ## Limits
 

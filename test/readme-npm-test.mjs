@@ -46,20 +46,15 @@ test("npm test from the README runs every test file", { timeout: 1_200_000 }, as
 
   assert.equal(output.status, 0, output.text.slice(-4000));
   assert.doesNotMatch(output.text, /Cannot find module/);
-  assert.match(output.text, /UXP_BOILERPLATE_TESTS/);
+  assert.doesNotMatch(output.text, /UXP_BOILERPLATE_TESTS/);
   const listed = output.text.match(/test files: ([^\n]+)/);
   assert.ok(listed, "runner did not list test files");
   assert.deepEqual(listed[1].trim().split(/\s+/), names.map((name) => path.join("test", name)));
-  const [nodeOut, boilerplateOut = ""] = output.text.split("UXP_BOILERPLATE_TESTS");
-  const nodePasses = reporterCounts(nodeOut, "pass");
-  const nodeFails = reporterCounts(nodeOut, "fail");
-  const boilerplatePasses = reporterCounts(boilerplateOut, "pass");
-  const boilerplateFails = reporterCounts(boilerplateOut, "fail");
-  assert.equal(nodeFails.at(-1), 0, nodeOut.slice(-2000));
-  assert.equal(boilerplateFails.at(-1), 0, boilerplateOut.slice(-2000));
+  const nodePasses = reporterCounts(output.text, "pass");
+  const nodeFails = reporterCounts(output.text, "fail");
+  assert.equal(nodeFails.at(-1), 0, output.text.slice(-2000));
   assert.ok(nodePasses.at(-1) >= names.length, `node suite reported ${nodePasses.at(-1)} passes for ${names.length} files`);
-  assert.ok(boilerplatePasses.at(-1) >= 1, boilerplateOut.slice(-2000));
-  console.error(`npm test suite: node ${nodePasses.at(-1)} pass / ${nodeFails.at(-1)} fail, boilerplate ${boilerplatePasses.at(-1)} pass / ${boilerplateFails.at(-1)} fail`);
+  console.error(`npm test suite: node ${nodePasses.at(-1)} pass / ${nodeFails.at(-1)} fail`);
 });
 
 function reporterCounts(text, label) {

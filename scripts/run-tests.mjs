@@ -9,10 +9,6 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const readmeTest = path.join("test", "readme-npm-test.mjs");
 
-function npmBin() {
-  return process.platform === "win32" ? "npm.cmd" : "npm";
-}
-
 function suiteFiles() {
   return readdirSync(path.join(root, "test"))
     .filter((name) => name.endsWith(".test.mjs") && path.join("test", name) !== readmeTest)
@@ -37,8 +33,6 @@ function runSuite() {
   }
   console.error(`test files: ${files.join(" ")}`);
   run(process.execPath, ["--import", "./test/preload.mjs", "--test", ...files]);
-  console.error("UXP_BOILERPLATE_TESTS");
-  run(npmBin(), ["test", "--prefix", "skill-boilerplate"]);
 }
 
 if (process.env.UXP_README_NPM_TEST === "1") {

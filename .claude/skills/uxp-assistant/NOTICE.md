@@ -2,6 +2,8 @@
 
 UXP Assistant is derived from express-addon-review 0.4.0.
 
+The session runtime in `scripts/runtime/` and the page in `assets/session-dashboard/` are the session files, the dashboard server, the wait contract, and the dashboard page from that project. Express-only checks, the marketplace listing, the panel audit, and the brand files were not copied. The MIT notice for that code is the repository `LICENSE` and is not rewritten.
+
 MIT License
 
 Copyright (c) 2026 express-addon-review contributors

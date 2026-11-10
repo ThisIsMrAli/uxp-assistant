@@ -14,25 +14,33 @@ npm run assist -- start --empty /path/to/parent --answers answers.json --out /tm
 node .claude/skills/uxp-assistant/scripts/session.mjs next --out /tmp/uxp-session
 ```
 
-`npm test` checks the skill by passing each `test/*.test.mjs` path to `node --test`, then running the vendored boilerplate suite. It does not launch Photoshop or Premiere. A build and a CCX file do not either. When the host is not launched, the result is NOT TESTED.
+`npm test` checks the skill by passing each `test/*.test.mjs` path to `node --test`. It does not launch Photoshop or Premiere. A build and a CCX file do not either. When the host is not launched, the result is NOT TESTED.
 
-`npm test` includes unit checks and `test/acceptance.test.mjs`. The acceptance file scaffolds with create-bolt-uxp 1.3.27, installs that project, and packages one documented non-rename goal. It does not launch Photoshop or Premiere. A rebuilt CCX may not match a previous digest byte for byte because zip timestamps differ. The retained archive and its digest are in `evidence/`.
+`npm test` includes unit checks and `test/acceptance.test.mjs`. The acceptance file scaffolds with create-bolt-uxp 1.3.27, installs that project, and packages one documented non-rename goal. It does not launch Photoshop or Premiere. A rebuilt CCX may not match a previous digest byte for byte because zip timestamps differ.
 
-## Upgrading the boilerplate
+## Install
 
-`skill-boilerplate/` is vendored so agent skill loaders see real files. The skill-boilerplate repository is private, so this project does not use an npm git dependency or a submodule. Those would fail for other people.
-
-`BOILERPLATE.lock` records `ThisIsMrAli/skill-boilerplate`, `sourceCommit`, and `contentHash`. `sourceCommit` is `5cc08412d0bdf2a3df1320984c7d2f3b25dc7f40`, the head of skill-boilerplate draft pull request 1. The vendored tree hash is `57b23f37b018e90055b60c418484764838cbc84847635e17e9321362dfa8170a`. `contentHash` is SHA-256 over the vendored subset: sorted lines of `type`, relative path, and SHA-256. A file hashes its bytes. A symlink hashes its target string and is not followed. `.git`, `node_modules`, and `.env` are omitted.
-
-The vendored subset also omits the root agent-install directories named in `install-agents.mjs` (`.cursor`, `.agents`, and the other agent folders). The real boilerplate repo commits those as relative links such as `.cursor/skills/skill-boilerplate -> ../../.claude/skills/skill-boilerplate`. UXP Assistant has its own installer, so those links are not part of the pin. The canonical skill files under `.claude/` stay. The hash covers exactly that subset, which is the committed `skill-boilerplate/` tree.
-
-Replace the folder from a local checkout:
+From this folder:
 
 ```bash
-node scripts/sync-boilerplate.mjs /path/to/skill-boilerplate-checkout --commit <sha>
+node install-agents.mjs --global
 ```
 
-The script refuses `.git`, `node_modules`, `.env`, an absolute symlink, and a symlink that resolves outside the checkout. A relative target may contain `..` when the resolved path stays inside the checkout. It then rewrites the lock. Omit `--commit` only when the sha is still unknown. `test/boilerplate-lock.test.mjs` fails if the vendored folder drifts from `contentHash`. Edit the boilerplate in its own repository and sync it back. UXP Assistant imports `skill-boilerplate/api.mjs` and nothing else from that folder.
+That links the skill into the agent folders on this machine, including Claude, Cursor, Codex, Gemini, and Windsurf. Use `node install-agents.mjs` without `--global` to link it only inside this project. The canonical skill is [`.claude/skills/uxp-assistant/SKILL.md`](.claude/skills/uxp-assistant/SKILL.md). The other agent directories are symlinks to that folder.
+
+`npx skills add` copies the skill directory on its own.
+
+The GitHub repository is private. The remote install fails with `Authentication failed` unless you are logged in as someone who can read it (`gh auth login`, or `GH_TOKEN` / `GITHUB_TOKEN` with access to the repo). It does not make the repository public.
+
+```bash
+# From a checkout of this private repository. This does not need GitHub auth.
+npx skills add . --skill uxp-assistant
+
+# Remote install from main. This is the form that works today, after GitHub authentication.
+npx skills add ThisIsMrAli/uxp-assistant --skill uxp-assistant
+```
+
+`node install-agents.mjs --global` from this folder is the other path that does not talk to GitHub.
 
 ## Dependency advisories
 

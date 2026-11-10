@@ -11,15 +11,15 @@ import { homeDir as uxpHome, rememberOut as rememberUxp } from "../.claude/skill
 import { previewTarget } from "../.claude/skills/uxp-assistant/scripts/lib/preview-target.mjs";
 import { appendAnswerLine, publishAsk } from "../.claude/skills/uxp-assistant/scripts/lib/session.mjs";
 import { readScriptGrant } from "../.claude/skills/uxp-assistant/scripts/lib/workflow.mjs";
-import { nextAction } from "../skill-boilerplate/.claude/skills/skill-boilerplate/scripts/lib/next.mjs";
-import { homeDir as boilerplateHome } from "../skill-boilerplate/.claude/skills/skill-boilerplate/scripts/lib/paths.mjs";
-import { refreshSources } from "../skill-boilerplate/.claude/skills/skill-boilerplate/scripts/lib/refresh.mjs";
-import { recordDocs, readSession, setMode, startSession } from "../skill-boilerplate/.claude/skills/skill-boilerplate/scripts/lib/session.mjs";
-import { refreshSkill } from "../skill-boilerplate/.claude/skills/skill-boilerplate/scripts/refresh.mjs";
-import { startSkill } from "../skill-boilerplate/.claude/skills/skill-boilerplate/scripts/start.mjs";
+import { nextAction } from "../.claude/skills/uxp-assistant/scripts/runtime/lib/next.mjs";
+import { homeDir as boilerplateHome } from "../.claude/skills/uxp-assistant/scripts/runtime/lib/paths.mjs";
+import { refreshSources } from "../.claude/skills/uxp-assistant/scripts/runtime/lib/refresh.mjs";
+import { recordDocs, readSession, setMode, startSession } from "../.claude/skills/uxp-assistant/scripts/runtime/lib/session.mjs";
+import { refreshSkill } from "../.claude/skills/uxp-assistant/scripts/runtime/refresh.mjs";
+import { startSkill } from "../.claude/skills/uxp-assistant/scripts/runtime/start.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const blank = path.join(root, "skill-boilerplate/examples/blank/extension.mjs");
+const blank = path.join(root, "test/fixtures/blank-extension.mjs");
 
 function temp(name) {
   return fs.mkdtempSync(path.join(os.tmpdir(), name));
@@ -135,8 +135,7 @@ test("B6 the record format is documented and every next line is present", () => 
   assert.match(skill, /"goal"/);
   assert.match(skill, /"sha256"/);
   assert.match(skill, /scripts\/skill\.mjs record --out/);
-  const boilerplate = fs.readFileSync(path.join(root, "skill-boilerplate/.claude/skills/skill-boilerplate/SKILL.md"), "utf8");
-  assert.match(boilerplate, /refresh\.mjs --out/);
+  assert.match(skill, /node scripts\/skill\.mjs refresh --out/);
 });
 
 test("B12 a test process does not write the real home", () => {
@@ -153,10 +152,10 @@ test("B12 a test process does not write the real home", () => {
   assert.equal(pointer.startsWith(os.homedir() + path.sep), false);
 });
 
-test("B13 boilerplate tests resolve their files from any working directory", () => {
+test("B13 session tests resolve their files from any working directory", () => {
   const env = { ...process.env };
   for (const key of Object.keys(env)) if (key.startsWith("NODE_TEST") || key === "NODE_CHANNEL_FD") delete env[key];
-  const result = spawnSync(process.execPath, ["--test", path.join(root, "skill-boilerplate/test/parity.test.mjs")], {
+  const result = spawnSync(process.execPath, ["--test", path.join(root, "test/runtime-parity.test.mjs")], {
     cwd: os.tmpdir(),
     encoding: "utf8",
     env
@@ -167,7 +166,7 @@ test("B13 boilerplate tests resolve their files from any working directory", () 
   assert.equal(script, "node scripts/run-tests.mjs");
   const runner = fs.readFileSync(path.join(root, "scripts/run-tests.mjs"), "utf8");
   assert.match(runner, /"--test"/);
-  assert.match(runner, /skill-boilerplate/);
+  assert.doesNotMatch(runner, /skill-boilerplate/);
   assert.doesNotMatch(runner, /"--test", "test"/);
 });
 
@@ -194,10 +193,10 @@ test("B16 preview output stays beside the package and does not claim a cloud cap
 
 test("B17 the dashboard drops the Express leftovers", () => {
   const page = [
-    fs.readFileSync(path.join(root, "skill-boilerplate/.claude/skills/skill-boilerplate/assets/dashboard/app.js"), "utf8"),
+    fs.readFileSync(path.join(root, ".claude/skills/uxp-assistant/assets/session-dashboard/app.js"), "utf8"),
     fs.readFileSync(path.join(root, ".claude/skills/uxp-assistant/assets/dashboard/app.js"), "utf8")
   ].join("\n");
-  const server = fs.readFileSync(path.join(root, "skill-boilerplate/.claude/skills/skill-boilerplate/scripts/lib/server.mjs"), "utf8");
+  const server = fs.readFileSync(path.join(root, ".claude/skills/uxp-assistant/scripts/runtime/lib/server.mjs"), "utf8");
   assert.equal(page.includes("listing-review"), false);
   assert.equal(page.includes("listingBlock"), false);
   assert.equal(page.includes('step.id === "access"'), false);

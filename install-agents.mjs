@@ -4,8 +4,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
-const canonical = path.join(repo, ".claude/skills/uxp-assistant");
-const skillName = "uxp-assistant";
+const skills = [
+  { name: "uxp-assistant", target: path.join(repo, ".claude/skills/uxp-assistant") }
+];
 
 const projectAgents = [
   ".cursor/skills",
@@ -45,7 +46,7 @@ const globalAgents = [
   ".zcode/skills"
 ];
 
-function linkSkill(parent, target, useRelative) {
+function linkSkill(parent, skillName, target, useRelative) {
   const dest = path.join(parent, skillName);
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   let current = null;
@@ -59,15 +60,15 @@ function linkSkill(parent, target, useRelative) {
   fs.symlinkSync(useRelative ? path.relative(path.dirname(dest), target) : target, dest);
 }
 
-if (!fs.existsSync(path.join(canonical, "SKILL.md"))) {
-  process.stderr.write(`Canonical skill is missing: ${canonical}\n`);
-  process.exit(1);
+for (const skill of skills) {
+  if (!fs.existsSync(path.join(skill.target, "SKILL.md"))) {
+    process.stderr.write(`Canonical skill is missing: ${skill.target}\n`);
+    process.exit(1);
+  }
+  for (const agent of projectAgents) linkSkill(path.join(repo, agent), skill.name, skill.target, true);
+  if (process.argv.includes("--global")) {
+    for (const agent of globalAgents) linkSkill(path.join(os.homedir(), agent), skill.name, skill.target, false);
+  }
 }
 
-for (const agent of projectAgents) linkSkill(path.join(repo, agent), canonical, true);
-
-if (process.argv.includes("--global")) {
-  for (const agent of globalAgents) linkSkill(path.join(os.homedir(), agent), canonical, false);
-}
-
-process.stdout.write(`Linked ${skillName} into ${projectAgents.length} project agent folders.\n`);
+process.stdout.write(`Linked ${skills.map((skill) => skill.name).join(" and ")} into ${projectAgents.length} project agent folders.\n`);

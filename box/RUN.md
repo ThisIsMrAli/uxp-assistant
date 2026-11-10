@@ -18,7 +18,7 @@ npm ci
 node box/run.mjs
 ```
 
-That runs the fixture checks, including the command-approval graph, the skill-boilerplate parity suite, and a non-browser time-to-dashboard check. It does not call a model, does not checkout git, and does not launch an Adobe app. Photoshop and Premiere stay NOT TESTED.
+That runs the fixture checks, including the command-approval graph, the session-runtime parity suite, and a non-browser time-to-dashboard check. It does not call a model, does not checkout git, and does not launch an Adobe app. Photoshop and Premiere stay NOT TESTED.
 
 Real setup, build, and package, still without a browser:
 
@@ -43,7 +43,7 @@ node box/run.mjs --dashboard
 node box/run.mjs --preview
 ```
 
-Those use a local Chrome, Edge, or Chromium. They are this machine's render. The default session page lists copied source text and mocks. It is not a UXP UI preview. `node .claude/skills/uxp-assistant/scripts/bundle-preview.mjs` serves a built package script behind a labelled shim when a CCX is already in `evidence/artifacts/`. That is this machine only. It is not a host pass.
+Those use a local Chrome, Edge, or Chromium. They are this machine's render. The default session page lists copied source text and mocks. It is not a UXP UI preview. `node .claude/skills/uxp-assistant/scripts/bundle-preview.mjs` serves a built package script behind a labelled shim when a CCX is already on disk. That is this machine only. It is not a host pass.
 
 ## Dashboard
 
