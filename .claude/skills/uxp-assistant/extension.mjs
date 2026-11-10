@@ -65,9 +65,10 @@ export default {
     questions.push({
       id: "permissions",
       title: "Requested permissions",
-      prompt: "Which permission does this request already name? An unnamed key is not added.",
+      prompt: "Which permission does this request already name? Detect from the request reads the goal. An unnamed key is not added.",
       options: [
-        { id: "none", label: "None (Recommended)", detail: "A native panel gets an empty requiredPermissions object. A WebView that does not communicate keeps the local keys with the message bridge off." },
+        { id: "auto", label: "Detect from the request (Recommended)", detail: "Reads the goal and keeps local files, network, or clipboard only when the request names that access. A request that names none of them adds no extra key." },
+        { id: "none", label: "None", detail: "Adds no local files, network, or clipboard key. A native panel gets an empty requiredPermissions object. A WebView that does not communicate keeps the local keys with the message bridge off." },
         { id: "localFileSystem", label: "Local files", detail: "The request names local file access." },
         { id: "network", label: "Network", detail: "The request names network access." },
         { id: "clipboard", label: "Clipboard", detail: "The request names the clipboard." }

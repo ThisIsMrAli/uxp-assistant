@@ -5,7 +5,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { removeProfile } from "../.claude/skills/uxp-assistant/scripts/lib/chrome.mjs";
 import { effectiveHostFloor, floorsFromText, WEBVIEW_FLOOR_NOT_USED } from "../.claude/skills/uxp-assistant/scripts/lib/floors.mjs";
-import { LEAST_LOCAL_WEBVIEW, narrowRequiredPermissions, permissionCapabilities, permissionChoice, starterPermissionsAreBroad } from "../.claude/skills/uxp-assistant/scripts/lib/permissions.mjs";
+import { LEAST_LOCAL_WEBVIEW, namedPermissions, narrowRequiredPermissions, permissionCapabilities, permissionChoice, resolveRequestedPermissions, starterPermissionsAreBroad } from "../.claude/skills/uxp-assistant/scripts/lib/permissions.mjs";
 import { mountLocalWebviews, stripThemeBridge } from "../.claude/skills/uxp-assistant/scripts/lib/webview-shell.mjs";
 import { installerEntry } from "../.claude/skills/uxp-assistant/scripts/lib/scaffold.mjs";
 import { resolveCapability } from "../.claude/skills/uxp-assistant/scripts/lib/capability.mjs";
@@ -82,6 +82,14 @@ test("commandName 23.0 is read across lines and a nested permission object stays
   assert.equal(permissionChoice("narrow"), "narrow");
   assert.equal(permissionChoice("yes"), "");
   assert.equal(permissionChoice("KEEP"), "");
+  assert.deepEqual(namedPermissions("Show the document name and the selected layer name"), []);
+  assert.deepEqual(namedPermissions("Import files into the active Premiere project with importFiles."), []);
+  assert.deepEqual(namedPermissions("Copy the layer name to the clipboard and upload to https://example.com"), ["network", "clipboard"]);
+  assert.deepEqual(namedPermissions("Read a local file and save a folder on disk"), ["localFileSystem"]);
+  assert.deepEqual(resolveRequestedPermissions("auto", "Fetch the selection from the network"), ["network"]);
+  assert.deepEqual(resolveRequestedPermissions("none", "Read a local file"), []);
+  assert.deepEqual(resolveRequestedPermissions("auto", "Show the document title"), []);
+  assert.deepEqual(resolveRequestedPermissions(["clipboard", "not-a-permission"], "Show the document title"), ["clipboard"]);
   const calls = [];
   const element = () => {
     const node = { className: "", id: "", src: "", uxpAllowInspector: "", appendChild(child) { calls.push(["append", child.id]); return child; } };

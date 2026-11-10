@@ -12,7 +12,7 @@ import { extractSuppliedUi, previewDocument } from "./preview.mjs";
 import { stageDecision } from "./stages.mjs";
 import { effectiveHostFloor, floorsFromText } from "./floors.mjs";
 import { spectrumGuidance } from "./runtime.mjs";
-import { narrowRequiredPermissions, permissionChoice, starterPermissionsAreBroad } from "./permissions.mjs";
+import { narrowRequiredPermissions, permissionChoice, resolveRequestedPermissions, starterPermissionsAreBroad } from "./permissions.mjs";
 import { writeLocalWebviewHost } from "./webview-shell.mjs";
 import { runPackage } from "./package-project.mjs";
 import { rememberOut } from "./paths.mjs";
@@ -63,7 +63,7 @@ export async function runWorkflow(options) {
     context: answers.context || "panel",
     name: answers.name || "",
     id: answers.id || "",
-    permissions: answers.permissions || [],
+    permissions: resolveRequestedPermissions(answers.permissions, answers.goal || ""),
     kind: options.kind || "empty"
   };
   const choice = (id) => answers[id] || readMerged(out).asks.find((item) => item.id === id && item.status === "answered")?.answer || "";

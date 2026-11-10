@@ -27,6 +27,43 @@ export const LEAST_LOCAL_WEBVIEW = {
 
 const CAPABILITY_KEYS = ["localFileSystem", "launchProcess", "clipboard", "network", "allowCodeGenerationFromStrings", "ipc"];
 
+/** Keys this question can name. A match is a phrase in the goal, not a guess from a nearby word. */
+const NAMED_BY_REQUEST = [
+  {
+    id: "localFileSystem",
+    pattern: /\blocalFileSystem\b|\blocal files?\b|\bfile ?system\b|\b(?:read|write|save|open|pick) (?:a |the )?(?:local )?(?:file|folder)s?\b|\bfolders? on disk\b|\bgetFileFor(?:Opening|Saving)\b|\bgetFolder\b/i
+  },
+  {
+    id: "network",
+    pattern: /\bnetwork\b|\bhttps?:\/\/|\bhttps? requests?\b|\bfetch\s*\(|\bwebsocket\b|\bXMLHttpRequest\b|\b(?:download|upload) (?:from|to)\b/i
+  },
+  {
+    id: "clipboard",
+    pattern: /\bclipboard\b/i
+  }
+];
+
+const REQUEST_KEYS = new Set(NAMED_BY_REQUEST.map((item) => item.id));
+
+/** Permissions the goal text already names. "file" or "fetch the layers" does not count. */
+export function namedPermissions(goal) {
+  const text = String(goal || "");
+  return NAMED_BY_REQUEST.filter((item) => item.pattern.test(text)).map((item) => item.id);
+}
+
+/**
+ * `auto` reads the goal. `none` and an empty answer add nothing.
+ * A listed key is kept. An unknown name is dropped.
+ */
+export function resolveRequestedPermissions(value, goal) {
+  const raw = Array.isArray(value) ? value.flatMap((item) => String(item).split(",")) : String(value ?? "").split(",");
+  const tokens = raw.map((item) => item.trim()).filter(Boolean);
+  if (!tokens.length || tokens.every((item) => item === "none")) return [];
+  const detected = tokens.includes("auto") ? namedPermissions(goal) : [];
+  const named = tokens.filter((item) => REQUEST_KEYS.has(item));
+  return [...new Set([...detected, ...named])];
+}
+
 /** Names the manifest actually declares. enableMessageBridge "no" and domains: [] are not capabilities. */
 export function permissionCapabilities(source) {
   const text = String(source || "");
