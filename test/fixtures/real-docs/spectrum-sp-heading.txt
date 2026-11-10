@@ -1,1 +1,0 @@
-sp-heading sp-heading Since: UXP v4.1 Renders heading text that is theme aware. See : https://spectrum.adobe.com/page/heading Example This is a heading Sizes Headings come in several sizes: Heading XXXL Heading XXL Heading XL Heading L Heading M Heading S Heading XS Heading XXS
