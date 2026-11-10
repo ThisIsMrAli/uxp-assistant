@@ -80,6 +80,8 @@ test("names are short and readable, whatever the sentence", () => {
       "create a premiere plugin called Marker List that lists markers and exports them",
       "Marker List",
     ],
+    ["/uxp-assistant", "UXP Plugin"],
+    ["uxp assistant", "UXP Plugin"],
   ]);
   for (const [goal, name] of cases) assert.equal(deriveName(goal), name, goal);
   assert.equal(deriveName(""), "UXP Plugin");

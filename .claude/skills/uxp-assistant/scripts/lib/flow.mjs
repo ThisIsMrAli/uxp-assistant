@@ -8,7 +8,7 @@ import { buildLibrary, findInLibrary, HOSTS, libraryFiles } from "./library.mjs"
 import { runPackage } from "./package-project.mjs";
 import { narrowRequiredPermissions } from "./permissions.mjs";
 import { designSection } from "./design.mjs";
-import { applyPlanning, blockedGoalQuestion, blockedQuestion, buildWays, featureLines, hardBlocks, panelGuide } from "./planning.mjs";
+import { applyPlanning, blockedGoalQuestion, blockedQuestion, buildWays, featureLines, goalIsThin, hardBlocks, panelGuide } from "./planning.mjs";
 import { patchReactBundles, prepareStarter } from "./starter.mjs";
 import { BOLT_FRAMEWORKS, findApp } from "./stack.mjs";
 import { typecheck } from "./typecheck.mjs";
@@ -112,9 +112,13 @@ export function planSummary(plan) {
     : "none named in the request. The starter's broad access is removed; add one only when the code needs it.";
   const ui = plan.runtime === "webview" ? "WebView" : plan.runtime === "native" ? "Native UXP" : "not chosen yet";
   const widgets = plan.widgets === "html" ? "plain HTML" : plan.widgets === "spectrum" ? "Spectrum" : "not chosen yet";
+  const ready = !goalIsThin(plan.goal);
   return [
-    `${hostLabel(plan.host)} panel "${plan.name}"`,
-    `Goal: ${plan.goal}`,
+    ready
+      ? "Nothing is created until you choose Build it. This is the spec, including anything already said in chat."
+      : "This is not ready to build. The job has not been described.",
+    ready ? `${hostLabel(plan.host)} panel "${plan.name}"` : `Name: ${plan.name || "not chosen"}`,
+    `Goal: ${plan.goal || "not described yet"}`,
     plan.description && plan.description !== plan.goal ? `Description: ${plan.description}` : "",
     `Plugin id: ${plan.id}`,
     plan.kind === "existing" ? `Project: ${plan.project || plan.input} (your existing plugin)` : `Stack: ${stackLabel(plan)}`,
@@ -136,6 +140,9 @@ function stackLabel(plan) {
 
 export async function runDocs(out, { fetchImpl, skip = false, overrides = {} } = {}) {
   const plan = resolvePlan(out, overrides);
+  if (goalIsThin(plan.goal)) {
+    throw new Error("The request does not say what the plugin should do. Wait for the goal answer. Do not invent one.");
+  }
   if (!plan.host) {
     throw new Error("The Adobe app is not known. Run: node scripts/skill.mjs docs --host ppro|phxs|idsn|ame|ilst|aeft");
   }
@@ -261,6 +268,7 @@ export async function runBuild(out, { overrides = {}, scaffoldImpl, installImpl,
   if (docsStep && docsStep.status !== "done" && docsStep.status !== "skipped") {
     throw new Error("The docs are not saved yet. Run: node scripts/skill.mjs docs");
   }
+  if (goalIsThin(plan.goal)) throw new Error("The request does not say what the plugin should do. Wait for the goal answer. Do not invent one.");
   if (!plan.host) throw new Error("The Adobe app is not known. Run docs with --host first.");
   const activity = (text) => {
     setStep(out, "build", "running", undefined, { doing: text, silent: true });
@@ -514,6 +522,17 @@ export function writeBrief(out, plan, project) {
       plan.runtime === "webview" ? "- The page inside the WebView can use browser APIs. Remote `fetch` from that page is still blocked; do it on the host. The host document still loads the guard." : "",
       plan.host === "phxs" ? "- Photoshop has no saved types file. TypeScript checks your calls against `node_modules/@types/photoshop` in the project; grep it for a name or a signature (the `check` line `types` covers the files you wrote)." : "",
       plan.host === "ppro" ? "- Adobe's samples write `const app = require(\"premierepro\")`. Here the same object is `premierepro`, imported from `src/globals.ts`. It is typed by the `@adobe/premierepro` package, and `check` also compares every `premierepro.X.Y` name to the saved types file." : "",
+      ""
+    );
+  }
+  if (plan.host === "ppro") {
+    lines.push(
+      "## Premiere objects",
+      "These rules are for Premiere Pro only. Photoshop, InDesign, Illustrator, After Effects, and Media Encoder do not use them.",
+      "- Finish file and network awaits before you take a Project, Sequence, or ProjectItem. Across those awaits, keep only plain values, such as a file path.",
+      "- A Project, Sequence, or ProjectItem stays valid while you await a method on that same object. After any other await, call Project.getActiveProject() again and use the new project, sequence, and items.",
+      "- Call every create*Action() inside project.lockedAccess(() => { project.executeTransaction(...) }). The callback is synchronous. Do not await inside it, and do not keep an Action after the callback returns.",
+      "Premiere throws \"The script object is no longer valid\" when code uses an object taken before that other await.",
       ""
     );
   }

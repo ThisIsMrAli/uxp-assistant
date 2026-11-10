@@ -241,8 +241,20 @@ function isVerb(word) {
   );
 }
 
+/** True when the words are the skill itself, or nothing. They do not describe a plugin. */
+export function isBlankGoal(goal) {
+  let text = String(goal || "").trim();
+  if (!text) return true;
+  text = text.replace(/(?:^|\s)(?:\/|~\/)?(?:[\w.-]+\/)*uxp-assistant\b/gi, " ");
+  text = text.replace(/\s+/g, " ").trim();
+  const bare = text.replace(/^\/+/, "").replace(/[_-]+/g, " ").toLowerCase();
+  if (!bare) return true;
+  return /^(?:uxp assistant|assistant|uxp|plugin|panel|extension|tool)$/.test(bare);
+}
+
 /** A short display name from the request: "create high quality qr codes" becomes "QR Codes". */
 export function deriveName(goal) {
+  if (isBlankGoal(goal)) return "UXP Plugin";
   let text = String(goal || "")
     .replace(/\s+/g, " ")
     .trim()
@@ -381,7 +393,8 @@ export function makePlan({
   project = "",
   flags = {},
 } = {}) {
-  const text = String(goal || "").trim();
+  const raw = String(goal || "").trim();
+  const text = isBlankGoal(raw) ? "" : raw;
   const facts = kind === "existing" && project ? projectFacts(project) : null;
   const host =
     normalizeHost(flags.host) || detectHost(text) || facts?.host || "";
@@ -390,7 +403,7 @@ export function makePlan({
     (BOLT_FRAMEWORKS.some((item) => item.id === flags.framework)
       ? flags.framework
       : detectFramework(text));
-  const name = String(flags.name || facts?.name || deriveName(text)).trim();
+  const name = String(flags.name || facts?.name || (text ? deriveName(text) : "UXP Plugin")).trim();
   const id = String(flags.id || facts?.id || deriveId(name)).trim();
   const runtime =
     flags.runtime === "webview" || flags.runtime === "native"
@@ -403,7 +416,7 @@ export function makePlan({
   const permissions = resolveRequestedPermissions("auto", text);
   return {
     goal: text,
-    description: goalIsDescribed(text) ? text : "",
+    description: text && goalIsDescribed(text) ? text : "",
     kind,
     input,
     project,

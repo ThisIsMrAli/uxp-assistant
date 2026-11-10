@@ -1,4 +1,4 @@
-import { deriveId, deriveName, folderIsEmpty, statedRuntime, statedWidgets } from "./intent.mjs";
+import { deriveId, deriveName, folderIsEmpty, isBlankGoal, statedRuntime, statedWidgets } from "./intent.mjs";
 
 /**
  * What the sentence did not decide. Questions for these are asked before the confirm card.
@@ -13,6 +13,7 @@ export function nameIsGeneric(name) {
 
 /** The request does not say what the plugin does. */
 export function goalIsThin(goal) {
+  if (isBlankGoal(goal)) return true;
   const text = String(goal || "").trim();
   if (!text) return true;
   return nameIsGeneric(deriveName(text));
@@ -57,8 +58,9 @@ export function planningQuestions(plan) {
   if (goalIsThin(plan.goal)) {
     questions.push({
       id: "goal",
-      title: "What it does",
-      prompt: "What should the plugin do? One or two sentences: the job, and what the user sees in the panel.",
+      title: "What should it do?",
+      kicker: "The job",
+      prompt: "Describe the plugin in one or two sentences: the job, and what the person sees in the panel. This is the spec. Nothing is built from the skill name alone.",
       input: "text",
       maxLength: 400,
       options: []
@@ -68,6 +70,7 @@ export function planningQuestions(plan) {
     questions.push({
       id: "name",
       title: "Plugin name",
+      kicker: "The name",
       prompt: "What should the panel be called? A short name, such as QR Codes.",
       input: "text",
       maxLength: 40,
@@ -77,8 +80,9 @@ export function planningQuestions(plan) {
   if (goalIsThin(plan.goal)) {
     questions.push({
       id: "description",
-      title: "Description",
-      prompt: "In one sentence, what does the panel show and what does the main button do?",
+      title: "What the panel shows",
+      kicker: "The screen",
+      prompt: "In one sentence, what does the panel show, and what does the main button do?",
       input: "text",
       maxLength: 240,
       options: []
@@ -88,6 +92,7 @@ export function planningQuestions(plan) {
     questions.push({
       id: "runtime",
       title: "Panel UI",
+      kicker: "How it is drawn",
       prompt: "Native UXP draws the panel with the host's own HTML. A WebView loads a browser page inside the panel, which starts extra processes. Use it only when the UI cannot be built as UXP HTML.",
       options: [
         { id: "native", label: "Native UXP (Recommended)", detail: "Spectrum or plain HTML in the host. No WebView." },
@@ -99,6 +104,7 @@ export function planningQuestions(plan) {
     questions.push({
       id: "widgets",
       title: "Controls",
+      kicker: "The controls",
       prompt: "Spectrum widgets match the Adobe app. Plain HTML is for a look Spectrum cannot do.",
       options: [
         { id: "spectrum", label: "Spectrum (Recommended)", detail: "sp-button, sp-textfield, and the host's other widgets." },
@@ -110,6 +116,7 @@ export function planningQuestions(plan) {
     questions.push({
       id: "design",
       title: "Look",
+      kicker: "The look",
       prompt: "Should the panel look like the host, or do you have a look in mind?",
       options: [
         { id: "match", label: "Match the host (Recommended)", detail: "Host colors, compact type, no custom theme." },

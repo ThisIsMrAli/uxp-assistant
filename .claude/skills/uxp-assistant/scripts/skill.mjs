@@ -19,6 +19,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { docsDir, planSummary, projectPath, resolvePlan, runBuild, runCheck, runDocs } from "./lib/flow.mjs";
+import { isBlankGoal } from "./lib/intent.mjs";
 import { runFeedback } from "./lib/feedback.mjs";
 import { findInLibrary, hostKey } from "./lib/library.mjs";
 import * as api from "./runtime/api.mjs";
@@ -121,7 +122,7 @@ function withNext(out, result) {
 async function start(args) {
   applyEnv();
   const goal = typeof args.goal === "string" ? args.goal.trim() : "";
-  if (!goal) throw new Error("Pass --goal with the developer's request, word for word.");
+  if (args.yes && isBlankGoal(goal)) throw new Error("There is nothing to build. --yes needs a request that says what the plugin does.");
   const project = typeof args.project === "string" ? path.resolve(args.project) : "";
   const empty = typeof args.empty === "string" ? path.resolve(args.empty) : "";
   const kind = project ? "existing" : "empty";

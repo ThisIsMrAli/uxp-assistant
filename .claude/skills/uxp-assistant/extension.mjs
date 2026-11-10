@@ -7,7 +7,7 @@ import { BOLT_APPS } from "./scripts/lib/stack.mjs";
  * UXP Assistant's extension. scripts/runtime owns the session and the dashboard.
  * This file says what the steps are, what runs in each, and the one card the developer sees.
  *
- * mode -> (host, only when the request names no Adobe app) -> plan -> (tweak, only when they ask to change something)
+ * mode -> the questions the request did not answer -> the spec card, which the person must confirm
  * then docs, build, implement, check run without asking anything.
  * After check the developer tries the plugin in the Adobe app and sends bugs (words and screenshots) until there are none.
  */
@@ -89,15 +89,17 @@ export default {
     if (!plan.host) {
       questions.push({
         id: "host",
-        title: "Adobe app",
-        prompt: "Which Adobe app is this plugin for? The request names none, or more than one.",
+        title: "Which Adobe app?",
+        kicker: "The app",
+        prompt: "Which Adobe app opens this panel? The request did not name one. Nothing is assumed.",
         options: BOLT_APPS.map((app, index) => ({ id: app.id, label: `${app.label.replace(/\s*\(Beta\)$/, "")}${index === 0 ? " (Recommended)" : ""}`, detail: app.beta ? "Beta in the scaffold tool." : "" }))
       });
     }
     questions.push(...planningQuestions(plan));
     questions.push({
       id: "plan",
-      title: "Plan",
+      title: "Confirm the spec",
+      kicker: "Before anything is created",
       prompt: planSummary(plan),
       options: [
         { id: "build", label: "Build it (Recommended)", detail: "Saves the docs, builds the plugin, then asks you to try it in the Adobe app." },

@@ -26,8 +26,18 @@ async function withFetch(work) {
   }
 }
 
-test("start needs the developer's words", async () => {
-  await assert.rejects(run(["start", "--empty", temp()]), /--goal/);
+test("a skill call with no description opens the interview instead of inventing a plugin", async () => {
+  const out = path.join(temp(), "s");
+  const started = await run(["start", "--goal", "/uxp-assistant", "--empty", temp(), "--mode", "chat", "--out", out]);
+  assert.equal(started.plan.host, "(ask)");
+  assert.equal(started.plan.name, "UXP Plugin");
+  assert.equal(started.asked, "host");
+  const ids = JSON.parse(fs.readFileSync(path.join(out, "questions.json"), "utf8")).map((item) => item.id);
+  for (const id of ["host", "goal", "name", "description", "runtime", "widgets", "design", "plan"]) {
+    assert.ok(ids.includes(id), id);
+  }
+  assert.ok(ids.indexOf("goal") < ids.indexOf("plan"));
+  await assert.rejects(run(["start", "--yes", "--empty", temp()]), /nothing to build/i);
 });
 
 test("start in chat mode names the plan question, not the mode question, and the plan card says what was read", async () => {

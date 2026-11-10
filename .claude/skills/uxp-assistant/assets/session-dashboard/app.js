@@ -580,7 +580,7 @@ function turn(ask) {
     if (option?.secret) secretBox.querySelector("label").textContent = option.secret;
     const missingSecret = Boolean(option?.secret) && !String(ui.secret[k] || "").trim();
     submit.disabled = !option || missingSecret || Boolean(ui.sending[k]);
-    submit.textContent = ui.sending[k] ? "Sending" : "Confirm choice";
+    submit.textContent = ui.sending[k] ? "Sending" : ask.id === "plan" && ui.choice[k] === "build" ? "Build this" : "Confirm choice";
     status.textContent = ui.error[k] || "";
   }
 
@@ -605,8 +605,8 @@ function turn(ask) {
   const s = session();
   const shots = (ask.images || []).map((id) => s.shots.find((shot) => shot.id === id)).filter(Boolean);
   const sheet = h("section", { class: "turn", "aria-labelledby": `turn-title-${k}` },
-    h("header", null, h("span", { class: "badge" }, icon("hand", 2.6), "Your turn"), h("h2", { id: `turn-title-${k}`, text: ask.title || ask.id })),
-    h("p", { class: "prompt", text: ask.prompt }),
+    h("header", null, h("span", { class: "badge" }, icon("hand", 2.6), ask.kicker || "Your turn"), h("h2", { id: `turn-title-${k}`, text: ask.title || ask.id })),
+    promptBlock(ask),
     shots.length ? h("div", { class: "proofs" }, shots.map((shot) => h("figure", null, h("img", { src: fileUrl(shot.file), alt: shot.label, width: shot.width, height: shot.height }), h("figcaption", { text: `${shot.label}, ${shot.width} by ${shot.height}` })))) : null,
     form,
     ask.affects?.length ? h("details", { class: "will" }, h("summary", { text: `What this touches (${ask.affects.length})` }),
@@ -744,6 +744,15 @@ document.addEventListener("paste", (event) => {
   ui.addFiles(files);
 });
 
+function promptBlock(ask) {
+  if (ask.id !== "plan") return h("p", { class: "prompt", text: ask.prompt });
+  const lines = String(ask.prompt || "").split("\n").filter(Boolean);
+  const [lead, ...rest] = lines;
+  return h("div", null,
+    h("p", { class: "prompt", text: lead || ask.prompt }),
+    rest.length ? h("ul", { class: "spec" }, rest.map((line) => h("li", { text: line }))) : null);
+}
+
 function textTurn(ask) {
   const k = `${ask.id}:${ask.nonce}`;
   const status = h("span", { class: "error", role: "alert" });
@@ -767,7 +776,7 @@ function textTurn(ask) {
     await load();
   } }, h("label", { for: `text-${k}`, text: "Your answer" }), input, h("div", { class: "actions" }, submit), status);
   return h("section", { class: "turn", "aria-labelledby": `turn-title-${k}` },
-    h("header", null, h("span", { class: "badge" }, icon("hand", 2.6), "Your turn"), h("h2", { id: `turn-title-${k}`, text: ask.title || ask.id })),
+    h("header", null, h("span", { class: "badge" }, icon("hand", 2.6), ask.kicker || "Your turn"), h("h2", { id: `turn-title-${k}`, text: ask.title || ask.id })),
     h("p", { class: "prompt", text: ask.prompt }),
     form);
 }

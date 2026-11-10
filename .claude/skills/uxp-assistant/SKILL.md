@@ -5,7 +5,7 @@ description: >-
   Media Encoder, Illustrator, After Effects) from one sentence, or adds a feature
   to an existing plugin. It saves Adobe's current UXP and host API docs on this
   computer, reads the app, name, framework, and permissions from the request,
-  asks only what the sentence left open, then one confirm card, then scaffolds, writes, builds, packages, and checks the
+  asks on the dashboard for anything the sentence did not say, then one confirm card the person must accept, then scaffolds, writes, builds, packages, and checks the
   plugin against the saved docs. Then the developer tries it in the Adobe app and
   sends bugs as words and screenshots; it fixes them and asks again until they say
   there are none. It runs to the end without stopping. Use when
@@ -27,7 +27,7 @@ A session ends at `session done`. Until then you are in the middle of a task.
 
 - Every command prints a `next` line. Do what it says.
 - Never end your turn with a message while the session is open. A message with no command after it ends your turn.
-- Ask the developer only what `next` tells you to ask: the mode, the plan card, then after `check` the try card. Nothing else, ever. Not the name, the app, the framework, the permissions, or whether to proceed. If something is unclear, take the simplest reading, say so in the summary, and keep going.
+- Ask every question `next` names, including the planning questions and the confirm card. In dashboard mode you publish the card and wait. You never answer it. You never pick the Adobe app, the name, native or WebView, Spectrum, or Build it. A sentence in chat is not a click on the dashboard: the person still confirms the spec. `--yes` is only when nobody is there, and it cannot invent a plugin from an empty request.
 - Between `ask` and `wait` (dashboard mode), write nothing to the user.
 - Long commands (`docs`, `build`, `check`) take up to a minute. Wait for them. Do not report on them.
 - If you lose your place, or the user types "continue", run `node scripts/skill.mjs session next`.
@@ -38,7 +38,7 @@ A session ends at `session done`. Until then you are in the middle of a task.
 node scripts/skill.mjs start --goal "<the developer's request, word for word>" --empty "<the workspace folder>"
 ```
 
-Use `--project "<folder>"` instead of `--empty` when the developer already has a plugin. Pass the folder the developer is working in, not the skill's folder. It reads the Adobe app, the name, the id, the framework, and the permissions from the request, so you pass nothing else. It prints the plan and a `next` line.
+Use `--project "<folder>"` instead of `--empty` when the developer already has a plugin. Pass the folder they are working in, not the skill's folder. Pass `--goal ""` when they only invoked the skill and did not describe a plugin. Do not pass the skill name, a file path, or an Adobe app they did not name. Do not pass `--host`, `--name`, or `--runtime` unless their sentence said so. The command prints the first question and a `next` line.
 
 - Add `--mode chat` when the developer already said no dashboard, or when you are not on their computer.
 - Add `--yes` when the developer said not to ask, or when nobody is there to answer (a background or cloud run). It picks chat, assumes native UXP, Spectrum, and a host-matching look, answers the plan card with "Build it", skips the try step, and goes straight to the docs. It still asks for the Adobe app when the request names none. Say those were assumptions.
@@ -50,8 +50,8 @@ Each command's `next` line names the command that follows it. Do what it says.
 | Step | What it does | Questions |
 | --- | --- | --- |
 | mode | Dashboard (a page on this computer) or chat | one |
-| planning | Only what the sentence did not say: the goal and name when they are missing, native UXP or WebView, Spectrum or plain HTML, the look, and at most two choices the goal leaves open | those |
-| plan | One card: app, name, description, UI, controls, look, permissions, folder. Build it, change something, or stop | one (a text answer only if they change something) |
+| planning | What the sentence did not say. No sentence at all asks for the job, the name, and the screen, then the Adobe app, native or WebView, Spectrum or plain HTML, and the look | those, one at a time, on the dashboard |
+| plan | The spec, read back. Build it, change something, or stop. A full sentence in chat still stops here until they confirm | one (a text answer only if they change something) |
 | docs | `docs` saves every page Adobe lists for the app, plus the host's TypeScript types, in about ten seconds | none |
 | build | `build` creates the project, narrows its permissions, installs, builds the empty starter, writes `BRIEF.md` | none |
 | implement | You write the plugin from `BRIEF.md` | none |

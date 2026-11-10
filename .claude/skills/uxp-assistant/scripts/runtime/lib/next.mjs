@@ -72,7 +72,7 @@ export function nextAction(out, { dashboardUp = false } = {}) {
     const asked = session.asks.find((item) => item.id === question.id);
     if (!asked) {
       return { action: "ask", ask: question.id, command: `${sessionCmd} ask --id ${question.id} ${outArg}`, say: dashboard
-        ? `Publish \`${question.id}\` on the dashboard with \`${sessionCmd} ask --id ${question.id} ${outArg}\`, then wait. Do not ask it in chat.`
+        ? `Publish \`${question.id}\` on the dashboard with \`${sessionCmd} ask --id ${question.id} ${outArg}\`, then wait. Do not ask it in chat. Do not answer it yourself, and do not pick a recommended option.`
         : `Run \`${sessionCmd} ask --id ${question.id} ${outArg}\`, ask it with AskQuestion (pass the prompt and each option through unchanged), then record the click with \`${sessionCmd} answer --id ${question.id} --value <option id> ${outArg}\`. Only when no person is there to answer (a background or cloud run) record the first option yourself.` };
     }
   }
