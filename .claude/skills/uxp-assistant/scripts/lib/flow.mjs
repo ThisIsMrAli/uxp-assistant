@@ -7,6 +7,7 @@ import { applyAnswers, detectHost, folderIsEmpty, hostLabel, namedPermissions, s
 import { buildLibrary, findInLibrary, HOSTS, libraryFiles } from "./library.mjs";
 import { runPackage } from "./package-project.mjs";
 import { narrowRequiredPermissions } from "./permissions.mjs";
+import { designSection } from "./design.mjs";
 import { applyPlanning, blockedGoalQuestion, blockedQuestion, buildWays, featureLines, hardBlocks, panelGuide } from "./planning.mjs";
 import { patchReactBundles, prepareStarter } from "./starter.mjs";
 import { BOLT_FRAMEWORKS, findApp } from "./stack.mjs";
@@ -507,7 +508,7 @@ export function writeBrief(out, plan, project) {
       plan.framework === "react" ? "- `src/spectrum.d.ts` already declares every `<sp-*>` element and `<uxp-panel>` for React. Do not declare them again." : "",
       "- `tsconfig.json` allows `.ts` imports, so a test can import `./thing.ts`. In panel code, import without the extension.",
       "- `uxp.storage` (`localFileSystem`, `formats`) and `uxp.shell` are typed. Call them directly, as Adobe's samples do; no cast is needed.",
-      "- The panel's `minimumSize` and `preferredDockedSize` are in `uxp.config.ts`. The starter's are small (about 230 x 200). Change them to fit your layout.",
+      "- A native starter already has a Spectrum screen in the main component and `src/panel.css`: one heading, one labeled field, one `sp-button variant=\"cta\"`, and a status line. Edit that screen. `minimumSize` is 260×360 when the file still had Bolt's 230×200.",
       "- The host objects come from `src/globals.ts` (`uxp`, `premierepro`, `photoshop`, ...). Import them from there.",
       "- `src/uxp-guard.js` is imported first. It defines TextEncoder and TextDecoder, which UXP does not have. Vite `modulePreload` is false. Do not remove either.",
       plan.runtime === "webview" ? "- The page inside the WebView can use browser APIs. Remote `fetch` from that page is still blocked; do it on the host. The host document still loads the guard." : "",
@@ -534,6 +535,7 @@ export function writeBrief(out, plan, project) {
     const ways = buildWays(plan);
     if (ways.length) lines.push("## Limits, and what to do instead", ...ways, "", "The full saved list is LIMITS.md. A limit that is not there, and not in the lines above, is not a limit.", "");
   }
+  lines.push(...designSection(plan));
   lines.push("## Panel UI", ...panelGuide(plan), "");
   const decided = featureLines(plan);
   if (decided.length) lines.push("## What they chose", ...decided, "");
@@ -582,9 +584,10 @@ export async function runCheck(out, { runner, typecheckImpl, overrides = {} } = 
   const project = session.addon.path || projectPath(plan);
   const baseline = readJson(baselineFile(out));
   const { changed } = changedSinceBaseline(project, baseline);
-  if (baseline && !changed.length) {
+    if (baseline && !changed.length) {
     setStep(out, "implement", "running", "Waiting for the code", { doing: "The starter has not been changed yet" });
     return {
+      docs: docsStamp(out, plan),
       ok: false,
       stage: "implement",
       error: "Nothing under src/ has changed since the starter, so there is no plugin yet.",
@@ -629,6 +632,7 @@ export async function runCheck(out, { runner, typecheckImpl, overrides = {} } = 
   const warnings = findings.filter((finding) => finding.severity !== "error");
   const dist = path.join(project, "dist");
   const result = {
+    docs: docsStamp(out, plan),
     project,
     build: pack.status,
     artifacts: (pack.artifacts || []).map((item) => path.join(project, item.file || String(item))),
@@ -653,6 +657,25 @@ export async function runCheck(out, { runner, typecheckImpl, overrides = {} } = 
     note: "The plugin was built and packaged. It was not run in the Adobe app: nothing here can open it.",
     load
   };
+}
+
+function docsStamp(out, plan) {
+  const lib = docsDir(out);
+  const types = path.join(lib, "api", "premierepro.d.ts");
+  if (plan.host === "ppro" && fs.existsSync(types)) {
+    const when = fs.statSync(types).mtime.toISOString().replace(/\.\d{3}Z$/, "Z");
+    return `Premiere types saved ${when} (api/premierepro.d.ts).`;
+  }
+  const library = path.join(lib, "library.json");
+  if (fs.existsSync(library)) {
+    try {
+      const saved = JSON.parse(fs.readFileSync(library, "utf8")).fetchedAt;
+      if (saved) return `Docs saved ${saved}.`;
+    } catch {
+      // The library file is unreadable. The line below covers that.
+    }
+  }
+  return "No docs were saved for this check.";
 }
 
 function show(finding) {

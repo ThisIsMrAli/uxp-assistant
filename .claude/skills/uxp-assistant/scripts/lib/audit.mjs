@@ -283,6 +283,63 @@ function walkMd(dir) {
   return found;
 }
 
+/**
+ * Premiere document crashes that Adobe's known-issues page does not spell out.
+ * These still fail the check when the saved pages never mention them.
+ * The WebView page is a browser and is not in this file list.
+ */
+function checkHostDocument(findings, files) {
+  for (const { file, text } of files) {
+    if (!text.trim() || file.includes("webview-ui")) continue;
+    reportMatch(findings, file, text, /(?:import\s*\(\s*|require\s*\(\s*|from\s+|import\s+)["'](?:(?:node:)?fs(?:\/promises)?|qrcode\/lib\/server(?:\.js)?)["']/, {
+      id: "host-node-fs",
+      text: "This file imports Node's fs or qrcode/lib/server.js. The starter leaves fs external, so the bundle calls require$$1, UXP throws, and the panel stays blank.",
+      fix: "Import qrcode/lib/core/qrcode.js and render the modules with no fs. Do not import node:fs into the panel."
+    });
+    reportMatch(findings, file, text, /<canvas\b[\s\S]*?>/gi, {
+      id: "host-canvas-height",
+      text: "A canvas with height: auto collapses to a thin line in the UXP document.",
+      fix: "Set the canvas width and height to the same pixel size, on the element and in its style.",
+      when: (match) => /(?<![\w-])height\s*(?:=|:)\s*["']auto["']/i.test(match[0])
+    });
+    reportMatch(findings, file, text, /(?:^|}|,)\s*([^{}@]*)\{([^{}]*)\}/g, {
+      id: "host-canvas-height",
+      text: "A canvas with height: auto collapses to a thin line in the UXP document.",
+      fix: "Set the canvas width and height to the same pixel size, on the element and in its style.",
+      when: (match) => /(^|[^\w-])canvas(?![\w-])/.test(match[1] || "") && !/=|import|const|let|function/.test(match[1] || "") && /(?<![\w-])height\s*:\s*auto\b/i.test(match[2] || "")
+    });
+    reportMatch(findings, file, text, /<sp-(?:textfield|textarea|picker|menu-item)\b[\s\S]*?>/gi, {
+      id: "host-spectrum-value",
+      text: "Premiere exposes value on sp-textfield, sp-textarea, sp-picker, and sp-menu-item as a getter. Passing it from React throws \"Cannot set property value\" and the panel goes blank. selected is the same kind of property.",
+      fix: "Read the field in onInput. Set value and selected with setAttribute. Do not pass them as props.",
+      when: (match) => /\bvalue\s*=/.test(match[0]) || (/\bsp-(?:picker|menu-item)\b/.test(match[0]) && /\bselected\s*=/.test(match[0]))
+    });
+    reportMatch(findings, file, text, /(?:^|[\s;{])(?:column-gap|row-gap|gap|inset)\s*:|\bdisplay\s*:\s*grid\b|\bgrid-template\b|(?:class|className)\s*=\s*["'`][^"'`]*\b(?:gap-(?:[xy]-)?\d|grid-cols-\d|grid-rows-\d)/, {
+      id: "host-layout",
+      text: "The UXP document does not paint CSS grid, gap, or inset. The host panel will not lay out.",
+      fix: "Use flex and margins in the host document. The page inside a WebView may use grid and gap."
+    });
+    reportMatch(findings, file, text, /<button\b/, {
+      id: "host-button",
+      text: "A plain button takes the host skin, so the panel CSS does not control it.",
+      fix: "Use sp-button. variant=\"cta\" for the one main action, secondary for the rest."
+    });
+  }
+}
+
+function reportMatch(findings, file, text, pattern, finding) {
+  const flags = pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`;
+  const expression = new RegExp(pattern.source, flags);
+  const lines = text.split("\n");
+  for (const match of text.matchAll(expression)) {
+    if (finding.when && !finding.when(match)) continue;
+    const line = lineOf(text, match.index);
+    if (/audit-ignore/.test(lines[line - 1] || "")) continue;
+    add(findings, { id: finding.id, file, line, text: finding.text, fix: finding.fix });
+    return;
+  }
+}
+
 function checkLimits(findings, { files, libText, docsAvailable }) {
   for (const { file, text } of files) {
     const lines = text.split("\n");
@@ -343,6 +400,7 @@ export function auditProject({ project, plan, libDir = "", baseline = null }) {
   if (configSource) checkPermissions(findings, { files: authored, plan, configSource, configFile });
   for (const item of authored) checkHostApi(findings, { ...item, plan, types });
   checkLimits(findings, { files: authored, libText, docsAvailable: libText.length > 0 });
+  checkHostDocument(findings, authored);
   checkCompat(findings, project);
   checkBundle(findings, project);
 

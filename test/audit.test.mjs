@@ -158,6 +158,35 @@ test("a WebView host is still a UXP document, so it needs the same guard", () =>
   assert.ok(ids.includes("compat-text-encoder"));
 });
 
+test("premiere document bugs fail even when no saved page states them", () => {
+  const { dir, baseline } = project({
+    main: `import code from "qrcode/lib/server.js";
+import fs from "node:fs";
+export const App = () => (
+  <div className="grid-cols-2">
+    <sp-textfield value={code}></sp-textfield>
+    <sp-menu-item selected={true}>A</sp-menu-item>
+    <canvas style={{ height: "auto" }}></canvas>
+    <button>Go</button>
+  </div>
+);
+`,
+    css: "canvas { width: 100%; height: auto; }\n.stage { display: grid; gap: 8px; inset: 0; }\n"
+  });
+  fs.mkdirSync(path.join(dir, "webview-ui", "src"), { recursive: true });
+  fs.writeFileSync(path.join(dir, "webview-ui", "src", "app.css"), ".page { display: grid; gap: 8px; }\n");
+  const findings = auditProject({ project: dir, plan, baseline }).findings;
+  const ids = findings.map((item) => item.id);
+  for (const id of ["host-node-fs", "host-spectrum-value", "host-canvas-height", "host-layout", "host-button"]) {
+    assert.ok(ids.includes(id), id);
+  }
+  assert.equal(findings.some((item) => item.file.includes("webview-ui")), false);
+  const ignored = project({ main: "<sp-textfield value={text}></sp-textfield> // audit-ignore\nconst canvas = 1;\n" });
+  const left = auditProject({ project: ignored.dir, plan, baseline: ignored.baseline }).findings.map((item) => item.id);
+  assert.equal(left.includes("host-spectrum-value"), false);
+  assert.equal(left.includes("host-canvas-height"), false);
+});
+
 test("no test script is a warning, not an error", () => {
   const { dir, baseline } = project({ main: "export const x = 1;\n" });
   fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ scripts: { build: "x" } }));

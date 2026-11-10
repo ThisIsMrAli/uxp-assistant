@@ -53,6 +53,7 @@ export function prepareStarter(project, { framework, runtime = "native" } = {}) 
   }
   done.push(...installCompat(project));
   done.push(...removeDemoLayout(project));
+  done.push(...installPanelShell(project, { framework, runtime }));
   return done;
 }
 
@@ -85,10 +86,245 @@ function removeDemoLayout(project) {
   }
   const scss = path.join(project, "src", "index.scss");
   if (fs.existsSync(scss) && /justify-content:\s*center/.test(fs.readFileSync(scss, "utf8"))) {
-    fs.writeFileSync(scss, "/* Panel layout belongs in the component CSS. */\n");
+    const source = fs.readFileSync(scss, "utf8");
+    const webview = source.match(/\.webview-ui\s*\{[^}]*\}/);
+    fs.writeFileSync(scss, webview ? `${webview[0]}\n` : "/* Panel layout belongs in src/panel.css. */\n");
     done.push("src/index.scss: removed the centered starter layout.");
   }
   return done;
+}
+
+const PANEL_CSS = `html,
+body,
+#app {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+  background-color: var(--uxp-host-background-color);
+  color: var(--uxp-host-text-color);
+}
+
+body {
+  display: block;
+  min-width: 0;
+  min-height: 0;
+}
+
+#app {
+  max-width: none;
+}
+
+.panel {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 12px;
+}
+
+.panel sp-divider,
+.panel .field,
+.panel .actions,
+.panel .status {
+  margin-top: 12px;
+}
+
+.panel .actions sp-button {
+  margin-right: 8px;
+}
+
+.field sp-textfield,
+.field sp-textarea,
+.field sp-dropdown,
+.field sp-picker {
+  display: block;
+  position: relative;
+  width: 100%;
+}
+
+.webview-ui {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+`;
+
+const REACT_SHELL = `import { useState } from "react";
+
+// Edit this screen. Do not pass value= to sp-textfield, sp-textarea, sp-picker, or sp-menu-item.
+
+export const App = () => {
+  const [text, setText] = useState("");
+  const [status, setStatus] = useState("");
+
+  return (
+    <main className="panel">
+      <sp-heading>Panel</sp-heading>
+      <sp-body>Replace this screen with the plugin.</sp-body>
+      <sp-divider></sp-divider>
+      <div className="field">
+        <sp-textfield
+          placeholder="Type here"
+          style={{ display: "block", position: "relative", width: "100%", height: "32px" }}
+          onInput={(event) => setText((event.target as HTMLElement & { value?: string }).value || "")}
+        >
+          <sp-label slot="label">Text</sp-label>
+        </sp-textfield>
+      </div>
+      <div className="actions">
+        <sp-button
+          variant="cta"
+          onClick={() => setStatus(text.trim() ? \`Ready: \${text.trim()}\` : "Type something first.")}
+        >
+          Run
+        </sp-button>
+      </div>
+      {status ? (
+        <sp-body className="status" role="status">
+          {status}
+        </sp-body>
+      ) : null}
+    </main>
+  );
+};
+`;
+
+const VUE_SHELL = `<script setup lang="ts">
+import { ref } from "vue";
+
+const text = ref("");
+const status = ref("");
+
+function onInput(event: Event) {
+  text.value = (event.target as HTMLElement & { value?: string }).value || "";
+}
+
+function run() {
+  status.value = text.value.trim() ? \`Ready: \${text.value.trim()}\` : "Type something first.";
+}
+</script>
+
+<template>
+  <main class="panel">
+    <sp-heading>Panel</sp-heading>
+    <sp-body>Replace this screen with the plugin.</sp-body>
+    <sp-divider></sp-divider>
+    <sp-textfield placeholder="Type here" style="display: block; position: relative; width: 100%; height: 32px" @input="onInput">
+      <sp-label slot="label">Text</sp-label>
+    </sp-textfield>
+    <div class="actions">
+      <sp-button variant="cta" @click="run">Run</sp-button>
+    </div>
+    <sp-body v-if="status" class="status" role="status">{{ status }}</sp-body>
+  </main>
+</template>
+`;
+
+const SVELTE_SHELL = `<script lang="ts">
+  let text = "";
+  let status = "";
+
+  function onInput(event: Event) {
+    text = (event.target as HTMLElement & { value?: string }).value || "";
+  }
+
+  function run() {
+    status = text.trim() ? \`Ready: \${text.trim()}\` : "Type something first.";
+  }
+</script>
+
+<main class="panel">
+  <sp-heading>Panel</sp-heading>
+  <sp-body>Replace this screen with the plugin.</sp-body>
+  <sp-divider></sp-divider>
+  <sp-textfield placeholder="Type here" style="display: block; position: relative; width: 100%; height: 32px" on:input={onInput}>
+    <sp-label slot="label">Text</sp-label>
+  </sp-textfield>
+  <div class="actions">
+    <sp-button variant="cta" on:click={run}>Run</sp-button>
+  </div>
+  {#if status}
+    <sp-body class="status" role="status">{status}</sp-body>
+  {/if}
+</main>
+`;
+
+const ENTRY_FILES = ["src/index-react.tsx", "src/index-vue.ts", "src/index-svelte.ts", "src/index.tsx", "src/main.ts"];
+
+/** Bolt's first screen is a centered demo. Replace it with a host Spectrum panel, once. */
+function installPanelShell(project, { framework, runtime }) {
+  const done = [...retargetEntries(project), ...enlargePanel(project)];
+  if (runtime === "webview") return done;
+  const rel = framework === "vue" ? "src/main.vue" : framework === "svelte" ? "src/main.svelte" : "src/main.tsx";
+  const file = path.join(project, rel);
+  if (!fs.existsSync(file)) return done;
+  const source = fs.readFileSync(file, "utf8");
+  if (!isBoltStarter(source)) return done;
+  const shell = framework === "vue" ? VUE_SHELL : framework === "svelte" ? SVELTE_SHELL : REACT_SHELL;
+  fs.writeFileSync(file, shell);
+  done.push(`${rel}: Spectrum shell with one heading, one labeled field, one cta button, and a status line.`);
+  done.push(...ensurePanelCss(project));
+  return done;
+}
+
+function isBoltStarter(text) {
+  if (/<sp-heading\b|<sp-button\b/.test(text)) return false;
+  return /BOLT_SAMPLECODE|VITE_BOLT_WEBVIEW_UI|bolt-uxp\.png|count is /.test(text);
+}
+
+function retargetEntries(project) {
+  const done = [];
+  let changed = false;
+  for (const rel of ENTRY_FILES) {
+    const file = path.join(project, rel);
+    if (!fs.existsSync(file)) continue;
+    const next = retargetEntry(fs.readFileSync(file, "utf8"));
+    if (!next) continue;
+    fs.writeFileSync(file, next);
+    changed = true;
+    done.push(`${rel}: loads panel.css instead of the starter demo CSS.`);
+  }
+  if (changed) done.push(...ensurePanelCss(project));
+  return done;
+}
+
+function retargetEntry(source) {
+  if (!/["']\.\/app\.css["']|["']\.\/index\.scss["']/.test(source)) return "";
+  let next = source.replace(/^[ \t]*import\s+["']\.\/app\.css["'];?[ \t]*\r?\n/gm, "");
+  next = next.replace(/^[ \t]*import\s+["']\.\/index\.scss["'];?[ \t]*\r?\n/gm, "");
+  if (!next.includes("./panel.css")) {
+    next = next.includes("uxp-guard")
+      ? next.replace(/(import\s+["']\.\/uxp-guard\.js["'];?\r?\n)/, `$1import "./panel.css";\n`)
+      : `import "./panel.css";\n${next}`;
+  }
+  return next === source ? "" : next;
+}
+
+function ensurePanelCss(project) {
+  const file = path.join(project, "src", "panel.css");
+  if (fs.existsSync(file)) return [];
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, PANEL_CSS);
+  return ["src/panel.css: host colors and flex. No grid, gap, or transitions."];
+}
+
+function enlargePanel(project) {
+  const file = path.join(project, "uxp.config.ts");
+  if (!fs.existsSync(file)) return [];
+  const before = fs.readFileSync(file, "utf8");
+  let text = before;
+  text = text.replace(/minimumSize:\s*\{\s*width:\s*230,\s*height:\s*200\s*\}/, "minimumSize: { width: 260, height: 360 }");
+  text = text.replace(/preferredDockedSize:\s*\{\s*width:\s*230,\s*height:\s*300\s*\}/, "preferredDockedSize: { width: 320, height: 480 }");
+  text = text.replace(/preferredFloatingSize:\s*\{\s*width:\s*450,\s*height:\s*400\s*\}/, "preferredFloatingSize: { width: 640, height: 420 }");
+  if (text === before) return [];
+  fs.writeFileSync(file, text);
+  return ["uxp.config.ts: minimum size is 260×360 so the panel can show the field and the result."];
 }
 
 /** Copy the UXP document guards and load them before the bundle. Vite must not inject modulepreload. */

@@ -247,6 +247,7 @@ test("check refuses the starter, lists errors with fixes, then passes once the c
   fs.writeFileSync(path.join(built.project, "src", "main.tsx"), `import { premierepro } from "./globals";\nexport const run = () => premierepro.Project.getActiveProject();\n`);
   const good = await runCheck(out, { runner: pack });
   assert.equal(good.ok, true, JSON.stringify(good.errors));
+  assert.match(good.docs, /Premiere types saved/);
   assert.equal(good.hostExecuted, false);
   assert.match(good.note, /not run in the Adobe app/);
   assert.match(good.load, /UXP Developer Tool/);
@@ -281,6 +282,8 @@ test("the brief points at pages that match the goal and not a page that only sha
   assert.match(brief, /drawing and writing an image/);
   assert.match(brief, /html-canvas-element\.md/);
   assert.match(brief, /use flex/);
+  assert.match(brief, /## Design/);
+  assert.match(brief, /Do not copy the search colors/);
   assert.match(brief, /no `toDataURL` or `toBlob`/);
 });
 

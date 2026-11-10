@@ -103,6 +103,35 @@ test("the starter demo layout is removed so Spectrum is not covered by it", () =
   assert.deepEqual(prepareStarter(dir, { framework: "vue" }).filter((line) => /demo|index\.scss/.test(line)), []);
 });
 
+test("a bolt demo becomes a Spectrum shell, and a later edit is left alone", () => {
+  const dir = withTsc();
+  fs.writeFileSync(path.join(dir, "src", "main.tsx"), "const webviewUI = import.meta.env.VITE_BOLT_WEBVIEW_UI === \"true\";\nexport const App = () => <main></main>;\n");
+  fs.writeFileSync(path.join(dir, "src", "index-react.tsx"), "import \"./uxp-guard.js\";\nimport \"./app.css\";\nimport \"./index.scss\";\n");
+  fs.writeFileSync(path.join(dir, "uxp.config.ts"), "minimumSize: { width: 230, height: 200 }, preferredDockedSize: { width: 230, height: 300 }, preferredFloatingSize: { width: 450, height: 400 }\n");
+  const lines = prepareStarter(dir, { framework: "react", runtime: "native" });
+  const main = fs.readFileSync(path.join(dir, "src", "main.tsx"), "utf8");
+  assert.match(main, /<sp-heading>/);
+  assert.match(main, /variant="cta"/);
+  assert.equal(/<sp-textfield[^>]*value=/.test(main), false);
+  const entry = fs.readFileSync(path.join(dir, "src", "index-react.tsx"), "utf8");
+  assert.match(entry, /panel\.css/);
+  assert.equal(/app\.css|index\.scss/.test(entry), false);
+  assert.match(fs.readFileSync(path.join(dir, "uxp.config.ts"), "utf8"), /width: 260, height: 360/);
+  assert.ok(lines.some((line) => /Spectrum shell/.test(line)));
+  assert.equal(prepareStarter(dir, { framework: "react", runtime: "native" }).some((line) => /Spectrum shell|260/.test(line)), false);
+  fs.writeFileSync(path.join(dir, "src", "main.tsx"), main.replace("Panel", "QR"));
+  prepareStarter(dir, { framework: "react", runtime: "native" });
+  assert.match(fs.readFileSync(path.join(dir, "src", "main.tsx"), "utf8"), /QR/);
+});
+
+test("a WebView host keeps the component that mounts the page", () => {
+  const dir = withTsc();
+  const host = "const webviewUI = import.meta.env.VITE_BOLT_WEBVIEW_UI === \"true\";\nexport const App = () => <main></main>;\n";
+  fs.writeFileSync(path.join(dir, "src", "main.tsx"), host);
+  prepareStarter(dir, { framework: "react", runtime: "webview" });
+  assert.equal(fs.readFileSync(path.join(dir, "src", "main.tsx"), "utf8"), host);
+});
+
 test("a Vue or Svelte starter gets no JSX types, and a tsconfig with comments is left alone", () => {
   const vue = withTsc();
   prepareStarter(vue, { framework: "vue" });
