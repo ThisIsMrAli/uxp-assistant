@@ -616,9 +616,9 @@ function turn(ask) {
 function textTurn(ask) {
   const k = `${ask.id}:${ask.nonce}`;
   const status = h("span", { class: "error", role: "alert" });
-  const input = h("input", { type: "text", id: `text-${k}`, maxlength: String(ask.maxLength || 500), autocomplete: "off" });
+  const input = h("input", { type: "text", id: `text-${k}`, maxlength: String(ask.maxLength || 500), autocomplete: "off", spellcheck: "false", placeholder: ask.placeholder || "Type your answer" });
   const submit = h("button", { class: "btn primary", type: "submit", text: "Confirm" });
-  const form = h("form", { onsubmit: async (event) => {
+  const form = h("form", { class: "text-answer", onsubmit: async (event) => {
     event.preventDefault();
     const value = input.value.trim();
     if (!value) {
