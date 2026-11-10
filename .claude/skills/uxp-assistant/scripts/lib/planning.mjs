@@ -218,6 +218,34 @@ const FEATURE_LABELS = {
   "feat-scope": { selected: "Change selected layers only.", all: "Change every layer." }
 };
 
+/**
+ * How to lay out the panel. These are UXP rules learned from real panels, not a copied design system.
+ * A native document cannot use the starter's demo CSS. A WebView page is a browser, but it still sits in the host.
+ */
+export function panelGuide(plan) {
+  const shared = [
+    "- One main action uses the strongest button. Other actions are secondary. Every field has a visible label. An error sits under that field, and a status line says what just happened.",
+    "- The result (preview, list, or image) is a square or a block with an explicit width and height. `height: auto` on a canvas collapses to a thin line. Set the canvas width and height to the same pixel size.",
+    "- Use the host colors (`--uxp-host-background-color`, `--uxp-host-text-color`, `--uxp-host-border-color`). Do not invent a separate brand palette. A QR or photo that must be white stays on a white well only.",
+    "- No emoji icons. Do not remove focus outlines."
+  ];
+  if (plan.runtime === "webview") {
+    return [
+      ...shared,
+      "- The WebView page is a browser, so normal CSS is fine there. Keep the layout dense: the result first, then the fields, then the button. At a wide size, put the fields beside the result.",
+      "- The host shell around the page stays UXP. Do not restyle it with the starter's demo CSS. Remote `fetch` still runs on the host."
+    ];
+  }
+  return [
+    ...shared,
+    "- Native UI is the host's Spectrum widgets: `sp-heading`, `sp-body`, `sp-divider`, `sp-textfield` or `sp-textarea`, and `sp-button`. One `variant=\"cta\"`. The rest are `secondary`.",
+    "- Do not pass `value` as a React prop on `sp-textfield`, `sp-textarea`, `sp-picker`, or `sp-menu-item`. Read `onInput` and set the attribute if you must.",
+    "- Delete the starter demo layout if it is still there: `src/app.css` and `src/index.scss` center the page, set a huge heading, and paint their own buttons. That layout is what makes a Spectrum panel look broken. The scaffold removes those demo rules. Do not bring them back.",
+    "- Lay the panel out with flex. No CSS grid, `gap`, or transitions. UXP does not paint them. At the panel's minimum size the controls stack. When the panel is wide, put the result beside the fields.",
+    "- Set `minimumSize` and `preferredFloatingSize` in `uxp.config.ts` so the layout has room."
+  ];
+}
+
 export function featureLines(plan) {
   const lines = [];
   for (const [id, value] of Object.entries(plan.features || {})) {

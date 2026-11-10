@@ -52,6 +52,42 @@ export function prepareStarter(project, { framework, runtime = "native" } = {}) 
     done.push("src/spectrum.d.ts: types for <sp-*> and <uxp-panel> in React.");
   }
   done.push(...installCompat(project));
+  done.push(...removeDemoLayout(project));
+  return done;
+}
+
+const HOST_RESET = `html, body, #app {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+  background-color: var(--uxp-host-background-color);
+  color: var(--uxp-host-text-color);
+}
+body { display: block; min-width: 0; min-height: 0; }
+#app { max-width: none; }
+`;
+
+/** The starter ships a Vite demo page: centered, huge type, its own buttons. That layout fights Spectrum. */
+function removeDemoLayout(project) {
+  const done = [];
+  const replacements = [
+    ["src/app.css", /place-items:\s*center|font-size:\s*3\.2em/],
+    ["webview-ui/src/app.css", /place-items:\s*center|font-size:\s*3\.2em/]
+  ];
+  for (const [rel, demo] of replacements) {
+    const file = path.join(project, rel);
+    if (!fs.existsSync(file) || !demo.test(fs.readFileSync(file, "utf8"))) continue;
+    fs.writeFileSync(file, HOST_RESET);
+    done.push(`${rel}: removed the starter demo layout.`);
+  }
+  const scss = path.join(project, "src", "index.scss");
+  if (fs.existsSync(scss) && /justify-content:\s*center/.test(fs.readFileSync(scss, "utf8"))) {
+    fs.writeFileSync(scss, "/* Panel layout belongs in the component CSS. */\n");
+    done.push("src/index.scss: removed the centered starter layout.");
+  }
   return done;
 }
 

@@ -7,7 +7,7 @@ import { applyAnswers, detectHost, folderIsEmpty, hostLabel, namedPermissions, s
 import { buildLibrary, findInLibrary, HOSTS, libraryFiles } from "./library.mjs";
 import { runPackage } from "./package-project.mjs";
 import { narrowRequiredPermissions } from "./permissions.mjs";
-import { applyPlanning, blockedGoalQuestion, blockedQuestion, buildWays, featureLines, hardBlocks } from "./planning.mjs";
+import { applyPlanning, blockedGoalQuestion, blockedQuestion, buildWays, featureLines, hardBlocks, panelGuide } from "./planning.mjs";
 import { patchReactBundles, prepareStarter } from "./starter.mjs";
 import { BOLT_FRAMEWORKS, findApp } from "./stack.mjs";
 import { typecheck } from "./typecheck.mjs";
@@ -493,7 +493,7 @@ export function writeBrief(out, plan, project) {
     "1. Read the files under \"Read first\", then the pages under \"Read when it applies\". They are Adobe's current pages, not memory.",
     "2. For every host API you are about to call, run `node scripts/skill.mjs find <words>` and read the hit. Copy names from the docs or from the types file; never guess one.",
     `3. Write the plugin in ${path.join(project, "src")}. Keep the starter's files and structure. Put logic that needs no host (math, parsing, encoding) in its own module, such as src/lib/<name>.ts, with <name>.test.ts beside it that imports it with the .ts extension. Add the script \`"test": "node --test \\"src/**/*.test.ts\\""\` to package.json (Node 22.18 or newer runs TypeScript directly).`,
-    "4. Make the panel good: a clear layout at the panel's minimum size, labels on every control, a visible result, and an error message the developer can act on. Follow the limits below.",
+    "4. Lay out the panel using the Panel UI section below. The starter's demo CSS is not the design. Follow the limits below.",
     "5. Run `node scripts/skill.mjs check`. It builds, packages, type checks the files you wrote, runs the tests, and reads the code against the docs. Fix everything it names and run it again until it says ok.",
     "6. When `check` says ok, run `node scripts/skill.mjs session next` and do what it says. The next step is the try card: the developer loads the plugin in the Adobe app and sends bugs. You do not end the session yourself.",
     "",
@@ -534,6 +534,7 @@ export function writeBrief(out, plan, project) {
     const ways = buildWays(plan);
     if (ways.length) lines.push("## Limits, and what to do instead", ...ways, "", "The full saved list is LIMITS.md. A limit that is not there, and not in the lines above, is not a limit.", "");
   }
+  lines.push("## Panel UI", ...panelGuide(plan), "");
   const decided = featureLines(plan);
   if (decided.length) lines.push("## What they chose", ...decided, "");
   lines.push(

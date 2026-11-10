@@ -91,6 +91,18 @@ test("the starter gets .ts imports and, for React, the Spectrum element types, o
   assert.deepEqual(prepareStarter(dir, { framework: "react" }), [], "a second run changes nothing");
 });
 
+test("the starter demo layout is removed so Spectrum is not covered by it", () => {
+  const dir = withTsc();
+  fs.writeFileSync(path.join(dir, "src", "app.css"), "h1 { font-size: 3.2em; }\nbody { display: flex; place-items: center; }\n");
+  fs.writeFileSync(path.join(dir, "src", "index.scss"), "main { justify-content: center; }\n");
+  const lines = prepareStarter(dir, { framework: "vue" });
+  assert.ok(lines.some((line) => /app\.css/.test(line)));
+  assert.ok(lines.some((line) => /index\.scss/.test(line)));
+  assert.equal(/3\.2em/.test(fs.readFileSync(path.join(dir, "src", "app.css"), "utf8")), false);
+  assert.equal(/justify-content:\s*center/.test(fs.readFileSync(path.join(dir, "src", "index.scss"), "utf8")), false);
+  assert.deepEqual(prepareStarter(dir, { framework: "vue" }).filter((line) => /demo|index\.scss/.test(line)), []);
+});
+
 test("a Vue or Svelte starter gets no JSX types, and a tsconfig with comments is left alone", () => {
   const vue = withTsc();
   prepareStarter(vue, { framework: "vue" });

@@ -5,7 +5,7 @@ description: >-
   Media Encoder, Illustrator, After Effects) from one sentence, or adds a feature
   to an existing plugin. It saves Adobe's current UXP and host API docs on this
   computer, reads the app, name, framework, and permissions from the request,
-  asks one confirm card, then scaffolds, writes, builds, packages, and checks the
+  asks only what the sentence left open, then one confirm card, then scaffolds, writes, builds, packages, and checks the
   plugin against the saved docs. Then the developer tries it in the Adobe app and
   sends bugs as words and screenshots; it fixes them and asks again until they say
   there are none. It runs to the end without stopping. Use when
@@ -71,7 +71,7 @@ An empty folder is the project. Files are written in that folder, not in a subfo
 - `docs/` holds every page Adobe lists for the app, as markdown. `docs/INDEX.md` lists them. `docs/LIMITS.md` is what UXP cannot do. A limit that is not there is not a limit; do not invent one.
 - Keep the starter's files. Write the plugin under `src/`. Put logic that needs no host (math, parsing, encoding) in its own module with a test, so it is checked without the app.
 - Declare the narrowest `requiredPermissions` the code needs, in `uxp.config.ts`. `check` fails when the code uses a picker, the network, or the clipboard without it.
-- Make the panel good: a clear layout at the panel's minimum size, a label on every control, a visible result, and an error message that says what to do.
+- Follow the Panel UI section in `BRIEF.md`. Native panels use the host's Spectrum widgets (`sp-heading`, `sp-body`, `sp-divider`, `sp-textfield` or `sp-textarea`, `sp-button`). Do not keep the starter's demo CSS: it centers the page and paints its own buttons. A canvas needs an explicit width and height in pixels. `height: auto` collapses it to a line. A WebView page may use normal CSS, still with one main button, a visible label, the error under the field, and a square preview. Use the host colors. Do not copy in a separate design system.
 - Report progress while you edit, so a dashboard user sees it: `node scripts/skill.mjs session step --id implement --status running --doing "Writing the encoder" --progress 2/6 --out <session>` (`2/6` is step 2 of your own six; pick any total).
 
 ## Check, fix, repeat
