@@ -22,7 +22,7 @@ export const LEAST_LOCAL_WEBVIEW = {
   allow: "yes",
   domains: [],
   allowLocalRendering: "yes",
-  enableMessageBridge: "no"
+  enableMessageBridge: "localOnly"
 };
 
 const CAPABILITY_KEYS = ["localFileSystem", "launchProcess", "clipboard", "network", "allowCodeGenerationFromStrings", "ipc"];
@@ -100,7 +100,7 @@ export function narrowRequiredPermissions(source, options = {}) {
   if (end < 0) return { ok: false, source: text, reason: "requiredPermissions is not a balanced object.", runtime, permissions: null };
   const kept = topLevelEntries(text, brace, end).filter((entry) => requested.has(entry.name) && entry.name !== "webview");
   const lines = [];
-  const bridge = options.bridge === "localOnly" ? "localOnly" : "no";
+  const bridge = options.bridge === "no" ? "no" : "localOnly";
   if (runtime === "webview") {
     lines.push(`webview: {
       allow: "yes",

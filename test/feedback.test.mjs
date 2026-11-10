@@ -33,8 +33,10 @@ async function checked(mode = "chat") {
   const ctx = { extensionPath, out, ...bins };
   await start({ ...ctx, input: temp(), kind: "empty", extra: { goal: QR } });
   await session(["mode", "--set", mode, "--out", out], ctx);
-  await session(["ask", "--id", "plan", "--out", out], ctx);
-  await session(["answer", "--id", "plan", "--value", "build", "--out", out], ctx);
+  for (const [id, value] of [["runtime", "native"], ["widgets", "spectrum"], ["design", "match"], ["feat-output", "both"], ["plan", "build"]]) {
+    await session(["ask", "--id", id, "--out", out], ctx);
+    await session(["answer", "--id", id, "--value", value, "--out", out], ctx);
+  }
   for (const step of ["docs", "build", "implement", "check"]) setStep(out, step, "done", "ok");
   fs.writeFileSync(path.join(out, "load.txt"), "Open UXP Developer Tool, choose Add Plugin, select /p/dist/manifest.json, then Load.\n");
   return { out, ctx };

@@ -30,14 +30,35 @@ export function detectFramework(goal) {
   return "react";
 }
 
-export function detectRuntime(goal) {
-  return /\bweb\s?view\b/i.test(String(goal || "")) ? "webview" : "native";
+/** Set only when the sentence says native or WebView. Empty means the question is still open. */
+export function statedRuntime(goal) {
+  const text = String(goal || "");
+  if (/\bweb\s?view\b/i.test(text)) return "webview";
+  if (/\bnative\b/i.test(text)) return "native";
+  return "";
+}
+
+/** Set only when the sentence says Spectrum or plain HTML. */
+export function statedWidgets(goal) {
+  const text = String(goal || "");
+  if (/\b(?:no|without|not)\s+spectrum\b|\bplain\s+(?:html|css)\b/i.test(text)) return "html";
+  if (/\bspectrum\b/i.test(text)) return "spectrum";
+  return "";
+}
+
+const EMPTY_IGNORE = new Set([".DS_Store", ".gitkeep", "Thumbs.db"]);
+
+/** True when the folder has nothing in it, or does not exist yet. */
+export function folderIsEmpty(dir) {
+  if (!dir || !fs.existsSync(dir)) return true;
+  return fs.readdirSync(dir).filter((name) => !EMPTY_IGNORE.has(name)).length === 0;
 }
 
 const ACRONYMS = new Set(["qr", "pdf", "svg", "png", "jpg", "jpeg", "gif", "url", "uri", "ai", "ui", "ux", "xml", "csv", "json", "api", "srt", "vtt", "lut", "xmp", "rgb", "cmyk", "hdr", "psd", "mp4", "mov", "gpu", "ocr", "id", "seo", "css", "html", "pdf417", "ean", "upc"]);
 const FILLER = new Set(["high", "quality", "good", "great", "best", "nice", "simple", "easy", "fast", "new", "custom", "beautiful", "awesome", "powerful", "professional", "really", "very", "some", "any", "my", "our", "all", "both", "every", "each", "a", "an", "the"]);
+const UI_WORDS = new Set(["native", "webview", "spectrum", "plugin", "panel", "uxp", "adobe", "png"]);
 const VERBS = new Set(["create", "generate", "make", "build", "show", "list", "display", "export", "import", "write", "add", "convert", "find", "manage", "edit", "produce", "render", "copy", "upload", "download", "rename", "sort", "resize", "crop", "apply", "fix", "clean", "extract", "search", "sync", "translate", "batch", "automate", "insert", "place", "replace", "remove", "delete", "check", "preview", "open", "save", "set", "get", "read", "scan", "detect", "split", "merge", "trim", "cut", "mark", "label", "tag", "organize", "arrange", "align", "duplicate", "swap"]);
-const CLAUSE = new Set(["with", "by", "using", "from", "for", "to", "that", "which", "so", "into", "via", "when", "where", "based", "in", "on", "at", "inside", "within", "across", "through", "between", "over", "and", "or", "then"]);
+const CLAUSE = new Set(["with", "by", "using", "from", "for", "to", "that", "which", "so", "into", "via", "when", "where", "based", "in", "on", "at", "of", "inside", "within", "across", "through", "between", "over", "and", "or", "then"]);
 
 function isVerb(word) {
   const lower = word.toLowerCase();
@@ -60,19 +81,32 @@ export function deriveName(goal) {
     purpose = /^(?:that|which|to|for)$/i.test(matched[1] || "") ;
   }
   text = text.replace(/^(?:to|that|which|for)\s+/i, () => { purpose = true; return ""; });
+  text = text.replace(/^(?:in|using|with)\s+(?:an?\s+)?(?:web\s?view|native(?:\s+uxp)?|spectrum)\s+(?:that|which|to)?\s*/i, () => { purpose = true; return ""; });
   let words = text.split(/[^A-Za-z0-9+#]+/).filter(Boolean);
   // "finds and replaces text": the verbs and the "and" between them are not part of the name.
   for (let first = true; words.length > 1; first = false) {
     const word = words[0].toLowerCase();
-    const strip = VERBS.has(word) || /^(?:and|or|then)$/.test(word) || (purpose && (isVerb(word) || (first && /^[a-z]+s$/i.test(word))));
+    const strip = isVerb(word) || /^(?:and|or|then)$/.test(word) || (purpose && first && /^[a-z]+s$/i.test(word));
     if (!strip) break;
     words.shift();
   }
   while (words.length > 1 && FILLER.has(words[0].toLowerCase())) words.shift();
   const cutAt = words.findIndex((word, index) => index > 0 && CLAUSE.has(word.toLowerCase()));
   const phrase = cutAt > 0 ? words.slice(0, cutAt) : words;
-  const kept = phrase.filter((word) => !FILLER.has(word.toLowerCase()));
-  const chosen = (kept.length ? kept : phrase).slice(0, 4);
+  const content = (list) => list.filter((word) => {
+    const lower = word.toLowerCase();
+    return !FILLER.has(lower) && !UI_WORDS.has(lower) && !CLAUSE.has(lower);
+  });
+  let chosen = content(phrase);
+  if (!chosen.length && cutAt > 0) {
+    const rest = words.slice(cutAt + 1);
+    while (rest.length > 1 && (isVerb(rest[0]) || FILLER.has(rest[0].toLowerCase()) || UI_WORDS.has(rest[0].toLowerCase()))) rest.shift();
+    chosen = content(rest);
+  }
+  if (!chosen.length) chosen = phrase.filter((word) => !UI_WORDS.has(word.toLowerCase()));
+  chosen = chosen.slice(0, 4);
+  const trailing = new Set(["save", "saves", "import", "imports", "create", "creates", "export", "exports", "make", "makes"]);
+  while (chosen.length > 1 && trailing.has(chosen.at(-1).toLowerCase())) chosen.pop();
   const trimmed = chosen.filter((word, index) => !(index === chosen.length - 1 && /^(?:a|an|the|of|to|in|on|for|and|or|with|that|which)$/i.test(word)));
   words = trimmed;
   if (!words.length) return "UXP Plugin";
@@ -109,10 +143,12 @@ export function makePlan({ goal, kind = "empty", input = "", project = "", flags
   const framework = facts?.framework || (BOLT_FRAMEWORKS.some((item) => item.id === flags.framework) ? flags.framework : detectFramework(text));
   const name = String(flags.name || facts?.name || deriveName(text)).trim();
   const id = String(flags.id || facts?.id || deriveId(name)).trim();
-  const runtime = flags.runtime === "webview" || flags.runtime === "native" ? flags.runtime : detectRuntime(text);
+  const runtime = flags.runtime === "webview" || flags.runtime === "native" ? flags.runtime : statedRuntime(text);
+  const widgets = flags.widgets === "spectrum" || flags.widgets === "html" ? flags.widgets : statedWidgets(text);
   const permissions = resolveRequestedPermissions("auto", text);
   return {
     goal: text,
+    description: goalIsDescribed(text) ? text : "",
     kind,
     input,
     project,
@@ -122,9 +158,21 @@ export function makePlan({ goal, kind = "empty", input = "", project = "", flags
     name,
     id,
     runtime,
+    widgets,
+    design: typeof flags.design === "string" ? flags.design : "",
+    features: {},
+    inPlace: kind !== "existing" && folderIsEmpty(input),
     permissions,
     context: "panel"
   };
+}
+
+function goalIsDescribed(text) {
+  return !nameIsGeneric(deriveName(text));
+}
+
+function nameIsGeneric(name) {
+  return /^(?:uxp plugin|plugin|panel|me plugin|extension|tool)$/i.test(String(name || "").trim());
 }
 
 function normalizeHost(value) {

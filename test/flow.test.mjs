@@ -6,6 +6,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { runFeedback } from "../.claude/skills/uxp-assistant/scripts/lib/feedback.mjs";
 import { projectPath, resolvePlan, runBuild, runCheck, runDocs, writeBrief } from "../.claude/skills/uxp-assistant/scripts/lib/flow.mjs";
+import { makePlan } from "../.claude/skills/uxp-assistant/scripts/lib/intent.mjs";
 import { nextAction } from "../.claude/skills/uxp-assistant/scripts/runtime/lib/next.mjs";
 import { finish, readMerged } from "../.claude/skills/uxp-assistant/scripts/runtime/lib/session.mjs";
 import { session, start } from "../.claude/skills/uxp-assistant/scripts/runtime/api.mjs";
@@ -38,9 +39,26 @@ async function answer(ctx, id, value) {
   await session(["answer", "--id", id, "--value", value, "--out", ctx.out], ctx);
 }
 
+/** Answer the planning questions with the recommended option, then the confirm card. */
+async function confirm(ctx, choice = "build") {
+  for (let i = 0; i < 10; i += 1) {
+    const action = nextAction(ctx.out);
+    if (action.action !== "ask" && action.action !== "ask-in-chat") return action;
+    if (action.ask === "plan") {
+      await answer(ctx, "plan", choice);
+      return nextAction(ctx.out);
+    }
+    const questions = JSON.parse(fs.readFileSync(path.join(ctx.out, "questions.json"), "utf8"));
+    const question = questions.find((item) => item.id === action.ask);
+    const value = question?.input === "text" ? "A useful panel." : question.options[0].id;
+    await answer(ctx, action.ask, value);
+  }
+  throw new Error("the confirm card never arrived");
+}
+
 /** A stand-in for create-bolt-uxp: the files the starter writes that the flow reads. */
 async function scaffoldImpl(parent, plan) {
-  const dir = path.join(parent, path.basename(projectPath(plan)));
+  const dir = plan.inPlace ? parent : path.join(parent, path.basename(projectPath(plan)));
   fs.mkdirSync(path.join(dir, "src"), { recursive: true });
   fs.writeFileSync(path.join(dir, "uxp.config.ts"), `export const id = "${plan.id}";\nconst manifest = {\n  manifestVersion: 5,\n  requiredPermissions: {\n    localFileSystem: "fullAccess",\n    network: { domains: ["ws://localhost:8080"] },\n    clipboard: "readAndWrite",\n    webview: { allow: "yes", domains: "all" },\n  },\n};\n`);
   fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ scripts: { build: "vite build", ccx: "vite build" } }));
@@ -72,9 +90,9 @@ test("the plan is read from the request and written to the session, so no later 
   const plan = JSON.parse(fs.readFileSync(path.join(out, "plan.json"), "utf8"));
   assert.equal(plan.host, "ppro");
   assert.equal(plan.name, "QR Codes");
-  assert.equal(projectPath(plan), path.join(work, "qr-codes"));
+  assert.equal(projectPath(plan), work, "an empty folder is the project");
   const questions = JSON.parse(fs.readFileSync(path.join(out, "questions.json"), "utf8")).map((item) => item.id);
-  assert.deepEqual(questions, ["mode", "plan", "tweak"], "no goal, host, name, framework, or permission question");
+  assert.deepEqual(questions, ["mode", "runtime", "widgets", "design", "designNote", "feat-output", "plan", "tweak"]);
   const card = JSON.parse(fs.readFileSync(path.join(out, "questions.json"), "utf8")).find((item) => item.id === "plan");
   assert.match(card.prompt, /Premiere Pro panel "QR Codes"/);
   assert.deepEqual(card.options.map((item) => item.id), ["build", "change", "stop"]);
@@ -84,10 +102,12 @@ test("the plan is read from the request and written to the session, so no later 
 test("a request that names no Adobe app gets one host question first, then the plan", async () => {
   const { out, ctx } = await begin("create a plugin that shows the document title");
   const questions = JSON.parse(fs.readFileSync(path.join(out, "questions.json"), "utf8")).map((item) => item.id);
-  assert.deepEqual(questions, ["mode", "host", "plan", "tweak"]);
+  assert.equal(questions[0], "mode");
+  assert.ok(questions.includes("host"));
+  assert.ok(questions.includes("runtime"));
   assert.equal(nextAction(out).ask, "host");
   await answer(ctx, "host", "phxs");
-  assert.equal(nextAction(out).ask, "plan");
+  assert.equal(nextAction(out).ask, "runtime");
   assert.equal(resolvePlan(out).host, "phxs");
 });
 
@@ -100,7 +120,9 @@ test("next walks mode, plan, docs, build, implement, check, finish with no other
     return action;
   };
   assert.equal(step().action, "ask");
-  await answer(ctx, "plan", "build");
+  const after = await confirm(ctx);
+  assert.equal(after.action, "docs");
+  seen.push("docs");
   assert.equal(step().action, "docs");
   assert.match(nextAction(out).command, /skill\.mjs docs --out /);
   await runDocs(out, { fetchImpl: fakeAdobe().fetchImpl });
@@ -110,12 +132,12 @@ test("next walks mode, plan, docs, build, implement, check, finish with no other
   assert.equal(implement.action, "implement");
   assert.match(implement.say, /BRIEF\.md/);
   assert.equal(readMerged(out).steps.find((item) => item.id === "implement").status, "running");
-  assert.deepEqual(seen, ["ask", "docs", "build", "implement"]);
+  assert.deepEqual(seen, ["ask", "docs", "docs", "build", "implement"]);
 });
 
 test("choosing Change something asks one text question, and the words change the plan", async () => {
   const { out, ctx } = await begin();
-  await answer(ctx, "plan", "change");
+  await confirm(ctx, "change");
   assert.equal(nextAction(out).ask, "tweak");
   await answer(ctx, "tweak", "use Photoshop, name it Fast QR, use Vue and needs network");
   const plan = resolvePlan(out);
@@ -130,7 +152,7 @@ test("choosing Change something asks one text question, and the words change the
 
 test("choosing Stop ends the session without docs, and done accepts it", async () => {
   const { out, ctx } = await begin();
-  await answer(ctx, "plan", "stop");
+  await confirm(ctx, "stop");
   const action = nextAction(out);
   assert.equal(action.action, "stop");
   assert.match(action.command, /done --stopped/);
@@ -174,7 +196,7 @@ test("build narrows the starter's broad permissions to the request and writes th
   await runDocs(out, { fetchImpl: fakeAdobe().fetchImpl });
   const built = await runBuild(out, { scaffoldImpl, installImpl });
   assert.equal(built.ok, true);
-  assert.equal(built.project, path.join(work, "qr-codes"));
+  assert.equal(built.project, work);
   const config = fs.readFileSync(path.join(built.project, "uxp.config.ts"), "utf8");
   assert.match(config, /requiredPermissions: \{\}/);
   assert.equal(/fullAccess|clipboard|webview/.test(config), false);
@@ -202,7 +224,7 @@ test("a request that names the clipboard keeps the clipboard key and nothing els
 
 test("check refuses the starter, lists errors with fixes, then passes once the code is right", async () => {
   const { out, ctx } = await begin();
-  await answer(ctx, "plan", "build");
+  await confirm(ctx);
   await runDocs(out, { fetchImpl: fakeAdobe().fetchImpl });
   const built = await runBuild(out, { scaffoldImpl, installImpl });
   const pack = runner(built.project);
@@ -258,7 +280,8 @@ test("the brief points at pages that match the goal and not a page that only sha
   const brief = fs.readFileSync(writeBrief(out, resolvePlan(out), built.project), "utf8");
   assert.match(brief, /drawing and writing an image/);
   assert.match(brief, /html-canvas-element\.md/);
-  assert.match(brief, /CSS transitions and animations are not supported|Canvas: UXP HTMLCanvasElement supports only basic shapes/);
+  assert.match(brief, /use flex/);
+  assert.match(brief, /no `toDataURL` or `toBlob`/);
 });
 
 test("check runs the project's TypeScript and reports errors in the files the assistant wrote, not the starter's", async () => {
@@ -292,7 +315,9 @@ test("the brief gives paths inside the docs folder, lists what the starter provi
   assert.match(brief, /## What the starter already gives you/);
   assert.match(brief, /`uxp\.storage` .* typed\. Call them directly/);
   assert.match(brief, /const app = require\("premierepro"\)/);
-  assert.match(brief, /document no toDataURL, toBlob, or getImageData/);
+  assert.match(brief, /no `toDataURL` or `toBlob`/);
+  assert.match(brief, /## Packages/);
+  assert.match(brief, /qrcode/);
   assert.match(brief, /In panel code, import without the extension/);
   assert.match(brief, /type checks the files you wrote/);
   assert.match(brief, /try card|session next/);
@@ -317,4 +342,32 @@ test("a wrong host API is reported once, not again as a type error on the same l
   const result = await runCheck(out, { runner: runner(built.project), typecheckImpl: () => ({ status: 2, stdout: output, stderr: "" }) });
   assert.deepEqual(result.errors.map((line) => line.match(/\[([a-z-]+)\]/)[1]), ["api-unknown", "type-error"]);
   assert.match(result.errors[1], /main\.tsx:3 /);
+});
+
+test("a folder that already has files keeps a named subfolder", () => {
+  const dir = temp();
+  fs.writeFileSync(path.join(dir, "notes.txt"), "keep");
+  const plan = makePlan({ goal: QR, kind: "empty", input: dir });
+  assert.equal(plan.inPlace, false);
+  assert.equal(projectPath(plan), path.join(dir, "qr-codes"));
+});
+
+test("a thin request asks for the goal, the name, and a description before the confirm card", async () => {
+  const { out } = await begin("make me a plugin");
+  const ids = JSON.parse(fs.readFileSync(path.join(out, "questions.json"), "utf8")).map((item) => item.id);
+  assert.ok(ids.indexOf("goal") < ids.indexOf("plan"));
+  assert.ok(ids.includes("name"));
+  assert.ok(ids.includes("description"));
+  assert.ok(ids.includes("runtime"));
+  assert.equal(nextAction(out).ask, "host");
+});
+
+test("a goal UXP cannot do stops the scaffold and asks to change it or stop", async () => {
+  const { out } = await begin("a premiere panel that renders a webgl scene");
+  await runDocs(out, { fetchImpl: fakeAdobe().fetchImpl });
+  const blocked = await runBuild(out, { scaffoldImpl, installImpl });
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.ask.id, "blocked");
+  assert.match(blocked.ask.prompt, /WebGL/);
+  assert.equal(fs.existsSync(path.join(projectPath(resolvePlan(out)), "uxp.config.ts")), false);
 });

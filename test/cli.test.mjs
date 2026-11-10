@@ -33,11 +33,11 @@ test("start needs the developer's words", async () => {
 test("start in chat mode names the plan question, not the mode question, and the plan card says what was read", async () => {
   const out = path.join(temp(), "s");
   const started = await run(["start", "--goal", QR, "--empty", temp(), "--mode", "chat", "--out", out]);
-  assert.equal(started.asked, "plan");
+  assert.equal(started.asked, "runtime");
   assert.equal(started.plan.host, "ppro");
   assert.equal(started.plan.name, "QR Codes");
   assert.match(started.card, /Premiere Pro panel "QR Codes"/);
-  assert.match(started.next, /ask --id plan/);
+  assert.match(started.next, /ask --id runtime/);
   assert.match(started.next, /AskQuestion/);
   assert.match(started.neverStop, /session next/);
 });
@@ -45,7 +45,7 @@ test("start in chat mode names the plan question, not the mode question, and the
 test("start --yes picks chat, answers the plan card with Build it, and goes straight to the docs", async () => {
   const out = path.join(temp(), "s");
   const started = await run(["start", "--goal", QR, "--empty", temp(), "--yes", "--out", out]);
-  assert.deepEqual(started.autoAnswered, ["mode=chat", "plan=build"]);
+  assert.deepEqual(started.autoAnswered, ["mode=chat", "runtime=native", "widgets=spectrum", "design=match", "feat-output=both", "plan=build"]);
   assert.equal(started.asked, null);
   assert.match(started.command, /skill\.mjs docs --out /);
   assert.equal(readMerged(out).mode, "chat");
@@ -55,7 +55,9 @@ test("start --yes picks chat, answers the plan card with Build it, and goes stra
 test("start --yes still asks for the Adobe app when the request names none", async () => {
   const out = path.join(temp(), "s");
   const started = await run(["start", "--goal", "create a plugin that shows the document title", "--empty", temp(), "--yes", "--out", out]);
-  assert.deepEqual(started.autoAnswered, ["mode=chat"]);
+  assert.ok(started.autoAnswered.includes("mode=chat"));
+  assert.ok(started.autoAnswered.includes("runtime=native"));
+  assert.equal(started.autoAnswered.includes("plan=build"), false);
   assert.equal(started.asked, "host");
 });
 
@@ -88,6 +90,7 @@ test("the implement line says how to run check for this session, and the closing
   // The build itself is covered in flow.test.mjs. Here the project exists, so build only reads and writes the brief.
   const plan = JSON.parse(fs.readFileSync(path.join(out, "plan.json"), "utf8"));
   plan.input = scaffold;
+  plan.inPlace = false;
   fs.writeFileSync(path.join(out, "plan.json"), JSON.stringify(plan));
   const project = path.join(scaffold, "qr-codes");
   fs.mkdirSync(path.join(project, "src"), { recursive: true });

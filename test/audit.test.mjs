@@ -132,6 +132,32 @@ test("a built manifest with no entrypoint, or a missing main file, is an error",
   assert.ok(ids.includes("manifest-main"));
 });
 
+test("a bundle that calls require$$ is the blank-panel crash", () => {
+  const { dir, baseline } = project({ main: "export const x = 1;\n" });
+  fs.mkdirSync(path.join(dir, "dist", "assets"), { recursive: true });
+  fs.writeFileSync(path.join(dir, "dist", "assets", "index.js"), "})(require$$1);\n");
+  const hit = auditProject({ project: dir, plan, baseline }).findings.find((item) => item.id === "bundle-require");
+  assert.ok(hit);
+  assert.match(hit.text, /require\$\$1 is not defined/);
+});
+
+test("a native panel whose first script is not uxp-compat.js fails the check", () => {
+  const { dir, baseline } = project({ main: "export const x = 1;\n" });
+  fs.writeFileSync(path.join(dir, "index.html"), "<script type=\"module\" src=\"/src/main.tsx\"></script>\n");
+  fs.writeFileSync(path.join(dir, "vite.config.ts"), "export default { build: { sourcemap: false } };\n");
+  const ids = auditProject({ project: dir, plan, baseline }).findings.map((item) => item.id);
+  assert.ok(ids.includes("compat-script"));
+  assert.ok(ids.includes("modulepreload"));
+});
+
+test("a WebView host is still a UXP document, so it needs the same guard", () => {
+  const { dir, baseline } = project({ main: "export const x = 1;\n" });
+  fs.writeFileSync(path.join(dir, "index.html"), "<script type=\"module\" src=\"/src/main.tsx\"></script>\n");
+  const ids = auditProject({ project: dir, plan: { host: "ppro", runtime: "webview", permissions: [] }, baseline }).findings.map((item) => item.id);
+  assert.ok(ids.includes("compat-script"));
+  assert.ok(ids.includes("compat-text-encoder"));
+});
+
 test("no test script is a warning, not an error", () => {
   const { dir, baseline } = project({ main: "export const x = 1;\n" });
   fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ scripts: { build: "x" } }));

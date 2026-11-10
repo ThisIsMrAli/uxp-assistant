@@ -18,7 +18,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { docsDir, planSummary, resolvePlan, runBuild, runCheck, runDocs } from "./lib/flow.mjs";
+import { docsDir, planSummary, projectPath, resolvePlan, runBuild, runCheck, runDocs } from "./lib/flow.mjs";
 import { runFeedback } from "./lib/feedback.mjs";
 import { findInLibrary, hostKey } from "./lib/library.mjs";
 import * as api from "./runtime/api.mjs";
@@ -69,7 +69,14 @@ export async function run(argv) {
   if (command === "build") {
     const out = outFor(args);
     applyEnv();
-    return withNext(out, await runBuild(out, { overrides: overrides(args) }));
+    const built = await runBuild(out, { overrides: overrides(args) });
+    if (built.ask) {
+      const file = path.join(out, `${built.ask.id}-ask.json`);
+      fs.writeFileSync(file, `${JSON.stringify(built.ask, null, 2)}\n`);
+      await api.session(["ask", "--id", built.ask.id, "--definition", file, "--out", out], { ...bins, out });
+      return withNext(out, { ok: false, blocked: built.blocked, error: built.error || built.blocked.join(" ") });
+    }
+    return withNext(out, built);
   }
   if (command === "check") {
     const out = outFor(args);
@@ -140,20 +147,26 @@ async function start(args) {
     auto.push("mode=chat");
     // Nobody is there to load it in the Adobe app, so the try step has no one to ask.
     setStep(out, "try", "skipped", "Not asked: this run had no one to try it");
-    if (plan.host) {
-      await api.session(["ask", "--id", "plan", "--out", out], { ...bins, out });
-      await api.session(["answer", "--id", "plan", "--value", "build", "--out", out], { ...bins, out });
-      auto.push("plan=build");
+    const questions = JSON.parse(fs.readFileSync(path.join(out, "questions.json"), "utf8"));
+    for (const question of questions) {
+      if (question.id === "mode" || question.id === "tweak" || question.id === "host" || question.when) continue;
+      const value = assumedAnswer(question, goal, resolvePlan(out));
+      if (!value) continue;
+      if (question.id === "plan" && !resolvePlan(out).host) continue;
+      await api.session(["ask", "--id", question.id, "--out", out], { ...bins, out });
+      await api.session(["answer", "--id", question.id, "--value", value, "--out", out], { ...bins, out });
+      auto.push(`${question.id}=${value}`);
     }
   }
   const action = nextAction(out, { dashboardUp: dashboardUp(out) });
+  const settled = resolvePlan(out);
   return {
     ...result,
     asked: action.ask || null,
-    ...(auto.length ? { autoAnswered: auto } : {}),
+    ...(auto.length ? { autoAnswered: auto, assumptions: `${settled.runtime === "webview" ? "WebView" : "Native UXP"}, Spectrum, and a host-matching look were chosen because nobody was there to answer.` } : {}),
     out,
-    plan: { host: plan.host || "(ask)", name: plan.name, id: plan.id, framework: plan.framework, permissions: plan.permissions, folder: plan.kind === "existing" ? plan.project : path.join(plan.input, slugName(plan.name)) },
-    card: planSummary(plan),
+    plan: { host: settled.host || "(ask)", name: settled.name, id: settled.id, framework: settled.framework, runtime: settled.runtime || "(ask)", widgets: settled.widgets || "(ask)", permissions: settled.permissions, folder: settled.kind === "existing" ? settled.project : projectPath(settled) },
+    card: planSummary(settled),
     next: action.say,
     ...(action.command ? { command: action.command } : {}),
     neverStop: "A session ends only at done. Keep running `session next` and do what it says until it says finished."
@@ -212,8 +225,14 @@ function slug(text) {
   return String(text).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32) || "session";
 }
 
-function slugName(name) {
-  return slug(name);
+function assumedAnswer(question, goal, plan) {
+  if (question.id === "plan") return "build";
+  if (question.id === "runtime") return "native";
+  if (question.id === "widgets") return "spectrum";
+  if (question.id === "design") return "match";
+  if (question.id === "name") return plan.name && plan.name !== "UXP Plugin" ? plan.name : "Plugin";
+  if (question.input === "text") return String(goal || "").trim() || "UXP Plugin";
+  return question.options?.[0]?.id || "";
 }
 
 function stamp() {

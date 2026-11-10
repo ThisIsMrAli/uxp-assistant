@@ -3,11 +3,12 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { auditProject, authoredFiles, changedSinceBaseline, snapshotSource, testFiles } from "./audit.mjs";
-import { applyAnswers, detectHost, hostLabel, namedPermissions, slugify } from "./intent.mjs";
+import { applyAnswers, detectHost, folderIsEmpty, hostLabel, namedPermissions, slugify } from "./intent.mjs";
 import { buildLibrary, findInLibrary, HOSTS, libraryFiles } from "./library.mjs";
 import { runPackage } from "./package-project.mjs";
 import { narrowRequiredPermissions } from "./permissions.mjs";
-import { prepareStarter } from "./starter.mjs";
+import { applyPlanning, blockedGoalQuestion, blockedQuestion, buildWays, featureLines, hardBlocks } from "./planning.mjs";
+import { patchReactBundles, prepareStarter } from "./starter.mjs";
 import { BOLT_FRAMEWORKS, findApp } from "./stack.mjs";
 import { typecheck } from "./typecheck.mjs";
 import { addNote, mutate, readMerged, recordDocs, setNoteStatus, setStep } from "../runtime/lib/session.mjs";
@@ -75,12 +76,16 @@ export function resolvePlan(out, overrides = {}) {
   if (!base) throw new Error(`No plan in ${out}. Run start first.`);
   const answers = answersOf(out);
   let plan = { ...base };
+  plan = applyPlanning(plan, answers);
   if (answers.host) plan = applyAnswers(plan, { host: answers.host });
   if (answers.tweak && plan.tweakApplied !== answers.tweak) {
     const changes = parseTweak(answers.tweak, plan);
     const { folder, ...fields } = changes;
     plan = applyAnswers(plan, fields);
-    if (folder && plan.kind === "empty") plan.input = folder;
+    if (folder && plan.kind === "empty") {
+    plan.input = folder;
+    plan.inPlace = folderIsEmpty(folder);
+  }
     if (fields.name && !fields.id) plan.id = `com.example.${slugify(fields.name).replace(/-/g, "")}`;
     plan.tweakApplied = answers.tweak;
   }
@@ -96,6 +101,7 @@ export function resolvePlan(out, overrides = {}) {
 
 export function projectPath(plan) {
   if (plan.kind === "existing") return plan.project || plan.input;
+  if (plan.inPlace) return plan.input;
   return path.join(plan.input, slugify(plan.name));
 }
 
@@ -103,13 +109,19 @@ export function planSummary(plan) {
   const permissions = plan.permissions.length
     ? plan.permissions.join(", ")
     : "none named in the request. The starter's broad access is removed; add one only when the code needs it.";
+  const ui = plan.runtime === "webview" ? "WebView" : plan.runtime === "native" ? "Native UXP" : "not chosen yet";
+  const widgets = plan.widgets === "html" ? "plain HTML" : plan.widgets === "spectrum" ? "Spectrum" : "not chosen yet";
   return [
     `${hostLabel(plan.host)} panel "${plan.name}"`,
     `Goal: ${plan.goal}`,
+    plan.description && plan.description !== plan.goal ? `Description: ${plan.description}` : "",
     `Plugin id: ${plan.id}`,
     plan.kind === "existing" ? `Project: ${plan.project || plan.input} (your existing plugin)` : `Stack: ${stackLabel(plan)}`,
+    `UI: ${ui}. Controls: ${widgets}.`,
+    plan.design ? `Look: ${plan.design}` : "",
+    ...featureLines(plan),
     `Permissions: ${permissions}`,
-    plan.kind === "existing" ? "" : `Folder: ${projectPath(plan)}`,
+    plan.kind === "existing" ? "" : `Folder: ${projectPath(plan)}${plan.inPlace ? " (this folder, not a subfolder)" : ""}`,
     `Steps after you confirm: save Adobe's current ${hostLabel(plan.host)} docs, ${plan.kind === "existing" ? "read the project" : "scaffold the project"}, write the plugin, build and package it.`
   ].filter(Boolean).join("\n");
 }
@@ -195,6 +207,46 @@ async function quiet(work) {
   }
 }
 
+/** Where create-bolt-uxp writes. An empty folder gets a temp child that is then moved up. */
+function scaffoldPlace(plan) {
+  if (!plan.inPlace) return { parent: plan.input, folderName: slugify(plan.name), hoist: false };
+  return { parent: projectPath(plan), folderName: ".uxp-scaffold", hoist: true };
+}
+
+function hoistScaffold(from, dest) {
+  if (!fs.existsSync(from)) return;
+  for (const name of fs.readdirSync(from)) {
+    const target = path.join(dest, name);
+    if (fs.existsSync(target)) throw new Error(`${target} already exists, so the scaffold was not moved up.`);
+    fs.renameSync(path.join(from, name), target);
+  }
+  fs.rmdirSync(from);
+}
+
+/** A goal UXP cannot build. Returns a result for the command, or null to continue. */
+function unsupported(out, plan) {
+  const hits = hardBlocks(plan);
+  if (!hits.length) return null;
+  const answers = answersOf(out);
+  if (answers.blocked === "stop") {
+    return { ok: false, blocked: hits, next: "The user chose to stop. Run session done --stopped and tell them nothing was built." };
+  }
+  if (!answers.blocked) return { ok: false, blocked: hits, ask: blockedQuestion(hits) };
+  if (answers.blocked === "change" && !String(answers.blockedGoal || "").trim()) {
+    return { ok: false, blocked: hits, ask: blockedGoalQuestion() };
+  }
+  const still = hardBlocks({ ...plan, goal: answers.blockedGoal || plan.goal });
+  if (still.length) {
+    return {
+      ok: false,
+      blocked: still,
+      error: "The new goal is still not supported.",
+      next: `Still not supported: ${still.join(" ")} Stop with session done --stopped, or change the goal to something UXP can do and run build again.`
+    };
+  }
+  return null;
+}
+
 function run(command, args, options) {
   const env = { ...process.env };
   for (const key of Object.keys(env)) if (key === "NODE_CHANNEL_FD" || key.startsWith("NODE_TEST_")) delete env[key];
@@ -213,6 +265,8 @@ export async function runBuild(out, { overrides = {}, scaffoldImpl, installImpl,
     setStep(out, "build", "running", undefined, { doing: text, silent: true });
     if (typeof onActivity === "function") onActivity(text);
   };
+  const blocked = unsupported(out, plan);
+  if (blocked) return blocked;
   setStep(out, "build", "running", plan.kind === "existing" ? "Reading the project" : "Creating the project", { doing: "Starting" });
   const project = projectPath(plan);
   const steps = [];
@@ -227,12 +281,13 @@ export async function runBuild(out, { overrides = {}, scaffoldImpl, installImpl,
     if (fs.existsSync(path.join(project, "uxp.config.ts"))) {
       steps.push("The project was already created. It was kept.");
     } else {
-      fs.mkdirSync(plan.input, { recursive: true });
+      const place = scaffoldPlace(plan);
+      fs.mkdirSync(place.parent, { recursive: true });
       activity("Creating the project with create-bolt-uxp (the first run installs it, about 20 seconds)");
       const scaffold = await quiet(async () => (scaffoldImpl
-        ? scaffoldImpl(plan.input, plan)
-        : (await import("./scaffold.mjs")).scaffoldWithInstaller(plan.input, {
-          folderName: slugify(plan.name),
+        ? scaffoldImpl(place.parent, plan)
+        : (await import("./scaffold.mjs")).scaffoldWithInstaller(place.parent, {
+          folderName: place.folderName,
           displayName: plan.name,
           id: plan.id,
           framework: plan.framework,
@@ -242,7 +297,8 @@ export async function runBuild(out, { overrides = {}, scaffoldImpl, installImpl,
           hybrid: false,
           onActivity: activity
         })));
-      steps.push(`Created ${scaffold.folder || project}.`);
+      if (place.hoist) hoistScaffold(path.join(place.parent, place.folderName), place.parent);
+      steps.push(`Created ${scaffold.folder && !place.hoist ? scaffold.folder : project}.`);
       const config = path.join(project, "uxp.config.ts");
       const narrowed = narrowRequiredPermissions(fs.readFileSync(config, "utf8"), { runtime: plan.runtime, requested: plan.permissions });
       if (narrowed.ok) {
@@ -250,7 +306,7 @@ export async function runBuild(out, { overrides = {}, scaffoldImpl, installImpl,
         steps.push(`Narrowed requiredPermissions to ${narrowed.kept.length ? narrowed.kept.join(", ") : "none"} (the starter asks for full file access, network, clipboard, and a WebView).`);
       }
     }
-    steps.push(...prepareStarter(project, { framework: plan.framework }));
+    steps.push(...prepareStarter(project, { framework: plan.framework, runtime: plan.runtime || "native" }));
     if (!fs.existsSync(path.join(project, "node_modules"))) {
       activity("Installing the project's dependencies");
       const install = installImpl
@@ -267,6 +323,24 @@ export async function runBuild(out, { overrides = {}, scaffoldImpl, installImpl,
         };
       }
       steps.push("Installed dependencies.");
+    }
+    const webviewUi = path.join(project, "webview-ui");
+    if (fs.existsSync(path.join(webviewUi, "package.json")) && !fs.existsSync(path.join(webviewUi, "node_modules"))) {
+      activity("Installing the WebView UI dependencies");
+      const uiInstall = installImpl
+        ? installImpl(webviewUi)
+        : run(process.platform === "win32" ? "npm.cmd" : "npm", ["install", "--no-fund", "--no-audit"], { cwd: webviewUi, timeout: 10 * 60 * 1000 });
+      if (uiInstall.status !== 0) {
+        setStep(out, "build", "pending", "The WebView UI install failed.");
+        return {
+          ok: false,
+          project,
+          error: `npm install in webview-ui failed (${uiInstall.status}).`,
+          output: `${uiInstall.stdout || ""}\n${uiInstall.stderr || ""}`.trim().slice(-1200),
+          next: `Fix the error above, then run node scripts/skill.mjs build again. The project in ${project} is kept.`
+        };
+      }
+      steps.push("Installed the WebView UI dependencies.");
     }
     if (!installImpl) {
       activity("Building the empty starter to prove the toolchain works");
@@ -402,7 +476,6 @@ export function writeBrief(out, plan, project) {
   const lib = docsDir(out);
   const have = fs.existsSync(path.join(lib, "library.json"));
   const label = hostLabel(plan.host);
-  const goalText = `${plan.goal} ${plan.name}`;
   const fresh = plan.kind !== "existing";
   const lines = [
     `# Brief: ${plan.name} (${label})`,
@@ -436,6 +509,8 @@ export function writeBrief(out, plan, project) {
       "- `uxp.storage` (`localFileSystem`, `formats`) and `uxp.shell` are typed. Call them directly, as Adobe's samples do; no cast is needed.",
       "- The panel's `minimumSize` and `preferredDockedSize` are in `uxp.config.ts`. The starter's are small (about 230 x 200). Change them to fit your layout.",
       "- The host objects come from `src/globals.ts` (`uxp`, `premierepro`, `photoshop`, ...). Import them from there.",
+      "- `src/uxp-guard.js` is imported first. It defines TextEncoder and TextDecoder, which UXP does not have. Vite `modulePreload` is false. Do not remove either.",
+      plan.runtime === "webview" ? "- The page inside the WebView can use browser APIs. Remote `fetch` from that page is still blocked; do it on the host. The host document still loads the guard." : "",
       plan.host === "phxs" ? "- Photoshop has no saved types file. TypeScript checks your calls against `node_modules/@types/photoshop` in the project; grep it for a name or a signature (the `check` line `types` covers the files you wrote)." : "",
       plan.host === "ppro" ? "- Adobe's samples write `const app = require(\"premierepro\")`. Here the same object is `premierepro`, imported from `src/globals.ts`. It is typed by the `@adobe/premierepro` package, and `check` also compares every `premierepro.X.Y` name to the saved types file." : "",
       ""
@@ -456,9 +531,16 @@ export function writeBrief(out, plan, project) {
     if (topics.length) lines.push("## Read when it applies to this goal", ...topics.map((row) => row), "");
     const core = (HOSTS[plan.host]?.core || []).map((id) => add(`pages/${id}.md`, CORE_WHY[id] || "reference")).filter(Boolean);
     if (core.length) lines.push("## Look up when you need it (long; search them, do not read them whole)", ...core, "");
-    const bullets = limitBullets(lib, goalText);
-    if (bullets.length) lines.push("## Limits that decide how you build (Adobe's pages, saved)", ...bullets, "");
+    const ways = buildWays(plan);
+    if (ways.length) lines.push("## Limits, and what to do instead", ...ways, "", "The full saved list is LIMITS.md. A limit that is not there, and not in the lines above, is not a limit.", "");
   }
+  const decided = featureLines(plan);
+  if (decided.length) lines.push("## What they chose", ...decided, "");
+  lines.push(
+    "## Packages",
+    "If the feature is a solved problem (QR codes, CSV, dates, color math), install a pure JavaScript package. Do not import `qrcode/lib/server.js` or Node's `fs` into the panel. The starter marks `fs` external, so the bundle ends in `require$$1`, UXP throws \"require$$1 is not defined\", and the panel stays blank. Use `qrcode/lib/core/qrcode.js` and render the modules with no `fs`. The package must not need WebGL.",
+    ""
+  );
   lines.push(
     "## Finish line",
     "`check` says ok, then run `node scripts/skill.mjs session next` and do what it says. That is the try card (`feedback`): the developer loads the plugin in the Adobe app and sends bugs, or says there are no more bugs. Only after they choose \"No more bugs\" (or you run `feedback --skip` because nobody is there) do you run `session done --summary \"...\"`. The summary says what was built, where it is, and how to load it. After \"No more bugs\" say they tried it and chose that; with `--skip` or `--yes` say it was built and packaged but not run in the Adobe app, because nothing here can open the app.",
@@ -523,6 +605,7 @@ export async function runCheck(out, { runner, typecheckImpl, overrides = {} } = 
     }
   }
 
+  if (plan.runtime !== "webview" && pack.status !== "failed") patchReactBundles(project);
   setStep(out, "check", "running", "Reading the code against Adobe's docs", { doing: "Auditing" });
   const audit = auditProject({ project, plan, libDir: fs.existsSync(path.join(docsDir(out), "library.json")) ? docsDir(out) : "", baseline });
   let findings = [...failures, ...audit.findings];

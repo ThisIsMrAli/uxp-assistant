@@ -41,7 +41,7 @@ node scripts/skill.mjs start --goal "<the developer's request, word for word>" -
 Use `--project "<folder>"` instead of `--empty` when the developer already has a plugin. Pass the folder the developer is working in, not the skill's folder. It reads the Adobe app, the name, the id, the framework, and the permissions from the request, so you pass nothing else. It prints the plan and a `next` line.
 
 - Add `--mode chat` when the developer already said no dashboard, or when you are not on their computer.
-- Add `--yes` when the developer said not to ask, or when nobody is there to answer (a background or cloud run). It picks chat, answers the plan card with "Build it", skips the try step (nobody is there to load it), and goes straight to the docs. It still asks for the Adobe app when the request names none.
+- Add `--yes` when the developer said not to ask, or when nobody is there to answer (a background or cloud run). It picks chat, assumes native UXP, Spectrum, and a host-matching look, answers the plan card with "Build it", skips the try step, and goes straight to the docs. It still asks for the Adobe app when the request names none. Say those were assumptions.
 
 ## The flow
 
@@ -50,7 +50,8 @@ Each command's `next` line names the command that follows it. Do what it says.
 | Step | What it does | Questions |
 | --- | --- | --- |
 | mode | Dashboard (a page on this computer) or chat | one |
-| plan | One card: app, name, id, stack, permissions, folder. Build it, change something, or stop | one (a text answer only if they change something) |
+| planning | Only what the sentence did not say: the goal and name when they are missing, native UXP or WebView, Spectrum or plain HTML, the look, and at most two choices the goal leaves open | those |
+| plan | One card: app, name, description, UI, controls, look, permissions, folder. Build it, change something, or stop | one (a text answer only if they change something) |
 | docs | `docs` saves every page Adobe lists for the app, plus the host's TypeScript types, in about ten seconds | none |
 | build | `build` creates the project, narrows its permissions, installs, builds the empty starter, writes `BRIEF.md` | none |
 | implement | You write the plugin from `BRIEF.md` | none |
@@ -58,7 +59,9 @@ Each command's `next` line names the command that follows it. Do what it says.
 | try | `feedback` shows how to load it. The developer uses it in the Adobe app and sends what is wrong (words, screenshots), or says there are no more bugs. You fix and ask again | one card, repeated until they say no more bugs |
 | done | `session done --summary "..."` | none |
 
-If the request names no Adobe app, a host question comes first. If the developer picks "Change something", the plan command reads their words (app, name, framework, permissions, folder) and the next steps use them.
+If the request names no Adobe app, the host question comes first. Native UXP is the recommended UI. WebView is last resort. If the developer picks "Change something", the plan command reads their words (app, name, framework, permissions, folder) and the next steps use them.
+
+An empty folder is the project. Files are written in that folder, not in a subfolder named after the plugin. A folder that already has files gets a subfolder.
 
 ## Writing the plugin
 

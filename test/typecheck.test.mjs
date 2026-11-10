@@ -79,7 +79,8 @@ test("a project with no tsconfig or no compiler is not type checked", () => {
 test("the starter gets .ts imports and, for React, the Spectrum element types, once", () => {
   const dir = withTsc({ compilerOptions: { composite: true, strict: true } });
   const first = prepareStarter(dir, { framework: "react" });
-  assert.equal(first.length, 2);
+  assert.equal(first.length, 4);
+  assert.ok(first.some((line) => /uxp-compat\.js/.test(line)));
   const config = JSON.parse(fs.readFileSync(path.join(dir, "tsconfig.json"), "utf8"));
   assert.equal(config.compilerOptions.allowImportingTsExtensions, true);
   assert.equal(config.compilerOptions.noEmit, true);
@@ -96,7 +97,9 @@ test("a Vue or Svelte starter gets no JSX types, and a tsconfig with comments is
   assert.equal(fs.existsSync(path.join(vue, "src", "spectrum.d.ts")), false);
   const commented = withTsc();
   fs.writeFileSync(path.join(commented, "tsconfig.json"), "{ // comment\n \"compilerOptions\": {} }");
-  assert.deepEqual(prepareStarter(commented, { framework: "svelte" }), []);
+  const prepared = prepareStarter(commented, { framework: "svelte" });
+  assert.ok(prepared.some((line) => /uxp-guard\.js/.test(line)));
+  assert.ok(prepared.some((line) => /uxp-compat\.js/.test(line)));
   assert.match(fs.readFileSync(path.join(commented, "tsconfig.json"), "utf8"), /\/\/ comment/);
 });
 

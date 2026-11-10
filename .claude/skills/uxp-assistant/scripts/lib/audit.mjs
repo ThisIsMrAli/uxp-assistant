@@ -224,7 +224,7 @@ function checkPermissions(findings, { files, plan, configSource, configFile }) {
     });
   }
   for (const permission of declared) {
-    if (["webview", "ipc", "allowCodeGenerationFromStrings"].includes(permission)) continue;
+    if (["webview", "ipc", "allowCodeGenerationFromStrings", "enableMessageBridge"].includes(permission)) continue;
     if (used.has(permission) || plan.permissions.includes(permission)) continue;
     add(findings, {
       id: "permission-unused", severity: "warn", file: configFile,
@@ -343,12 +343,91 @@ export function auditProject({ project, plan, libDir = "", baseline = null }) {
   if (configSource) checkPermissions(findings, { files: authored, plan, configSource, configFile });
   for (const item of authored) checkHostApi(findings, { ...item, plan, types });
   checkLimits(findings, { files: authored, libText, docsAvailable: libText.length > 0 });
+  checkCompat(findings, project);
+  checkBundle(findings, project);
 
   const scripts = readScripts(project);
   if (!scripts.test) {
     findings.push({ severity: "warn", id: "no-tests", file: "package.json", text: "package.json has no test script, so nothing checks the plugin's own logic.", fix: 'Put host-free logic in its own module and add the script "test": "node --test \\"src/**/*.test.ts\\"" (Node 22.18+).' });
   }
   return { findings, scanned: authored.map((item) => item.file), typesRead: Boolean(types?.any) };
+}
+
+function checkCompat(findings, project) {
+  const htmlPath = path.join(project, "index.html");
+  if (!fs.existsSync(htmlPath)) return;
+  const html = fs.readFileSync(htmlPath, "utf8");
+  const firstScript = html.search(/<script\b/i);
+  if (firstScript < 0) return;
+  const compatAt = html.search(/<script[^>]*src=["'][^"']*uxp-compat\.js["']/i);
+  if (compatAt < 0 || compatAt > firstScript) {
+    add(findings, {
+      id: "compat-script",
+      file: "index.html",
+      text: "uxp-compat.js is not the first script, so the panel can crash on observers, localStorage, or ownerDocument.",
+      fix: "Add <script src=\"./uxp-compat.js\"></script> before every other script, and keep public/uxp-compat.js."
+    });
+  }
+  const guardPath = path.join(project, "src", "uxp-guard.js");
+  const guardText = fs.existsSync(guardPath) ? fs.readFileSync(guardPath, "utf8") : "";
+  if (!guardText.includes("TextEncoder") || !guardText.includes("TextDecoder")) {
+    add(findings, {
+      id: "compat-text-encoder",
+      file: "src/uxp-guard.js",
+      text: "UXP has no TextEncoder or TextDecoder. Packages such as qrcode throw \"TextEncoder is not defined\" without the guard.",
+      fix: "Restore src/uxp-guard.js from the skill and import it first in the panel entry."
+    });
+  }
+  if (!fs.existsSync(path.join(project, "public", "uxp-compat.js")) && !fs.existsSync(guardPath)) {
+    add(findings, { id: "compat-file", file: "src/uxp-guard.js", text: "The UXP document guard script is missing.", fix: "Restore src/uxp-guard.js from the skill assets." });
+  }
+  for (const item of authoredFiles(project, null)) {
+    if (/\bchild_process\b|\brequire\(\s*["']util["']\s*\)/.test(item.text) && /TextEncoder|TextDecoder/.test(item.text)) {
+      add(findings, { id: "host-missing-encoder", file: item.file, text: "This file reaches for Node's TextEncoder. UXP does not provide it.", fix: "Use the panel's uxp-guard.js. Do not import util.TextEncoder." });
+    }
+    if (/@radix-ui|react-remove-scroll/.test(item.text)) {
+      add(findings, { id: "limit-radix", file: item.file, text: "Radix dialogs and react-remove-scroll crash the UXP document.", fix: "Draw a dialog as an absolutely positioned layer inside the panel." });
+    }
+    if (/crossorigin\s*=/.test(item.text)) {
+      add(findings, { id: "limit-crossorigin", file: item.file, text: "plugin:/ does not answer a CORS request, so a crossorigin script never loads.", fix: "Remove the crossorigin attribute." });
+    }
+  }
+  const vitePath = path.join(project, "vite.config.ts");
+  if (fs.existsSync(vitePath) && !/modulePreload\s*:\s*false/.test(fs.readFileSync(vitePath, "utf8"))) {
+    add(findings, {
+      id: "modulepreload",
+      file: "vite.config.ts",
+      text: "Vite modulepreload is on. Premiere has no MutationObserver, so the panel never paints.",
+      fix: "Set build.modulePreload to false."
+    });
+  }
+}
+
+/** Vite names an external Node built-in `require$$1`. UXP has no such global, so the panel never paints. */
+function checkBundle(findings, project) {
+  const dist = path.join(project, "dist");
+  if (!fs.existsSync(dist)) return;
+  for (const file of walkJs(dist)) {
+    const text = fs.readFileSync(file, "utf8");
+    if (!text.includes("require$$")) continue;
+    add(findings, {
+      id: "bundle-require",
+      file: path.relative(project, file),
+      text: "The bundle calls require$$. A Node built-in, usually fs, was left external. UXP throws \"require$$1 is not defined\" and the panel stays blank.",
+      fix: "Do not import qrcode/lib/server.js or Node's fs into the panel. Use qrcode/lib/core/qrcode.js and render the modules without fs. Remove fs from the bundle's external list only if nothing imports it."
+    });
+    break;
+  }
+}
+
+function walkJs(dir) {
+  const found = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) found.push(...walkJs(full));
+    else if (entry.name.endsWith(".js")) found.push(full);
+  }
+  return found;
 }
 
 function readScripts(project) {

@@ -1,5 +1,6 @@
 import { planSummary } from "./scripts/lib/flow.mjs";
 import { makePlan } from "./scripts/lib/intent.mjs";
+import { planningQuestions } from "./scripts/lib/planning.mjs";
 import { BOLT_APPS } from "./scripts/lib/stack.mjs";
 
 /**
@@ -16,7 +17,8 @@ export default {
   homeDirName: ".uxp-assistant",
   steps: [
     { id: "prepare", label: "Prepare", hint: "Reads your request. No network." },
-    { id: "plan", label: "Plan", hint: "One card. It shows what was read from your request." },
+    { id: "planning", label: "Planning", hint: "The questions the request did not answer." },
+    { id: "plan", label: "Plan", hint: "Confirm the spec, then the build starts." },
     {
       id: "docs",
       label: "Adobe docs",
@@ -53,7 +55,23 @@ export default {
     },
     { id: "done", label: "Wrap up" }
   ],
-  askSteps: { host: "plan", plan: "plan", tweak: "plan", feedback: "try" },
+  askSteps: {
+    host: "planning",
+    goal: "planning",
+    name: "planning",
+    description: "planning",
+    runtime: "planning",
+    widgets: "planning",
+    design: "planning",
+    designNote: "planning",
+    "feat-output": "planning",
+    "feat-scope": "planning",
+    blocked: "planning",
+    blockedGoal: "planning",
+    plan: "plan",
+    tweak: "plan",
+    feedback: "try"
+  },
   prepare({ input, kind, project, goal, host, framework, name, id, runtime }) {
     const plan = makePlan({ goal, kind, input, project, flags: { host, framework, name, id, runtime } });
     return {
@@ -76,6 +94,7 @@ export default {
         options: BOLT_APPS.map((app, index) => ({ id: app.id, label: `${app.label.replace(/\s*\(Beta\)$/, "")}${index === 0 ? " (Recommended)" : ""}`, detail: app.beta ? "Beta in the scaffold tool." : "" }))
       });
     }
+    questions.push(...planningQuestions(plan));
     questions.push({
       id: "plan",
       title: "Plan",
