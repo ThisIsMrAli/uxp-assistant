@@ -8,7 +8,7 @@ import { buildLibrary, findInLibrary, HOSTS, libraryFiles } from "./library.mjs"
 import { runPackage } from "./package-project.mjs";
 import { narrowRequiredPermissions } from "./permissions.mjs";
 import { designSection } from "./design.mjs";
-import { applyPlanning, blockedGoalQuestion, blockedQuestion, buildWays, featureLines, goalIsThin, hardBlocks, panelGuide } from "./planning.mjs";
+import { applyPlanning, blockedGoalQuestion, blockedQuestion, buildWays, featureLines, goalIsThin, hardBlocks, panelGuide, spectrumGuide } from "./planning.mjs";
 import { patchReactBundles, prepareStarter } from "./starter.mjs";
 import { BOLT_FRAMEWORKS, findApp } from "./stack.mjs";
 import { typecheck } from "./typecheck.mjs";
@@ -441,7 +441,7 @@ const TOPICS = [
   { when: /layer|document|selection|filter|smart object/i, label: "documents and layers", pages: ["ps-reference/classes/layer", "ps-reference/classes/layers", "ps-reference/classes/document", "ps-reference/classes/photoshop"], queries: ["batchPlay descriptor"], hosts: ["phxs"] },
   { when: /http|api|network|fetch|upload|server|url|online/i, label: "network", queries: ["network fetch domains permissions"] },
   { when: /clipboard|copy/i, label: "clipboard", queries: ["clipboard permissions"] },
-  { when: /./, label: "building the panel UI", limits: /sp-|dropdown|button|textfield|label|form|select|option|input|width|css|z-index/i, queries: ["Spectrum UXP components sp-button sp-textfield", "theme aware host colors css"] }
+  { when: /./, label: "building the panel UI", limits: /sp-|dropdown|button|textfield|label|form|select|option|input|width|css|z-index/i, queries: ["Spectrum UXP widgets sp-slider sp-progressbar sp-radio-group sp-action-button", "theme aware host colors css"] }
 ];
 
 function pointers(lib, plan, seen) {
@@ -480,6 +480,21 @@ const CORE_WHY = {
   "guides/uxp_guide/uxp-misc/manifest-v5": "manifest fields and requiredPermissions",
   "ps_reference/classes/photoshop": "the Photoshop module"
 };
+
+function spectrumFiles(lib) {
+  const root = path.join(lib, "pages");
+  const found = [];
+  const walk = (dir) => {
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith(".md") && full.includes(`${path.sep}reference-spectrum`)) found.push(path.relative(lib, full));
+    }
+  };
+  walk(root);
+  return found.sort();
+}
 
 export function writeBrief(out, plan, project) {
   const lib = docsDir(out);
@@ -556,6 +571,7 @@ export function writeBrief(out, plan, project) {
   }
   lines.push(...designSection(plan));
   lines.push("## Panel UI", ...panelGuide(plan), "");
+  lines.push(...spectrumGuide(plan, spectrumFiles(lib)));
   const decided = featureLines(plan);
   if (decided.length) lines.push("## What they chose", ...decided, "");
   lines.push(

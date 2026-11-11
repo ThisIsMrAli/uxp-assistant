@@ -107,7 +107,7 @@ export function planningQuestions(plan) {
       kicker: "The controls",
       prompt: "Spectrum widgets match the Adobe app. Plain HTML is for a look Spectrum cannot do.",
       options: [
-        { id: "spectrum", label: "Spectrum (Recommended)", detail: "sp-button, sp-textfield, and the host's other widgets." },
+        { id: "spectrum", label: "Spectrum (Recommended)", detail: "The host's widgets: buttons, sliders, progress, radios, menus, and the rest." },
         { id: "html", label: "Plain HTML and CSS", detail: "No Spectrum widgets." }
       ]
     });
@@ -245,12 +245,76 @@ export function panelGuide(plan) {
   }
   return [
     ...shared,
-    "- Native UI is the host's Spectrum widgets: `sp-heading`, `sp-body`, `sp-divider`, `sp-textfield` or `sp-textarea`, and `sp-button`. One `variant=\"cta\"`. The rest are `secondary`. A plain `<button>` fails `check`, because Premiere skins it.",
+    "- Use the Spectrum widgets section. One `sp-button variant=\"cta\"`. Other actions are `secondary` or `sp-action-button`. A plain `<button>` fails `check`, because Premiere skins it.",
     "- Do not pass `value` or `selected` as a prop on `sp-textfield`, `sp-textarea`, `sp-picker`, or `sp-menu-item`. Premiere's are getters, and React throws. Read `onInput` and use `setAttribute`. `check` fails on the prop.",
     "- The scaffold already removed the centered demo CSS and left a Spectrum screen. Do not bring `app.css` back. Lay the panel out with flex. No CSS grid, `gap`, or `inset`. `check` fails on those in the host document.",
     "- `sp-textarea` and `sp-dropdown` paint outside the layout box, so a stylesheet height does not keep them in the column. Put each one in its own wrapper with an explicit pixel height, and set `display`, `position: relative`, `width`, and `height` on the element itself. A label sits on its own line above the control. The preview well is a fixed square after the fields, with `overflow: hidden`.",
     "- Set `minimumSize` and `preferredFloatingSize` in `uxp.config.ts` so the layout has room."
   ];
+}
+
+/**
+ * Spectrum in UXP is two catalogs.
+ * Built-in widgets have a saved page each, so `find` can open them.
+ * Spectrum Web Components are the larger set. Adobe does not publish a docs page per component
+ * (the list is the swc-uxp-wrappers README, locked to Spectrum Web Components 0.37.0), so `find` cannot.
+ * Package names are that README. A `true` third item is a row Adobe marks "Known issues".
+ */
+const SWC = [
+  ["sp-action-bar", "action-bar", true],
+  ["sp-action-button", "action-button", false],
+  ["sp-action-group", "action-group", false],
+  ["sp-asset", "asset", true],
+  ["sp-avatar", "avatar", false],
+  ["sp-banner", "banner", false],
+  ["sp-button", "button", false],
+  ["sp-button-group", "button-group", false],
+  ["sp-card", "card", true],
+  ["sp-checkbox", "checkbox", true],
+  ["sp-dialog", "dialog", false],
+  ["sp-divider", "divider", false],
+  ["sp-field-group", "field-group", false],
+  ["sp-field-label", "field-label", false],
+  ["sp-help-text", "help-text", false],
+  ["sp-illustrated-message", "illustrated-message", false],
+  ["sp-link", "link", true],
+  ["sp-menu", "menu", true],
+  ["sp-meter", "meter", true],
+  ["sp-number-field", "number-field", true],
+  ["sp-overlay", "overlay", true],
+  ["sp-picker-button", "picker-button", false],
+  ["sp-popover", "popover", false],
+  ["sp-quick-actions", "quick-actions", false],
+  ["sp-radio", "radio", false],
+  ["sp-search", "search", true],
+  ["sp-sidenav", "sidenav", true],
+  ["sp-swatch", "swatch", false],
+  ["sp-switch", "switch", true],
+  ["sp-table", "table", true],
+  ["sp-tags", "tags", true],
+  ["sp-textfield", "textfield", true],
+  ["sp-toast", "toast", false],
+  ["sp-tooltip", "tooltip", false]
+];
+
+export function spectrumGuide(plan, savedPages = []) {
+  if (plan.widgets === "html") return [];
+  const swc = SWC.map(([tag, pkg, caution]) => `${tag} (\`@swc-uxp-wrappers/${pkg}\`${caution ? ", known issues" : ""})`).join(", ");
+  const saved = savedPages.length
+    ? ["Saved Spectrum pages (open these; `find <tag>` searches them):", ...savedPages.map((file) => `- \`${file}\``)]
+    : ["No Spectrum pages were saved in this session. After docs, `find <tag>` searches the built-in widget pages. It still will not find an SWC page, because Adobe does not publish one per component."];
+  const jobs = [
+    "- Built-in widgets need no install. The complete set Adobe documents as its own pages is typography (`sp-heading`, `sp-body`, `sp-detail`, `sp-label`) and user interface (`sp-action-button`, `sp-button`, `sp-checkbox`, `sp-divider`, `sp-dropdown`, `sp-icon`, `sp-link`, `sp-menu`, `sp-menu-item`, `sp-progressbar`, `sp-radio`, `sp-radio-group`, `sp-slider`, `sp-textfield`, `sp-textarea`). That list is the whole built-in set, not the whole of Spectrum.",
+    "- Use a built-in widget when the job has one. Title `sp-heading`, sentence `sp-body`, short secondary line `sp-detail`, control name `sp-label`. One main action `sp-button variant=\"cta\"`, other actions `secondary` or `primary`, a destructive action `variant=\"warning\"`, a compact tool `sp-action-button`. One on/off `sp-checkbox`. A few exclusive choices that stay visible `sp-radio-group`. Many choices `sp-dropdown`. One line `sp-textfield`, several lines `sp-textarea`, a number in a range `sp-slider`, a known amount `sp-progressbar`, an icon `sp-icon`, a text link `sp-link`.",
+    `- Spectrum Web Components are the larger set, locked to Spectrum Web Components 0.37.0 by the wrapper. Adobe's list: ${swc}. Icons and the theme come from \`@swc-uxp-wrappers/utils\`, which you install with any of them.`,
+    "- A job with no built-in widget uses SWC: a banner, a card, a table, a toast, tags, search, a switch, a meter, a number field, a dialog, a sidenav, an illustrated message. Set `featureFlags.enableSWCSupport: true` in `uxp.config.ts`, install `@swc-uxp-wrappers/utils` and `@swc-uxp-wrappers/<package>`, and import `@swc-uxp-wrappers/<package>/sp-<package>.js` before the tag. Do not import the SWC for a tag you are also using as a built-in widget.",
+    "- `find <tag>` opens a saved built-in page. It does not open an SWC page. For an SWC marked known issues, read that row on https://github.com/adobe/swc-uxp-wrappers before you depend on it. Set `value`, `checked`, and `selected` with `setAttribute`, not as a React prop.",
+    "- `sp-textarea` and `sp-dropdown` paint outside their box. Give each a wrapper with an explicit pixel height, and set `display: block`, `position: relative`, `width: 100%`, and `height` on the element."
+  ];
+  const lead = plan.runtime === "webview"
+    ? "The page inside the WebView is a browser, so it does not get these tags. Match the same jobs there with browser controls. Controls on the host shell use the catalogs below."
+    : "Spectrum is two catalogs. Use the one that has the job. A text field and a button are not the whole of either catalog.";
+  return ["## Spectrum widgets", lead, ...jobs, ...saved, ""];
 }
 
 export function featureLines(plan) {

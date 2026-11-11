@@ -82,7 +82,7 @@ function surfaceRules(plan) {
     ];
   }
   return [
-    "- Express the interaction rules with Spectrum, for this plugin and every other: `sp-heading`, `sp-body`, `sp-divider`, `sp-label` on its own line, `sp-textfield` or `sp-textarea`, `sp-dropdown` or `sp-picker`, and `sp-button`.",
+    "- Express the interaction rules with the host Spectrum widgets in the Spectrum widgets section. A text field and a button are not the whole set: use the widget for the job, such as a slider, a progress bar, radios, or an action button.",
     "- One `variant=\"cta\"`. The other actions are `secondary`. Do not pass `value` or `selected` as a React prop. Read `onInput` and use `setAttribute`.",
     "- `sp-textarea`, `sp-dropdown`, and `sp-picker` paint outside their layout box. Put each in a wrapper with an explicit pixel height, and set `display: block`, `position: relative`, `width: 100%`, and `height` on the element itself.",
     "- Host color variables, flex, and margins. No grid, gap, inset, transitions, or the search palette.",
