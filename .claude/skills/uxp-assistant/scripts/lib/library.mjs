@@ -43,17 +43,15 @@ export const HOSTS = {
   },
   ilst: {
     label: "Illustrator",
-    config: `${ORIGIN}/premiere-pro/uxp/config.md`,
+    config: `${ORIGIN}/uxp/config.md`,
     types: [],
-    core: [],
-    shared: true
+    core: ["guides/explanation/concepts/manifest", "guides/explanation/fundamentals/user-interfaces"]
   },
   aeft: {
     label: "After Effects",
-    config: `${ORIGIN}/premiere-pro/uxp/config.md`,
+    config: `${ORIGIN}/after-effects/uxp/config.md`,
     types: [],
-    core: [],
-    shared: true
+    core: ["get-started", "after-effects-api/application", "after-effects-api/project"]
   }
 };
 

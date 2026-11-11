@@ -67,7 +67,7 @@ An empty folder is the project. Files are written in that folder, not in a subfo
 
 `BRIEF.md` in the session folder is your task. Read it first. It lists the plan, the saved pages worth reading for this goal, and the limits Adobe documents.
 
-- Every host API name comes from the docs. Before you call one, run `node scripts/skill.mjs find <words>` and read the hit. The Premiere types file is `docs/api/premierepro.d.ts`; grep it. `check` fails on a name that is not in it, and on a TypeScript error in a file you wrote.
+- Every host API name comes from that app's saved docs. Before you call one, run `node scripts/skill.mjs find <words>` and read the hit. Premiere is the only app with `docs/api/premierepro.d.ts`; `check` fails on a name that is not in it. Photoshop calls are checked against `node_modules/@types/photoshop`. Do not call `premierepro` from Photoshop, InDesign, Media Encoder, Illustrator, or After Effects. Photoshop document changes go through `executeAsModal`.
 - `docs/` holds every page Adobe lists for the app, as markdown. `docs/INDEX.md` lists them. `docs/LIMITS.md` is what UXP cannot do. A limit that is not there is not a limit; do not invent one.
 - Keep the starter's files. Write the plugin under `src/`. Put logic that needs no host (math, parsing, encoding) in its own module with a test, so it is checked without the app.
 - Declare the narrowest `requiredPermissions` the code needs, in `uxp.config.ts`. `check` fails when the code uses a picker, the network, or the clipboard without it.

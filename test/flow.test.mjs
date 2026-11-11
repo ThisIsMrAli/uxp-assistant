@@ -6,6 +6,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { runFeedback } from "../.claude/skills/uxp-assistant/scripts/lib/feedback.mjs";
 import { projectPath, resolvePlan, runBuild, runCheck, runDocs, writeBrief } from "../.claude/skills/uxp-assistant/scripts/lib/flow.mjs";
+import { HOSTS } from "../.claude/skills/uxp-assistant/scripts/lib/library.mjs";
 import { makePlan } from "../.claude/skills/uxp-assistant/scripts/lib/intent.mjs";
 import { nextAction } from "../.claude/skills/uxp-assistant/scripts/runtime/lib/next.mjs";
 import { finish, readMerged } from "../.claude/skills/uxp-assistant/scripts/runtime/lib/session.mjs";
@@ -363,6 +364,26 @@ test("a thin request asks for the goal, the name, and a description before the c
   assert.ok(ids.includes("description"));
   assert.ok(ids.includes("runtime"));
   assert.equal(nextAction(out).ask, "host");
+});
+
+test("each Adobe app gets its own rule, and only Premiere gets the project-lifetime rule", () => {
+  assert.equal(HOSTS.aeft.config.endsWith("/after-effects/uxp/config.md"), true);
+  assert.equal(HOSTS.ilst.config.endsWith("/uxp/config.md"), true);
+  assert.equal(HOSTS.ilst.config.includes("premiere-pro"), false);
+  const expect = {
+    ppro: ["## Premiere objects", "lockedAccess"],
+    phxs: ["## Photoshop changes", "executeAsModal"],
+    idsn: ["## InDesign", "indesign"],
+    ame: ["## Media Encoder", "render queue"],
+    aeft: ["## After Effects", "composition"],
+    ilst: ["## Illustrator", "not an Illustrator DOM"]
+  };
+  for (const [host, needles] of Object.entries(expect)) {
+    const out = temp();
+    const text = fs.readFileSync(writeBrief(out, { host, kind: "existing", name: "X", id: "com.example.x", goal: "rename the selection", permissions: [], framework: "react", runtime: "native" }, "/tmp/plugin"), "utf8");
+    for (const needle of needles) assert.ok(text.includes(needle), `${host} missing ${needle}`);
+    if (host !== "ppro") assert.equal(text.includes("## Premiere objects"), false, host);
+  }
 });
 
 test("a goal UXP cannot do stops the scaffold and asks to change it or stop", async () => {

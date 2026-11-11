@@ -310,7 +310,7 @@ function checkHostDocument(findings, files) {
     });
     reportMatch(findings, file, text, /<sp-(?:textfield|textarea|picker|menu-item)\b[\s\S]*?>/gi, {
       id: "host-spectrum-value",
-      text: "Premiere exposes value on sp-textfield, sp-textarea, sp-picker, and sp-menu-item as a getter. Passing it from React throws \"Cannot set property value\" and the panel goes blank. selected is the same kind of property.",
+      text: "The UXP document exposes value on sp-textfield, sp-textarea, sp-picker, and sp-menu-item as a getter in every host. Passing it from React throws \"Cannot set property value\" and the panel goes blank. selected is the same kind of property.",
       fix: "Read the field in onInput. Set value and selected with setAttribute. Do not pass them as props.",
       when: (match) => /\bvalue\s*=/.test(match[0]) || (/\bsp-(?:picker|menu-item)\b/.test(match[0]) && /\bselected\s*=/.test(match[0]))
     });

@@ -481,6 +481,58 @@ const CORE_WHY = {
   "ps_reference/classes/photoshop": "the Photoshop module"
 };
 
+function hostRules(plan) {
+  if (plan.host === "ppro") {
+    return [
+      "## Premiere objects",
+      "These rules are for Premiere Pro only. Photoshop, InDesign, Illustrator, After Effects, and Media Encoder do not use them.",
+      "- Finish file and network awaits before you take a Project, Sequence, or ProjectItem. Across those awaits, keep only plain values, such as a file path.",
+      "- A Project, Sequence, or ProjectItem stays valid while you await a method on that same object. After any other await, call Project.getActiveProject() again and use the new project, sequence, and items.",
+      "- Call every create*Action() inside project.lockedAccess(() => { project.executeTransaction(...) }). The callback is synchronous. Do not await inside it, and do not keep an Action after the callback returns.",
+      "Premiere throws \"The script object is no longer valid\" when code uses an object taken before that other await.",
+      ""
+    ];
+  }
+  if (plan.host === "phxs") {
+    return [
+      "## Photoshop changes",
+      "These rules are for Photoshop only. Do not call `premierepro`, and do not use `lockedAccess` or `executeTransaction`.",
+      "- Change the document inside `photoshop.core.executeAsModal`. A change outside it throws.",
+      "- The module is `photoshop`, imported from `src/globals.ts`. There is no saved types file. Grep `node_modules/@types/photoshop` before you call a method.",
+      ""
+    ];
+  }
+  if (plan.host === "idsn") {
+    return [
+      "## InDesign",
+      "The module is `indesign`, imported from `src/globals.ts`. Do not call `premierepro` or `photoshop`. Read the saved InDesign API pages before a call.",
+      ""
+    ];
+  }
+  if (plan.host === "ame") {
+    return [
+      "## Media Encoder",
+      "Use the Media Encoder API in the saved pages: the render queue, render jobs, and watch folders. Do not call `premierepro` or edit a sequence. This app encodes.",
+      ""
+    ];
+  }
+  if (plan.host === "aeft") {
+    return [
+      "## After Effects",
+      "Use the After Effects API in the saved pages: project, composition, and layer. Import the host module from `src/globals.ts`. Do not call `premierepro`.",
+      ""
+    ];
+  }
+  if (plan.host === "ilst") {
+    return [
+      "## Illustrator",
+      "Adobe's current manifest host list is Photoshop, InDesign, Premiere Pro, and Media Encoder. Illustrator is a beta switch in the scaffold. The saved pages are the shared UXP platform, not an Illustrator DOM. Do not call `premierepro`, `photoshop`, or `indesign`, and do not invent a method that is not in those pages.",
+      ""
+    ];
+  }
+  return [];
+}
+
 function spectrumFiles(lib) {
   const root = path.join(lib, "pages");
   const found = [];
@@ -540,17 +592,7 @@ export function writeBrief(out, plan, project) {
       ""
     );
   }
-  if (plan.host === "ppro") {
-    lines.push(
-      "## Premiere objects",
-      "These rules are for Premiere Pro only. Photoshop, InDesign, Illustrator, After Effects, and Media Encoder do not use them.",
-      "- Finish file and network awaits before you take a Project, Sequence, or ProjectItem. Across those awaits, keep only plain values, such as a file path.",
-      "- A Project, Sequence, or ProjectItem stays valid while you await a method on that same object. After any other await, call Project.getActiveProject() again and use the new project, sequence, and items.",
-      "- Call every create*Action() inside project.lockedAccess(() => { project.executeTransaction(...) }). The callback is synchronous. Do not await inside it, and do not keep an Action after the callback returns.",
-      "Premiere throws \"The script object is no longer valid\" when code uses an object taken before that other await.",
-      ""
-    );
-  }
+  lines.push(...hostRules(plan));
   if (have) {
     const seen = new Set();
     const add = (rel, why) => {

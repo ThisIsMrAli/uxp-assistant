@@ -246,7 +246,7 @@ export function panelGuide(plan) {
   return [
     ...shared,
     "- Use the Spectrum widgets section. One `sp-button variant=\"cta\"`. Other actions are `secondary` or `sp-action-button`. A plain `<button>` fails `check`, because Premiere skins it.",
-    "- Do not pass `value` or `selected` as a prop on `sp-textfield`, `sp-textarea`, `sp-picker`, or `sp-menu-item`. Premiere's are getters, and React throws. Read `onInput` and use `setAttribute`. `check` fails on the prop.",
+    "- Do not pass `value` or `selected` as a prop on `sp-textfield`, `sp-textarea`, `sp-picker`, or `sp-menu-item`. The UXP document exposes them as getters in every host, and React throws. Read `onInput` and use `setAttribute`. `check` fails on the prop.",
     "- The scaffold already removed the centered demo CSS and left a Spectrum screen. Do not bring `app.css` back. Lay the panel out with flex. No CSS grid, `gap`, or `inset`. `check` fails on those in the host document.",
     "- `sp-textarea` and `sp-dropdown` paint outside the layout box, so a stylesheet height does not keep them in the column. Put each one in its own wrapper with an explicit pixel height, and set `display`, `position: relative`, `width`, and `height` on the element itself. A label sits on its own line above the control. The preview well is a fixed square after the fields, with `overflow: hidden`.",
     "- Set `minimumSize` and `preferredFloatingSize` in `uxp.config.ts` so the layout has room."
