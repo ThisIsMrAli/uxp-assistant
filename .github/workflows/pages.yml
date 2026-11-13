@@ -1,0 +1,36 @@
+name: Pages
+
+# The owner starts this by hand. It does not deploy on push or on a schedule.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build the unlisted page
+        env:
+          PAGES_SHARE_TOKEN: ${{ secrets.PAGES_SHARE_TOKEN }}
+          PAGES_SHARE_EXPIRES: ${{ secrets.PAGES_SHARE_EXPIRES }}
+        run: node scripts/build-pages.mjs
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site-dist
+      - id: deployment
+        uses: actions/deploy-pages@v4

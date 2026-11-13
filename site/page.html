@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en" data-product="uxp">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <meta name="referrer" content="no-referrer">
+  <meta name="description" content="Take a plugin idea from a sentence to an installable CCX, with checks guided by the Adobe app it will run in.">
+  <title>UXP Assistant</title>
+  <link rel="stylesheet" href="site.css">
+  <script src="site.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#content">Skip to content</a>
+  <div class="wrap">
+    <header class="top">
+      <a class="brand" href="#content"><span class="mark" aria-hidden="true">Ux</span>UXP Assistant</a>
+      <nav aria-label="Page"><a href="#workflow">Workflow</a><a href="#install">Install</a><a href="https://github.com/ThisIsMrAli/uxp-assistant">GitHub</a></nav>
+    </header>
+    <main id="content">
+      <section class="hero">
+        <div>
+          <p class="kicker">Adobe desktop plugin development</p>
+          <h1>Build the plugin you wish existed.</h1>
+          <p class="lede">Take a plugin idea from a sentence to an installable CCX, with checks guided by the Adobe app it will run in.</p>
+          <div class="actions"><a class="button primary" href="https://drive.google.com/file/d/1NL-8h8E_En4vBGMDkDBN3wAVzvJjHspw/view?usp=sharing">Watch the demo</a><a class="button" href="#install">Install the skill</a></div>
+        </div>
+        <figure class="demo">
+          <a href="https://drive.google.com/file/d/1NL-8h8E_En4vBGMDkDBN3wAVzvJjHspw/view?usp=sharing" aria-label="Watch the UXP Assistant demo"><img src="demo.webp" alt="Demo capture showing the generated plugin inside Premiere Pro." width="1120" height="565"><span class="play" aria-hidden="true">▶ Play demo</span></a>
+          <figcaption>Demo capture showing the generated plugin inside Premiere Pro.</figcaption>
+        </figure>
+      </section>
+      <section id="workflow" class="section">
+        <h2>How it works</h2>
+        <ol class="steps"><li><span class="step-number">01</span><h3>Confirm the plan</h3><p>Choose the Adobe app, project folder, and permissions before scaffolding.</p></li><li><span class="step-number">02</span><h3>Build for the host</h3><p>Use a searchable copy of Adobe’s documentation to guide the implementation.</p></li><li><span class="step-number">03</span><h3>Check and package</h3><p>Run the build and available tests, check API use and permissions, and create a CCX.</p></li><li><span class="step-number">04</span><h3>Try in the app</h3><p>Load the plugin in the target app and share screenshots or feedback for another revision.</p></li></ol>
+        <div class="features"><article><h3>Host-specific guidance</h3><p>Work with documentation for Premiere Pro, Photoshop, InDesign, Media Encoder, Illustrator, or After Effects.</p></article><article><h3>Catch issues earlier</h3><p>Checks cover the code and package. TypeScript checks run when the project supports them.</p></article><article><h3>Maintain an existing plugin</h3><p>Use the same plan, check, and feedback loop to extend a project you already ship.</p></article></div>
+      </section>
+      <section id="install" class="section">
+        <h2>Install and try it</h2>
+        <div class="install-grid">
+          <div>
+            <p>Requires Node.js 20 or newer and GitHub access to the repository. Sign in to GitHub with an account that has access before cloning.</p>
+            <div class="terminal">
+              <div class="terminal-head"><strong>Run in your terminal</strong><button type="button" data-copy="install-command" aria-live="polite" hidden>Copy commands</button></div>
+              <pre><code id="install-command">git clone https://github.com/ThisIsMrAli/uxp-assistant.git
+cd uxp-assistant
+node install-agents.mjs --global</code></pre>
+            </div>
+            <p class="prompt"><strong>Try this prompt</strong><br>Use uxp-assistant to create a Premiere Pro plugin that adds subtitles from text.</p>
+          </div>
+          <div>
+            <h3>Open your coding tool</h3>
+            <details><summary>Codex</summary><p>Open your project in Codex after running the installer. Ask for <code>uxp-assistant</code> by name in a new chat.</p></details><details><summary>Claude Code</summary><p>Open your project in Claude Code after running the installer. Ask for <code>uxp-assistant</code> by name in a new chat.</p></details><details><summary>Cursor</summary><p>Open your project in Cursor after running the installer. Ask for <code>uxp-assistant</code> by name in a new chat.</p></details>
+            <details><summary>Other supported tools</summary><p>The installer also links the skill into supported locations for tools such as Gemini CLI and Windsurf. Keep the checkout on disk so the links continue to work.</p></details>
+          </div>
+        </div>
+      </section>
+    </main>
+    <footer class="foot"><p>Load the plugin in the target Adobe app to verify its behavior. Build and package checks run locally.</p><a href="https://github.com/ThisIsMrAli/uxp-assistant">Read the repository guide</a></footer>
+  </div>
+</body>
+</html>

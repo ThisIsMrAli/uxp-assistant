@@ -2,3 +2,6 @@ node_modules/
 .claude/skills/uxp-assistant/references/live/
 evidence/
 .DS_Store
+
+.share/
+site-dist/
