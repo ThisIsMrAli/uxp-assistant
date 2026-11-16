@@ -70,7 +70,7 @@ npm run skill -- feedback --out <session folder>      # the try card; answer it 
 
 ## Project site
 
-[Visit the project site](https://thisismrali.github.io/uxp-assistant/) for the demo, workflow, and installation guide. The Pages workflow publishes the site from `main`.
+[Visit the project site](https://thisismrali.github.io/uxp-assistant/) for the demo, workflow, and installation guide. GitHub Pages serves the `gh-pages` branch. Run `node scripts/build-pages.mjs` to build the site into `site-dist/` before updating the published branch.
 
 ## License
 
