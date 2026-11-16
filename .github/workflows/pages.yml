@@ -1,7 +1,12 @@
 name: Pages
 
-# The owner starts this by hand. It does not deploy on push or on a schedule.
 on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "scripts/build-pages.mjs"
+      - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions:
@@ -24,10 +29,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Build the unlisted page
-        env:
-          PAGES_SHARE_TOKEN: ${{ secrets.PAGES_SHARE_TOKEN }}
-          PAGES_SHARE_EXPIRES: ${{ secrets.PAGES_SHARE_EXPIRES }}
+      - name: Build the project site
         run: node scripts/build-pages.mjs
       - uses: actions/upload-pages-artifact@v3
         with:

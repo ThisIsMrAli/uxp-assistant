@@ -24,7 +24,7 @@ Load the plugin in the target Adobe app to verify its behavior. Build and packag
 
 ## Install
 
-You’ll need Node.js 20 or newer and GitHub access to the private repository.
+You’ll need Node.js 20 or newer and Git.
 
 ```bash
 git clone https://github.com/ThisIsMrAli/uxp-assistant.git
@@ -68,29 +68,9 @@ npm run skill -- feedback --out <session folder>      # the try card; answer it 
 | minimatch 9.0.9 | [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249), glob-parts denial of service | Nothing in this process feeds an attacker-controlled pattern to minimatch. The installer copies its own template. |
 | archiver-utils, archiver, zip-stream, meta-bolt, create-bolt-uxp | Flagged because they depend on the two packages above | These run as a local scaffold in the folder the user named. This is not a service that archives or expands untrusted uploads. |
 
-## Share a private preview
+## Project site
 
-The owner enables GitHub Pages deliberately. `.github/workflows/pages.yml` runs only when someone starts it by hand. It does not deploy on a push to main, and it does not run on a schedule.
-
-The source repository stays private. It does not appear on a public GitHub profile, and nobody can clone it without being given access.
-
-GitHub Pages has no signature check. A private repository hides the source. It does not hide a Pages site. The preview address is an unguessable path, with an optional expiry, which is as close as Pages can come to a presigned URL:
-
-- The site root says “Not found” and does not name the project.
-- The page and its presentation assets exist only under that path.
-- Anyone with the address can open it until you rotate the path, or until the date passes and the next deploy removes it.
-- An expired path is removed the next time the owner runs the Pages workflow. `noindex` asks search engines not to list the site. That is not access control.
-
-Do not put secrets on the page, and do not post the address in public. Publishing Pages from a private repository needs GitHub Pro, Team, or Enterprise. This project is not published from a public repository.
-
-```bash
-node scripts/share-link.mjs                 # print the address and store it in Actions secrets
-node scripts/share-link.mjs --days 30       # the same, and remove the path 30 days later
-node scripts/share-link.mjs --rotate        # invalidate the current address
-node scripts/share-link.mjs --publish       # also start a deploy
-```
-
-The address is written to `.share/link.json` on this computer and to Actions secrets. `.share/` is not committed. The command refuses to continue when the repository is not private.
+[Visit the project site](https://thisismrali.github.io/uxp-assistant/) for the demo, workflow, and installation guide. The Pages workflow publishes the site from `main`.
 
 ## License
 
